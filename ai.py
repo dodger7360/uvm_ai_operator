@@ -1,4 +1,3 @@
-import json
 import os
 
 from dotenv import load_dotenv
@@ -40,55 +39,19 @@ profile_pipe, round_pipe, sheet, expanded_metal, rebar, round_bar, flat_bar.
 единицу, если она присутствует. source_text содержит исходный фрагмент позиции.
 """
 
-RESPONSE_SHAPE = {
-    "items": [{
-        "product": None,
-        "product_group": None,
-        "size_designation": None,
-        "grade": None,
-        "diameter_mm": None,
-        "thickness_mm": None,
-        "width_mm": None,
-        "length_mm": None,
-        "height_mm": None,
-        "side_a_mm": None,
-        "side_b_mm": None,
-        "wall_thickness_mm": None,
-        "quantity": None,
-        "unit": None,
-        "source_unit": None,
-        "form": None,
-        "gost_tu": None,
-        "processing": None,
-        "source_text": None,
-        "interpreted_fields": [],
-    }],
-    "city": None,
-    "delivery": None,
-    "deadline": None,
-    "customer": None,
-    "comment": None,
-    "missing_fields": [],
-    "clarification_questions": [],
-    "warnings": [],
-}
-
-
 def parse_request(text: str) -> PurchaseRequest:
     """Extracts a draft request. Normalization and validation run separately."""
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        response_format={"type": "json_object"},
+    response = client.beta.chat.completions.parse(
+        model="gpt-5.6-luna",
+        response_format=PurchaseRequest,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT + "\nJSON shape:\n" + json.dumps(RESPONSE_SHAPE, ensure_ascii=False)},
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": text},
         ],
-        temperature=0,
     )
-    raw_content = response.choices[0].message.content
-    if not raw_content:
-        raise ValueError("Модель вернула пустой ответ.")
-    try:
-        return PurchaseRequest.model_validate(json.loads(raw_content))
-    except (json.JSONDecodeError, ValueError) as error:
-        raise ValueError("Не удалось разобрать JSON-ответ модели.") from error
+    message = response.choices[0].message
+    if message.refusal:
+        raise ValueError(f"Модель отказалась обработать заявку: {message.refusal}")
+    if message.parsed is None:
+        raise ValueError("Модель не вернула структурированный ответ.")
+    return message.parsed
