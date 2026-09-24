@@ -27,7 +27,7 @@ REQUIRED_FIELDS = {
     "profile_pipe": ("width_mm", "height_mm", "wall_thickness_mm"),
     "round_pipe": ("diameter_mm", "wall_thickness_mm"),
     "sheet": ("thickness_mm", "width_mm", "length_mm"),
-    "rebar": ("diameter_mm",),
+    "rebar": ("diameter_mm", "grade"),
     "round_bar": ("diameter_mm",),
     "flat_bar": ("width_mm", "thickness_mm"),
 }

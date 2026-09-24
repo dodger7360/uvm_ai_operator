@@ -1,5 +1,5 @@
 from normalizer import UNIT_ALIASES
-from rules import field_label, required_fields
+from rules import PRODUCT_GROUPS, field_label, required_fields
 from schemas import PurchaseRequest
 
 
@@ -53,8 +53,10 @@ def validate_request(request: PurchaseRequest) -> PurchaseRequest:
                 f"{position}: уточните количество.",
             )
         elif item.quantity <= 0:
-            _add_unique(
-                warnings,
+            _missing(
+                missing_fields,
+                clarification_questions,
+                f"{prefix}.quantity",
                 f"{position}: количество должно быть больше нуля.",
             )
 
@@ -66,15 +68,26 @@ def validate_request(request: PurchaseRequest) -> PurchaseRequest:
                 f"{position}: уточните единицу измерения.",
             )
         elif item.unit not in set(UNIT_ALIASES.values()):
-            _add_unique(
-                warnings,
-                f"{position}: необычная единица измерения — {item.unit}.",
+            _missing(
+                missing_fields,
+                clarification_questions,
+                f"{prefix}.unit",
+                f"{position}: уточните поддерживаемую единицу измерения.",
             )
 
         group = item.product_group
 
+        if group not in PRODUCT_GROUPS:
+            _missing(
+                missing_fields,
+                clarification_questions,
+                f"{prefix}.product_group",
+                f"{position}: уточните тип товара.",
+            )
+
         for field in required_fields(group):
-            if getattr(item, field) is None:
+            value = getattr(item, field)
+            if value is None or (isinstance(value, str) and not value.strip()):
                 label = field_label(field)
 
                 _missing(

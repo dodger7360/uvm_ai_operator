@@ -6,9 +6,6 @@ from openai import OpenAI
 from schemas import PurchaseRequest
 
 
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 SYSTEM_PROMPT = """
 Ты извлекаешь позиции из живых заявок на металлопрокат.
 Верни только JSON. Используй исходный текст целиком и создай отдельный item
@@ -39,19 +36,27 @@ profile_pipe, round_pipe, sheet, expanded_metal, rebar, round_bar, flat_bar.
 единицу, если она присутствует. source_text содержит исходный фрагмент позиции.
 """
 
-def parse_request(text: str) -> PurchaseRequest:
-    """Extracts a draft request. Normalization and validation run separately."""
-    response = client.beta.chat.completions.parse(
-        model="gpt-5.6-luna",
-        response_format=PurchaseRequest,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text},
-        ],
-    )
-    message = response.choices[0].message
-    if message.refusal:
-        raise ValueError(f"Модель отказалась обработать заявку: {message.refusal}")
-    if message.parsed is None:
-        raise ValueError("Модель не вернула структурированный ответ.")
-    return message.parsed
+
+class AIService:
+    """Sends user text to the AI and returns its structured draft."""
+
+    def __init__(self) -> None:
+        load_dotenv()
+        self._client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    def parse_request(self, text: str) -> PurchaseRequest:
+        """Extracts a draft request. Normalization and validation run separately."""
+        response = self._client.beta.chat.completions.parse(
+            model="gpt-5.6-luna",
+            response_format=PurchaseRequest,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+        )
+        message = response.choices[0].message
+        if message.refusal:
+            raise ValueError(f"Модель отказалась обработать заявку: {message.refusal}")
+        if message.parsed is None:
+            raise ValueError("Модель не вернула структурированный ответ.")
+        return message.parsed

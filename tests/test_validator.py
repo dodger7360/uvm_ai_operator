@@ -35,6 +35,74 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(sheet.missing_fields, ["items[0].width_mm", "items[0].length_mm"])
         self.assertEqual(rebar.missing_fields, ["items[0].diameter_mm"])
 
+    def test_rejects_unknown_product_group(self):
+        result = validate_item(
+            product="металл",
+            product_group="unknown",
+            quantity=1,
+            unit="т",
+        )
+
+        self.assertEqual(result.missing_fields, ["items[0].product_group"])
+        self.assertEqual(result.clarification_questions, ["Позиция 1: уточните тип товара."])
+
+    def test_rebar_requires_diameter_and_grade(self):
+        without_diameter = validate_item(
+            product="арматура",
+            grade="А500С",
+            quantity=1,
+            unit="т",
+        )
+        without_grade = validate_item(
+            product="арматура",
+            size_designation="12",
+            quantity=1,
+            unit="т",
+        )
+
+        self.assertEqual(without_diameter.missing_fields, ["items[0].diameter_mm"])
+        self.assertEqual(without_grade.missing_fields, ["items[0].grade"])
+
+    def test_non_positive_quantity_blocks_validation(self):
+        for quantity in (0, -1):
+            with self.subTest(quantity=quantity):
+                result = validate_item(
+                    product="швеллер",
+                    size_designation="12П",
+                    quantity=quantity,
+                    unit="т",
+                )
+
+                self.assertEqual(result.missing_fields, ["items[0].quantity"])
+                self.assertEqual(result.warnings, [])
+
+    def test_unsupported_unit_blocks_validation(self):
+        result = validate_item(
+            product="швеллер",
+            size_designation="12П",
+            quantity=1,
+            unit="паллет",
+        )
+
+        self.assertEqual(result.missing_fields, ["items[0].unit"])
+        self.assertEqual(
+            result.clarification_questions,
+            ["Позиция 1: уточните поддерживаемую единицу измерения."],
+        )
+
+    def test_accepts_valid_rebar_position(self):
+        result = validate_item(
+            product="арматура",
+            size_designation="12",
+            grade="А500С",
+            quantity=20,
+            unit="т",
+        )
+
+        self.assertEqual(result.missing_fields, [])
+        self.assertEqual(result.clarification_questions, [])
+        self.assertEqual(result.warnings, [])
+
     def test_preserves_no_model_generated_questions_or_warnings(self):
         request = PurchaseRequest(
             items=[RequestItem(product="швеллер", size_designation="12П", quantity=1, unit="т")],

@@ -1,4 +1,4 @@
-from ai import parse_request
+from ai import AIService
 from normalizer import normalize_request
 from validator import validate_request
 from formatter import format_supplier_request
@@ -28,7 +28,7 @@ request_text = (
 )
 
 
-result = parse_request(request_text)
+result = AIService().parse_request(request_text)
 normalized_result = normalize_request(result)
 validated_result = validate_request(normalized_result)
 

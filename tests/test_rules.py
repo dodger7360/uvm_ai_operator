@@ -19,7 +19,7 @@ class RulesTests(unittest.TestCase):
         )
         self.assertEqual(
             required_fields("rebar"),
-            ("diameter_mm",),
+            ("diameter_mm", "grade"),
         )
 
     def test_unknown_product_group_has_no_required_fields(self):
