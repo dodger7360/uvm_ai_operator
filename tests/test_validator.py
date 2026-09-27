@@ -6,6 +6,16 @@ from validator import validate_request
 
 
 def validate_item(**kwargs):
+    kwargs.setdefault(
+        "source_text",
+        " ".join(
+            str(kwargs[field])
+            for field in (
+                "product", "size_designation", "grade", "quantity", "unit"
+            )
+            if kwargs.get(field) is not None
+        ),
+    )
     request = PurchaseRequest(items=[RequestItem(**kwargs)])
     return validate_request(normalize_request(request))
 
@@ -75,6 +85,7 @@ class ValidatorTests(unittest.TestCase):
 
                 self.assertEqual(result.missing_fields, ["items[0].quantity"])
                 self.assertEqual(result.warnings, [])
+                self.assertFalse(result.is_valid)
 
     def test_unsupported_unit_blocks_validation(self):
         result = validate_item(
@@ -102,10 +113,14 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(result.missing_fields, [])
         self.assertEqual(result.clarification_questions, [])
         self.assertEqual(result.warnings, [])
+        self.assertTrue(result.is_valid)
 
     def test_preserves_no_model_generated_questions_or_warnings(self):
         request = PurchaseRequest(
-            items=[RequestItem(product="швеллер", size_designation="12П", quantity=1, unit="т")],
+            items=[RequestItem(
+                product="швеллер", size_designation="12П", quantity=1, unit="т",
+                source_text="Швеллер 12П — 1 т",
+            )],
             clarification_questions=["вопрос модели"],
             warnings=["предупреждение модели"],
             missing_fields=["ошибка модели"],
@@ -116,3 +131,88 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(result.missing_fields, [])
         self.assertEqual(result.clarification_questions, [])
         self.assertEqual(result.warnings, [])
+
+    def test_absent_grade_and_gost_are_not_invented_by_python(self):
+        request = PurchaseRequest(items=[RequestItem(
+            product="арматура", product_group="rebar", diameter_mm=12,
+            quantity=1, unit="т", source_text="Арматура 12 — 1 т",
+        )])
+
+        result = validate_request(normalize_request(request))
+
+        self.assertIsNone(result.items[0].grade)
+        self.assertIsNone(result.items[0].gost_tu)
+        self.assertEqual(result.missing_fields, ["items[0].grade"])
+        self.assertFalse(result.is_valid)
+
+    def test_unsubstantiated_model_grade_and_gost_are_discarded(self):
+        request = PurchaseRequest(items=[RequestItem(
+            product="арматура", product_group="rebar", diameter_mm=12,
+            grade="А500С", gost_tu="ГОСТ 34028", quantity=1, unit="т",
+            source_text="Арматура 12 — 1 т",
+        )])
+
+        result = validate_request(normalize_request(request))
+
+        self.assertIsNone(result.items[0].grade)
+        self.assertIsNone(result.items[0].gost_tu)
+        self.assertEqual(result.missing_fields, ["items[0].grade"])
+        self.assertEqual(len(result.warnings), 2)
+
+    def test_confirmed_dimension_values_remain_valid(self):
+        request = PurchaseRequest(items=[RequestItem(
+            product="труба", product_group="round_pipe", diameter_mm=57,
+            wall_thickness_mm=4, size_designation="57×4", quantity=1, unit="т",
+            source_text="Труба 57×4 — 1 т",
+        )])
+
+        result = validate_request(normalize_request(request))
+
+        self.assertEqual(result.items[0].diameter_mm, 57)
+        self.assertEqual(result.items[0].wall_thickness_mm, 4)
+        self.assertEqual(result.items[0].size_designation, "57×4")
+        self.assertTrue(result.is_valid)
+
+    def test_required_dimension_absent_from_source_blocks_validation(self):
+        request = PurchaseRequest(items=[RequestItem(
+            product="труба", product_group="round_pipe", diameter_mm=57,
+            wall_thickness_mm=4, size_designation="57×4", quantity=1, unit="т",
+            source_text="Труба 57 — 1 т",
+        )])
+
+        result = validate_request(normalize_request(request))
+
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.missing_fields, [])
+
+    def test_missing_item_source_text_blocks_validation(self):
+        request = PurchaseRequest(items=[RequestItem(
+            product="швеллер", product_group="channel", size_designation="12П",
+            quantity=1, unit="т",
+        )])
+
+        result = validate_request(normalize_request(request))
+
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.missing_fields, [])
+        self.assertIn("исходного фрагмента", result.warnings[0])
+
+    def test_python_overwrites_model_validation_fields_and_preserves_item_source(self):
+        request = PurchaseRequest(
+            items=[RequestItem(
+                product="балка", product_group="beam", size_designation="25К1",
+                quantity=2, unit="т", source_text="Балка 25К1 — 2 т",
+            )],
+            missing_fields=["model value"],
+            clarification_questions=["model question"],
+            warnings=["model warning"],
+            is_valid=False,
+        )
+
+        result = validate_request(normalize_request(request))
+
+        self.assertEqual(result.items[0].source_text, "Балка 25К1 — 2 т")
+        self.assertEqual(result.missing_fields, [])
+        self.assertEqual(result.clarification_questions, [])
+        self.assertEqual(result.warnings, [])
+        self.assertTrue(result.is_valid)
