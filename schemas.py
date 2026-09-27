@@ -29,7 +29,9 @@ class RequestItem(BaseModel):
     interpreted_fields: List[str] = Field(default_factory=list)
 
 
-class PurchaseRequest(BaseModel):
+class PurchaseRequestExtraction(BaseModel):
+    """Facts extracted from the user's text; no Python validation output."""
+
     items: List[RequestItem] = Field(default_factory=list)
 
     city: Optional[str] = None
@@ -39,7 +41,12 @@ class PurchaseRequest(BaseModel):
     customer: Optional[str] = None
     comment: Optional[str] = None
 
+
+class PurchaseRequest(PurchaseRequestExtraction):
+    """Extracted request enriched with Python-owned validation results."""
+
     missing_fields: List[str] = Field(default_factory=list)
     clarification_questions: List[str] = Field(default_factory=list)
 
     warnings: List[str] = Field(default_factory=list)
+    is_valid: bool = False

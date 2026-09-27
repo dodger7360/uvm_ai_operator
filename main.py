@@ -38,7 +38,7 @@ print("=" * 70)
 print("ПРОВЕРКА ЗАЯВКИ")
 print("=" * 70)
 
-if validated_result.missing_fields:
+if not validated_result.is_valid:
     print()
     print("Заявка требует уточнения:")
     print()

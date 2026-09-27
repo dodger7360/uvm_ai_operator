@@ -1,19 +1,25 @@
 import os
+import re
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from schemas import PurchaseRequest
+from schemas import PurchaseRequest, PurchaseRequestExtraction
 
 
 SYSTEM_PROMPT = """
-Ты извлекаешь позиции из живых заявок на металлопрокат.
-Верни только JSON. Используй исходный текст целиком и создай отдельный item
-для каждой позиции. Ничего не выдумывай: не добавляй ГОСТ, марку стали,
-длину 6/12 м, покрытие или обработку, если их нет в исходном тексте.
+Извлекай только факты, прямо присутствующие в тексте заявки. Не используй
+внешние знания для заполнения значений и не делай догадок или замен.
+Создай отдельный item для каждой позиции. source_text каждого item должен быть
+только исходным фрагментом этой позиции, без дублирования всей заявки.
+Сохраняй исходные обозначения товара и типоразмера. Не придумывай марку стали,
+ГОСТ/ТУ, длину, размеры, покрытие или обработку, если их нет в тексте.
 
-Ты только извлекаешь факты, а не определяешь обязательность полей:
-missing_fields, clarification_questions и warnings всегда возвращай пустыми.
+Извлекай product, product_group, size_designation, размеры, grade, gost_tu,
+quantity и исходную unit только при наличии в тексте. Также извлекай city,
+delivery, deadline, customer и comment только если они явно указаны.
+Отсутствующее значение оставляй пустым. Не вычисляй missing_fields,
+clarification_questions, warnings или результат валидации.
 
 Используй product_group только из значений: beam, i_beam, channel, angle,
 profile_pipe, round_pipe, sheet, expanded_metal, rebar, round_bar, flat_bar.
@@ -25,6 +31,8 @@ profile_pipe, round_pipe, sheet, expanded_metal, rebar, round_bar, flat_bar.
   wall_thickness_mm=4, product_group=profile_pipe;
 - круглая труба 57×3,5: diameter_mm=57, wall_thickness_mm=3.5,
   product_group=round_pipe;
+- размер 120×4 трактуй как 120×120×4 только если в тексте явно указана
+  квадратная профильная труба; иначе не достраивай размер;
 - уголок 90×90×6: side_a_mm=90, side_b_mm=90, thickness_mm=6;
 - арматура А1 20: grade=А1, diameter_mm=20;
 - круг 20: diameter_mm=20;
@@ -32,9 +40,43 @@ profile_pipe, round_pipe, sheet, expanded_metal, rebar, round_bar, flat_bar.
 - 25К1, 12П и ПВЛ 506 являются достаточными типоразмерами: сохраняй их в
   size_designation, не придумывай габариты.
 
-Количество и единицу извлекай как указано. source_unit должен хранить исходную
-единицу, если она присутствует. source_text содержит исходный фрагмент позиции.
+Количество и исходную единицу извлекай как указано. Не меняй марку стали и не
+считай разные марки эквивалентными: А500С, В500С, А240/A1 и круг Ст3 — разные
+обозначения. ГОСТ/ТУ извлекай только если он указан. Если обозначение
+неоднозначно, сохрани его в исходном виде и не заполняй отсутствующие
+характеристики догадкой.
 """
+
+_SOURCE_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def _compact_source_text(value: str) -> tuple[str, set[int]]:
+    """Ignore case, whitespace, and punctuation while retaining token edges."""
+    tokens = [token.casefold() for token in _SOURCE_TOKEN_RE.findall(value)]
+    compact = "".join(tokens)
+    boundaries = {0}
+    offset = 0
+    for token in tokens:
+        offset += len(token)
+        boundaries.add(offset)
+    return compact, boundaries
+
+
+def _source_fragment_occurrences(source: str, fragment: str) -> int:
+    source_compact, source_boundaries = _compact_source_text(source)
+    fragment_compact, _ = _compact_source_text(fragment)
+    if not fragment_compact:
+        return 0
+    occurrences = 0
+    offset = 0
+    while True:
+        offset = source_compact.find(fragment_compact, offset)
+        if offset < 0:
+            return occurrences
+        end = offset + len(fragment_compact)
+        if offset in source_boundaries and end in source_boundaries:
+            occurrences += 1
+        offset += 1
 
 
 class AIService:
@@ -48,15 +90,53 @@ class AIService:
         """Extracts a draft request. Normalization and validation run separately."""
         response = self._client.beta.chat.completions.parse(
             model="gpt-5.6-luna",
-            response_format=PurchaseRequest,
+            response_format=PurchaseRequestExtraction,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": text},
             ],
         )
+        if not getattr(response, "choices", None):
+            raise ValueError("Модель не вернула структурированный ответ.")
         message = response.choices[0].message
         if message.refusal:
             raise ValueError(f"Модель отказалась обработать заявку: {message.refusal}")
         if message.parsed is None:
             raise ValueError("Модель не вернула структурированный ответ.")
-        return message.parsed
+        self._validate_source_fragments(message.parsed, text)
+        return PurchaseRequest(**message.parsed.model_dump())
+
+    @staticmethod
+    def _validate_source_fragments(
+        extraction: PurchaseRequestExtraction,
+        source_text: str,
+    ) -> None:
+        """Reject item excerpts that are not literal fragments of the input."""
+        if not extraction.items:
+            return
+        available_counts = {}
+        for item in extraction.items:
+            fragment = item.source_text
+            if not fragment or not fragment.strip():
+                raise ValueError("Модель не вернула исходный фрагмент позиции.")
+            canonical_fragment = _compact_source_text(fragment)[0]
+            available_counts[canonical_fragment] = _source_fragment_occurrences(
+                source_text, fragment
+            )
+
+        used_counts = {}
+        for fragment in (item.source_text for item in extraction.items):
+            canonical_fragment = _compact_source_text(fragment)[0]
+            used_counts[canonical_fragment] = used_counts.get(canonical_fragment, 0) + 1
+            if used_counts[canonical_fragment] > available_counts[canonical_fragment]:
+                raise ValueError(
+                    "Исходный фрагмент позиции не найден в тексте заявки."
+                )
+        if len(extraction.items) > 1 and any(
+            _compact_source_text(item.source_text)[0]
+            == _compact_source_text(source_text)[0]
+            for item in extraction.items
+        ):
+            raise ValueError(
+                "Для нескольких позиций нужен отдельный исходный фрагмент каждой позиции."
+            )
