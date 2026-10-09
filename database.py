@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 from typing import Iterator, Optional, Union
 
+from metal_reference.schema import SCHEMA as METAL_REFERENCE_SCHEMA
 
 PathLike = Union[str, Path]
 
@@ -91,4 +92,4 @@ class Database:
 
     def initialize(self) -> None:
         with self.connection() as connection:
-            connection.executescript(SCHEMA)
+            connection.executescript(SCHEMA + METAL_REFERENCE_SCHEMA)

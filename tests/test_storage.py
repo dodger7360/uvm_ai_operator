@@ -51,15 +51,129 @@ class SQLiteStorageTests(unittest.TestCase):
             )],
         )
 
-    def test_creates_all_five_tables_and_enables_foreign_keys(self):
+    def test_creates_application_and_metal_reference_tables_and_enables_foreign_keys(self):
+        table_names = self._table_names()
         self.assertTrue(
-            {"request", "request_item", "product", "warehouse", "inventory"}
-            .issubset(self._table_names())
+            {
+                "request", "request_item", "product", "warehouse", "inventory",
+                "reference_family", "reference_category", "reference_item", "reference_variant",
+                "reference_dimension", "reference_property", "reference_standard",
+                "reference_alias", "reference_source",
+            }
+            .issubset(table_names)
+        )
+        self.assertTrue(
+            {"reference_observation", "reference_assertion_source", "product_reference_link"}
+            .isdisjoint(table_names)
         )
         with self.database.connection() as connection:
             self.assertEqual(
                 connection.execute("PRAGMA foreign_keys").fetchone()[0], 1
             )
+
+    def test_metal_reference_keys_links_and_nullable_values(self):
+        with self.database.connection() as connection:
+            family_id = connection.execute(
+                "INSERT INTO reference_family (code, name) VALUES (?, ?)",
+                ("rebar", "Арматура"),
+            ).lastrowid
+            category_id = connection.execute(
+                "INSERT INTO reference_category (family_id, code, name) VALUES (?, ?, ?)",
+                (family_id, "rebar_a3", "Арматура А3"),
+            ).lastrowid
+            item_id = connection.execute(
+                """INSERT INTO reference_item
+                (category_id, normalized_key, designation)
+                VALUES (?, ?, ?)""",
+                (category_id, "12", "12"),
+            ).lastrowid
+            standard_id = connection.execute(
+                """INSERT INTO reference_standard
+                (designation, document_type, year)
+                VALUES (?, ?, ?)""",
+                ("ГОСТ 34028-2016", "ГОСТ", 2016),
+            ).lastrowid
+            variant_id = connection.execute(
+                """INSERT INTO reference_variant
+                (reference_item_id, grade_class, standard_id)
+                VALUES (?, ?, ?)""",
+                (item_id, "А500С", standard_id),
+            ).lastrowid
+            connection.execute(
+                """INSERT INTO reference_dimension
+                (reference_item_id, parameter_type, numeric_value, unit)
+                VALUES (?, ?, ?, ?)""",
+                (item_id, "nominal_diameter", None, "мм"),
+            )
+            connection.execute(
+                """INSERT INTO reference_property
+                (reference_variant_id, property_type, numeric_value, unit,
+                 raw_label, raw_value)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (variant_id, "mass_per_length", None, "кг/м", "Масса 1 м", "0,888 кг"),
+            )
+            connection.execute(
+                """INSERT INTO reference_alias
+                (reference_item_id, raw_value, normalized_value, alias_type)
+                VALUES (?, ?, ?, ?)""",
+                (item_id, "А3 12", "а3 12", "designation"),
+            )
+            source_id = connection.execute(
+                """INSERT INTO reference_source (source_type, name)
+                VALUES (?, ?)""",
+                ("document", "Внутренний справочник"),
+            ).lastrowid
+            self.assertIsNotNone(source_id)
+
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    """INSERT INTO reference_item
+                    (category_id, normalized_key, designation)
+                    VALUES (?, ?, ?)""",
+                    (category_id, "12", "Дубликат"),
+                )
+
+        with self.database.connection() as connection:
+            saved_dimension = connection.execute(
+                "SELECT numeric_value FROM reference_dimension"
+            ).fetchone()
+            self.assertIsNone(saved_dimension["numeric_value"])
+            self.assertEqual(
+                connection.execute(
+                    "SELECT COUNT(*) FROM reference_variant WHERE standard_id = ?",
+                    (standard_id,),
+                ).fetchone()[0],
+                1,
+            )
+
+    def test_metal_reference_fact_requires_exactly_one_owner(self):
+        with self.database.connection() as connection:
+            family_id = connection.execute(
+                "INSERT INTO reference_family (code, name) VALUES (?, ?)",
+                ("sheet", "Лист/рулон г/к"),
+            ).lastrowid
+            category_id = connection.execute(
+                "INSERT INTO reference_category (family_id, code, name) VALUES (?, ?, ?)",
+                (family_id, "sheet_hot_rolled", "Лист/рулон г/к"),
+            ).lastrowid
+            item_id = connection.execute(
+                """INSERT INTO reference_item
+                (category_id, normalized_key, designation)
+                VALUES (?, ?, ?)""",
+                (category_id, "4", "4 мм"),
+            ).lastrowid
+            variant_id = connection.execute(
+                "INSERT INTO reference_variant (reference_item_id) VALUES (?)",
+                (item_id,),
+            ).lastrowid
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    """INSERT INTO reference_dimension
+                    (reference_item_id, reference_variant_id, parameter_type, unit,
+                     raw_value)
+                    VALUES (?, ?, ?, ?, ?)""",
+                    (item_id, variant_id, "thickness", "мм", "4"),
+                )
 
     def test_request_item_stores_valid_product_snapshot_and_can_be_linked_later(self):
         request_id = self.requests.create(
