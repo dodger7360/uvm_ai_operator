@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -17,6 +17,10 @@ class RequestItem(BaseModel):
     side_b_mm: Optional[float] = None
     wall_thickness_mm: Optional[float] = None
 
+    length_type: Optional[Literal["measured", "unmeasured", "other"]] = None
+    length_requirement: Optional[str] = None
+    wall_thickness_requirement: Optional[str] = None
+
     quantity: Optional[float] = None
     unit: Optional[str] = None
     source_unit: Optional[str] = None
@@ -27,6 +31,15 @@ class RequestItem(BaseModel):
 
     source_text: Optional[str] = None
     interpreted_fields: List[str] = Field(default_factory=list)
+
+
+class SharedAttributeEvidence(BaseModel):
+    """A request-level attribute and its explicit target positions."""
+
+    attribute: Literal["grade"]
+    value: str
+    source_text: str
+    applies_to: List[int] = Field(default_factory=list)
 
 
 class PurchaseRequestExtraction(BaseModel):
@@ -40,6 +53,7 @@ class PurchaseRequestExtraction(BaseModel):
 
     customer: Optional[str] = None
     comment: Optional[str] = None
+    shared_attributes: List[SharedAttributeEvidence] = Field(default_factory=list)
 
 
 class PurchaseRequest(PurchaseRequestExtraction):
@@ -50,3 +64,4 @@ class PurchaseRequest(PurchaseRequestExtraction):
 
     warnings: List[str] = Field(default_factory=list)
     is_valid: bool = False
+    confirmed_shared_attributes: List[SharedAttributeEvidence] = Field(default_factory=list)

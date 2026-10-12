@@ -3,9 +3,10 @@
 from dataclasses import dataclass
 
 from ai import AIService
+from formatter import format_item
 from normalizer import normalize_request
 from schemas import PurchaseRequest
-from validator import validate_request
+from validator import confirm_shared_attributes, validate_request
 
 
 @dataclass(frozen=True)
@@ -36,8 +37,99 @@ class NormalizationWorkbench:
         """Return the complete current request state and its clarification questions."""
         current_request = self._ai_service.parse_request(raw_request)
         normalize_request(current_request)
-        validate_request(current_request)
+        confirmed = confirm_shared_attributes(raw_request, current_request)
+        current_request.confirmed_shared_attributes = confirmed
+        for evidence in confirmed:
+            for position in evidence.applies_to:
+                item = current_request.items[position - 1]
+                if item.grade is None:
+                    item.grade = evidence.value
+                    if "grade" not in item.interpreted_fields:
+                        item.interpreted_fields.append("grade")
+        if confirmed:
+            normalize_request(current_request)
+
+        validate_request(current_request, raw_request=raw_request)
+        for evidence in current_request.shared_attributes:
+            if evidence not in confirmed:
+                question = (
+                    f"Общий атрибут «{evidence.value}» не применён: "
+                    "уточните его значение или область применения."
+                )
+                if question not in current_request.clarification_questions:
+                    current_request.clarification_questions.append(question)
+                if "shared_attributes" not in current_request.missing_fields:
+                    current_request.missing_fields.append("shared_attributes")
+                current_request.is_valid = False
         return WorkbenchResult(
             raw_request=raw_request,
             current_request=current_request,
         )
+
+
+def format_workbench_result(result: WorkbenchResult) -> str:
+    """Render the current request using the project's existing item formatter."""
+    lines = ["Нормализованная заявка:"]
+    if result.current_request.items:
+        lines.extend(
+            format_item(item, index)
+            for index, item in enumerate(result.current_request.items, start=1)
+        )
+    else:
+        lines.append("Товарные позиции не найдены.")
+
+    lines.extend([
+        "",
+        "Проверка: " + ("пройдена" if result.is_valid else "нужны уточнения"),
+        "Вопросы/уточнения:",
+    ])
+    if result.questions:
+        lines.extend(f"- {question}" for question in result.questions)
+    else:
+        lines.append("- Нет")
+
+    if result.current_request.warnings:
+        lines.extend(["", "Предупреждения:"])
+        lines.extend(f"- {warning}" for warning in result.current_request.warnings)
+
+    return "\n".join(lines)
+
+
+def main(
+    *,
+    workbench: NormalizationWorkbench | None = None,
+    input_fn=None,
+    output_fn=None,
+) -> int:
+    """Read a multiline request, run W1, and print its normalized state."""
+    reader = input if input_fn is None else input_fn
+    writer = print if output_fn is None else output_fn
+
+    writer("Введите заявку; завершите ввод отдельной строкой /done.")
+    lines: list[str] = []
+    try:
+        while True:
+            try:
+                line = reader("> ")
+            except EOFError:
+                break
+            if line.strip() == "/done":
+                break
+            lines.append(line)
+    except KeyboardInterrupt:
+        writer("\nВвод прерван.")
+        return 0
+
+    raw_request = "\n".join(lines)
+    if not raw_request.strip():
+        writer("Заявка не введена.")
+        return 0
+
+    processor = workbench or NormalizationWorkbench()
+    result = processor.process(raw_request)
+    writer(format_workbench_result(result))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

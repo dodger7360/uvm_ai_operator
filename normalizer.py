@@ -10,6 +10,8 @@ UNIT_ALIASES = {
     "кг": "кг", "килограмм": "кг", "килограмма": "кг", "килограммов": "кг",
     "шт": "шт", "штука": "шт", "штуки": "шт", "штук": "шт",
     "м": "м", "метр": "м", "метра": "м", "метров": "м",
+    "м.п.": "м", "мп": "м", "пог.м": "м",
+    "погонный метр": "м", "погонные метры": "м",
 }
 
 DISPLAY_PRODUCTS = {
@@ -17,7 +19,7 @@ DISPLAY_PRODUCTS = {
     "i_beam": "Двутавр",
     "channel": "Швеллер",
     "angle": "Уголок",
-    "profile_pipe": "Труба",
+    "profile_pipe": "Труба профильная",
     "round_pipe": "Труба",
     "sheet": "Лист",
     "expanded_metal": "Лист ПВЛ",
@@ -27,6 +29,36 @@ DISPLAY_PRODUCTS = {
 }
 
 NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
+_ROUND_SIZE_RE = re.compile(
+    r"^(\d+(?:[.,]\d+)?)(?:\s*[xхХX×*]\s*(\d+(?:[.,]\d+)?))?(?=$|\s|[,;])"
+)
+_EXPLICIT_LENGTH_RE = re.compile(
+    r"\bдлина\s*(?:[:=]\s*)?(\d+(?:[.,]\d+)?)\s*(мм|см|м)\b",
+    re.IGNORECASE,
+)
+_LONG_PRODUCT_GROUPS = {
+    "beam", "i_beam", "channel", "angle", "profile_pipe", "round_pipe",
+    "rebar", "round_bar", "flat_bar",
+}
+
+
+def _normalize_length(item: RequestItem) -> None:
+    """Fill only an explicit single length with a source-provided unit."""
+    if item.product_group not in _LONG_PRODUCT_GROUPS or item.length_mm is not None:
+        return
+    source = item.source_text or ""
+    # Multiple length clauses and alternatives require clarification, not selection.
+    if len(re.findall(r"\bдлина\b", source, re.IGNORECASE)) != 1:
+        return
+    match = _EXPLICIT_LENGTH_RE.search(source)
+    if match is None or re.match(
+        r"\s*(?:[-–/]|или\b|до\b|—\s*\d+(?:[.,]\d+)?\s*(?:мм|см|м)\b)",
+        source[match.end():], re.IGNORECASE,
+    ):
+        return
+    value = float(match[1].replace(",", "."))
+    if value > 0:
+        _set_if_missing(item, "length_mm", value * {"мм": 1, "см": 10, "м": 1000}[match[2].lower()])
 
 
 def _format_number(value: float) -> str:
@@ -131,13 +163,18 @@ def _normalize_item(item: RequestItem) -> None:
     group = item.product_group or _detect_product_group(item.product)
 
     if group == "pipe":
+        cross_section = re.match(
+            r"^\d+(?:[.,]\d+)?(?:\s*[xхХX×*]\s*\d+(?:[.,]\d+)?)*",
+            (item.size_designation or "").strip(),
+        )
         group = (
             "profile_pipe"
-            if len(_numbers(item.size_designation or "")) >= 3
+            if cross_section and len(_numbers(cross_section[0])) >= 3
             else "round_pipe"
         )
 
     item.product_group = group
+    _normalize_length(item)
 
     if not item.size_designation:
         return
@@ -200,24 +237,18 @@ def _normalize_item(item: RequestItem) -> None:
             for value in values
         )
 
-    elif group == "round_pipe" and values:
-        _set_if_missing(
-            item,
-            "diameter_mm",
-            values[0],
-        )
-
-        if len(values) == 2:
-            _set_if_missing(
-                item,
-                "wall_thickness_mm",
-                values[1],
-            )
-
-        item.size_designation = "×".join(
-            _format_number(value)
-            for value in values
-        )
+    elif group == "round_pipe":
+        # Normalize only the leading cross-section, preserving every text suffix.
+        original_size = item.size_designation.strip()
+        match = _ROUND_SIZE_RE.match(original_size)
+        if match:
+            dimensions = [float(token.replace(",", ".")) for token in match.groups() if token is not None]
+            _set_if_missing(item, "diameter_mm", dimensions[0])
+            if len(dimensions) == 2:
+                _set_if_missing(item, "wall_thickness_mm", dimensions[1])
+            item.size_designation = "×".join(
+                _format_number(value) for value in dimensions
+            ) + original_size[match.end():]
 
     elif group in {"rebar", "round_bar"} and len(values) == 1:
         _set_if_missing(
