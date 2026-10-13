@@ -2,14 +2,13 @@
 from decimal import Decimal
 from typing import Literal, Optional
 from uuid import uuid4
-from collections import Counter
 import re
 import os
 from diagnostics import operation, phase, emit, CURRENT, PipelineError, SemanticExtractionError
 from clarifications import PendingClarification, next_question, question_state, answer_values
 from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
-from normalizer import normalize_request
+from normalizer import normalize_request, UNIT_ALIASES
 from validator import validate_request, confirm_shared_attributes
 from formatter import format_normalized_request, sort_items
 
@@ -220,6 +219,15 @@ def is_new_request(text):
     return any(PRODUCT_ROW.search(line) and QUANTITY_RE.search(line) for line in text.splitlines())
 
 
+def product_row_key(row, city):
+    """Ignore a request opener and the explicitly extracted trailing city."""
+    from ai import _compact_source_text
+    row = re.sub(r'^\s*(?:нужна|нужны|нужно|нужен|требуется|требуются)\s+', '', row, flags=re.I)
+    if city and city.strip():
+        row = re.sub(r'(?:[,;]\s*|\s+)' + re.escape(city.strip()) + r'[.!?]*\s*$', '', row, flags=re.I)
+    return _compact_source_text(row)[0]
+
+
 class TelegramService:
     def __init__(self, ai, repository):
         self.ai, self.repository = ai, repository
@@ -322,7 +330,8 @@ class TelegramService:
                 complete_rows=[row for row in parse_text.splitlines() if PRODUCT_ROW.search(row) and not row.strip().endswith(':')]
                 source_has_quantities=bool(complete_rows) and all(QUANTITY_RE.search(row) for row in complete_rows)
                 eligible = {'source_fragment_mismatch','missing_positions','merged_positions',
-                            'unsupported_attributes','header_mapping','header_positions_missing'}
+                            'unsupported_attributes','header_mapping','header_positions_missing',
+                            'additional_positions','city_mismatch'}
                 if attempt or not source_has_quantities or error.code not in eligible:
                     raise
                 emit('medium_retry',stage='extraction',reason=error.code)
@@ -331,36 +340,55 @@ class TelegramService:
         return messages
 
     def _build_active(self,text,parse_text,heading_records,effort=None):
-        from ai import _compact_source_text, _source_fragment_occurrences
+        from ai import _source_fragment_occurrences
         phase('extraction',source_count=sum(bool(PRODUCT_ROW.search(row)) for row in parse_text.splitlines()))
         draft = self.ai.parse_request(parse_text) if effort is None else self.ai.parse_request(parse_text,reasoning_effort=effort)
         initial=draft.model_copy(deep=True)
         if not draft.items:
             raise PipelineError('no_items','Отправьте перечень металлопроката с количеством и единицами.')
+        if draft.city and (not _source_fragment_occurrences(parse_text, draft.city)
+                or re.search(r'\d', draft.city) or PRODUCT_ROW.search(draft.city)
+                or draft.city.strip().casefold().rstrip('.') in UNIT_ALIASES):
+            raise SemanticExtractionError('city_mismatch','Город не подтверждается исходной заявкой. Повторите заявку.')
         # Every physical row containing a product must be represented. Quoted Excel
         # continuations remain within the item's literal source fragment.
         product = PRODUCT_ROW
         literal_rows = [line.strip().strip('"')
             for line in parse_text.splitlines()
             if product.search(line) and re.search(r'\d', line)]
-        source_rows = Counter(_compact_source_text(line)[0] for line in literal_rows)
-        phase('validation',source_count=sum(source_rows.values()),extracted_count=len(draft.items))
-        for compact, count in source_rows.items():
-            represented = sum(bool(_source_fragment_occurrences(i.source_text or '', compact)) for i in draft.items)
-            if represented < count:
-                raise SemanticExtractionError('missing_positions','Не все исходные позиции распознаны. Повторите заявку; предыдущая сохранена.',source_count=sum(source_rows.values()),extracted_count=len(draft.items))
-        unused_literals = list(literal_rows)
+        phase('validation',source_count=len(literal_rows),extracted_count=len(draft.items))
         for item in draft.items:
             physical = [line for line in (item.source_text or '').splitlines() if product.search(line) and QUANTITY_RE.search(line)]
             if len(physical) > 1:
                 raise SemanticExtractionError('merged_positions','Несколько исходных строк объединены в одну позицию. Повторите заявку.')
+        # Consume each physical row once, so a fragment cannot cover two rows
+        # and duplicate rows require separate extracted items.
+        unmatched_rows = list(literal_rows)
+        unmatched_items = []
         for item in draft.items:
-            # Source excerpts may differ only in punctuation/case. Recover the
-            # literal row before extracting standards and exact Decimal amounts.
-            literal = next((row for row in unused_literals if _compact_source_text(row)[0] == _compact_source_text(item.source_text or '')[0]), None)
+            fragment = item.source_text or ''
+            if not _source_fragment_occurrences(parse_text, fragment):
+                raise SemanticExtractionError('source_fragment_mismatch','Исходный фрагмент позиции не найден в заявке. Повторите заявку.')
+            literal = next((row for row in unmatched_rows
+                if _source_fragment_occurrences(row, fragment)
+                and product_row_key(row, draft.city) == product_row_key(fragment, draft.city)), None)
             if literal is not None:
-                unused_literals.remove(literal)
                 item.source_text = literal
+            else:
+                # Preserve quoted Excel continuations within a literal excerpt.
+                literal = next((row for row in unmatched_rows
+                    if _source_fragment_occurrences(fragment, row)), None)
+            if literal is not None:
+                if len(list(product.finditer(fragment))) > len(list(product.finditer(literal))):
+                    raise SemanticExtractionError('merged_positions','Несколько исходных строк объединены в одну позицию. Повторите заявку.')
+                unmatched_rows.remove(literal)
+            else:
+                unmatched_items.append(item)
+        if unmatched_rows:
+            raise SemanticExtractionError('missing_positions','Не все исходные позиции распознаны. Повторите заявку; предыдущая сохранена.',source_count=len(literal_rows),extracted_count=len(draft.items))
+        if unmatched_items:
+            raise SemanticExtractionError('additional_positions','Извлечены лишние позиции без отдельной исходной строки. Повторите заявку.',source_count=len(literal_rows),extracted_count=len(draft.items))
+        for item in draft.items:
             exact_source_attributes(item)
         phase('normalization')
         normalize_request(draft)
