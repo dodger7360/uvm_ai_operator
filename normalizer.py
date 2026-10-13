@@ -12,6 +12,7 @@ UNIT_ALIASES = {
     "м": "м", "метр": "м", "метра": "м", "метров": "м",
     "м.п.": "м", "мп": "м", "пог.м": "м",
     "погонный метр": "м", "погонные метры": "м",
+    "пог. м": "пог. м", "м²": "м²", "м2": "м²",
 }
 
 DISPLAY_PRODUCTS = {
@@ -26,6 +27,8 @@ DISPLAY_PRODUCTS = {
     "rebar": "Арматура",
     "round_bar": "Круг",
     "flat_bar": "Полоса",
+    "wire": "Проволока", "strip": "Лента", "mesh": "Сетка",
+    "rod": "Пруток",
 }
 
 NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
@@ -179,6 +182,9 @@ def _normalize_item(item: RequestItem) -> None:
     if not item.size_designation:
         return
 
+    if group == "strip":
+        item.size_designation = re.sub(r"^(\d+(?:[.,]\d+)?)\s*[xхХX*×]\s*(\d+(?:[.,]\d+)?)", r"\1×\2", item.size_designation.strip())
+        return
     size = _normalize_dimensions(item.size_designation)
     values = _numbers(size)
 

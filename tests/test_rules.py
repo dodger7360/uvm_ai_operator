@@ -31,9 +31,9 @@ class RulesTests(unittest.TestCase):
         self.assertEqual(field_label("diameter_mm"), "диаметр")
         self.assertEqual(field_label("size_designation"), "типоразмер")
 
-    def test_normalizes_gs_to_09g2s(self):
-        self.assertEqual(normalize_grade_rule("ГС"), "09Г2С")
-        self.assertEqual(normalize_grade_rule("гс"), "09Г2С")
+    def test_preserves_gs_without_interpreting_it(self):
+        self.assertEqual(normalize_grade_rule("ГС"), "ГС")
+        self.assertEqual(normalize_grade_rule("гс"), "гс")
 
     def test_does_not_replace_steel_with_another_steel(self):
         self.assertEqual(normalize_grade_rule("Ст3"), "Ст3")

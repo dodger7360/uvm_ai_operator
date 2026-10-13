@@ -1,5 +1,6 @@
-from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from decimal import Decimal
+from typing import Annotated, List, Literal, Optional
+from pydantic import BaseModel, Field, WithJsonSchema, BeforeValidator
 
 
 class RequestItem(BaseModel):
@@ -21,7 +22,7 @@ class RequestItem(BaseModel):
     length_requirement: Optional[str] = None
     wall_thickness_requirement: Optional[str] = None
 
-    quantity: Optional[float] = None
+    quantity: Optional[Annotated[Decimal, BeforeValidator(lambda value: value.replace(",", ".") if isinstance(value, str) else value), WithJsonSchema({"type": "string"}, mode="validation")]] = None
     unit: Optional[str] = None
     source_unit: Optional[str] = None
 

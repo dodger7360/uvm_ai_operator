@@ -1,12 +1,17 @@
 from normalizer import DISPLAY_PRODUCTS
 from schemas import PurchaseRequest, RequestItem
 from typing import Optional
+from decimal import Decimal
+import re
 
 
 def format_number(value: Optional[float]) -> Optional[str]:
     if value is None:
         return None
-    return str(int(value)) if float(value).is_integer() else str(value).replace(".", ",")
+    number = format(Decimal(str(value)), "f")
+    if "." in number:
+        number = number.rstrip("0").rstrip(".")
+    return number.replace(".", ",")
 
 
 def _fallback_size(item: RequestItem) -> Optional[str]:
@@ -42,7 +47,7 @@ def format_item(item: RequestItem, index: int) -> str:
         parts.append(dimensions)
     values = (item.gost_tu, item.processing) if item.product_group == "rebar" else (item.grade, item.gost_tu, item.processing)
     for value in values:
-        if value:
+        if value and not (item.product_group == "strip" and value == item.grade and value in (item.size_designation or "")):
             parts.append(value)
     description = " ".join(parts)
     if item.quantity is not None:
@@ -65,3 +70,49 @@ def format_supplier_request(request: PurchaseRequest) -> str:
         lines.extend(["", request.comment])
     lines.extend(["", "Прошу указать:", "- цену;", "- наличие;", "- срок поставки;", "- город отгрузки;", "- условия оплаты.", "", "Спасибо!"])
     return "\n".join(lines)
+
+
+GROUP_ORDER = {name: n for n, name in enumerate([
+    "round_pipe", "profile_pipe", "sheet", "expanded_metal", "beam", "i_beam",
+    "angle", "channel", "rebar", "round_bar", "flat_bar", "rod", "wire", "strip", "mesh", "fitting"])}
+
+
+def sort_items(items):
+    def key(item):
+        numbers = tuple(Decimal(s.replace(',', '.')) for s in re.findall(r'\d+(?:[.,]\d+)?', item.size_designation or ''))
+        if item.product_group == 'sheet' and item.thickness_mm is not None:
+            numbers = (Decimal(str(item.thickness_mm)),) + numbers
+        return GROUP_ORDER.get(item.product_group, 99), numbers
+    return sorted(items, key=key)
+
+
+def format_normalized_request(request):
+    lines = []
+    for item in request.items:
+        line = format_item(item, 1).removeprefix('1. ')
+        standard = DISPLAY_PRODUCTS.get(item.product_group, '')
+        name = (item.product or '').casefold()
+        subtype = None
+        if item.product_group == 'sheet':
+            if re.search(r'х/?к|холоднокатан', name):
+                subtype = 'Лист Х/К'
+            elif re.search(r'г/?к|горячекатан', name):
+                subtype = 'Лист Г/К'
+        elif item.product_group == 'round_pipe':
+            if re.search(r'э/?с|электросвар', name):
+                subtype = 'Труба э/с'
+            elif 'вгп' in name or 'водогаз' in name:
+                subtype = 'Труба ВГП'
+            elif 'бесшов' in name:
+                subtype = 'Труба бесшовная'
+        if subtype:
+            line = subtype + line[len(standard):]
+        if item.unit == 'шт' and line.endswith(' шт'):
+            line += '.'
+        for requirement in (item.form, item.length_requirement, item.wall_thickness_requirement):
+            if requirement and requirement not in line:
+                parts = line.split(' — ', 1)
+                parts[0] += ' ' + requirement
+                line = ' — '.join(parts)
+        lines.append(line)
+    return '\n'.join(lines)

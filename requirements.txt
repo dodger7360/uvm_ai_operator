@@ -1,0 +1,4 @@
+openai==3.19.2
+pydantic==2.13.5
+python-dotenv==1.2.3
+socksio==1.0.0

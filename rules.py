@@ -12,7 +12,7 @@ PRODUCT_GROUPS = {
     "expanded_metal",
     "rebar",
     "round_bar",
-    "flat_bar",
+    "flat_bar", "wire", "strip", "mesh", "rod", "fitting",
 }
 
 
@@ -47,9 +47,7 @@ FIELD_LABELS = {
 
 
 # Безопасные нормализации, которые не меняют смысл марки.
-GRADE_ALIASES = {
-    "гс": "09Г2С",
-}
+GRADE_ALIASES = {}  # Technical designations are never substituted automatically.
 
 
 def required_fields(product_group: Optional[str]) -> tuple[str, ...]:

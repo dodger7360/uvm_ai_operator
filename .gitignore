@@ -28,3 +28,7 @@ atlas-singbox.json
 *sing-box*.json
 *sing-box*.conf
 *.ovpn
+
+# Telegram runtime
+telegram.log
+telegram.lock
