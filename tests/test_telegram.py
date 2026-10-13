@@ -246,7 +246,7 @@ class TelegramTests(unittest.TestCase):
         access.allowed.return_value = True
         handle_update(update, service, api, access)
         service.process.assert_called_once_with(5, 'заявка')
-        self.assertEqual([c.kwargs['text'] for c in api.call.call_args_list], ['one','two'])
+        self.assertEqual([c.kwargs['text'] for c in api.call.call_args_list if c.args[0]=='sendMessage'], ['one','two'])
         self.assertTrue(all('parse_mode' not in c.kwargs for c in api.call.call_args_list))
 
     def test_handler_ignores_groups(self):

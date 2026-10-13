@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 import time
+import threading
 import urllib.request
 import urllib.error
 from dotenv import load_dotenv
@@ -28,11 +29,11 @@ class TelegramAPI:
     def __init__(self, token):
         self._base = 'https://api.telegram.org/bot' + token + '/'
 
-    def call(self, method, **payload):
+    def call(self, method, _timeout=45, **payload):
         request = urllib.request.Request(self._base + method,
             data=json.dumps(payload).encode(), headers={'Content-Type':'application/json'})
         try:
-            with urllib.request.urlopen(request, timeout=45) as response:
+            with urllib.request.urlopen(request, timeout=_timeout) as response:
                 result = json.load(response)
         except urllib.error.HTTPError as exc:
             raise TelegramError(exc.code) from None
@@ -41,6 +42,39 @@ class TelegramAPI:
         if not result.get('ok'):
             raise TelegramError(result.get('error_code', 0))
         return result['result']
+
+
+class TypingIndicator:
+    """Keep Telegram's short-lived typing action active during processing."""
+    def __init__(self, api, chat_id, interval=4):
+        self.api, self.chat_id, self.interval = api, chat_id, interval
+        self.stopped=threading.Event()
+        self.thread=None
+
+    def _pulse(self):
+        try:
+            self.api.call('sendChatAction', chat_id=self.chat_id, action='typing', _timeout=3)
+        except Exception:
+            # Indicator failure never cancels the actual request.
+            LOG.warning('typing_indicator_unavailable')
+
+    def _refresh(self):
+        deadline=time.monotonic()+self.interval
+        while not self.stopped.wait(max(0,deadline-time.monotonic())):
+            self._pulse()
+            deadline+=self.interval
+
+    def __enter__(self):
+        self._pulse()
+        self.thread=threading.Thread(target=self._refresh,daemon=True,name='telegram-typing')
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self.stopped.set()
+        if self.thread:
+            self.thread.join(timeout=3.2)
+        return False
 
 
 def handle_update(update, service, api, access=None):
@@ -65,7 +99,8 @@ def handle_update(update, service, api, access=None):
         messages = ['Отправьте заявку на металлопрокат обычным сообщением. После ответа можно написать: «Везде С255 замени на Ст3» или «В пятой позиции измени количество на 2,5 т».']
     else:
         try:
-            messages = service.process(user_id, text)
+            with TypingIndicator(api,chat_id):
+                messages = service.process(user_id, text)
         except PipelineError as exc:
             messages = [exc.public_message]
         except ValueError as exc:
