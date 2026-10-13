@@ -22,7 +22,7 @@ def _missing(
 
 
 _WORD_RE = re.compile(r"[^\W_]+", re.UNICODE)
-_NUMBER_RE = re.compile(r"(?<![\w.])\d+(?:[.,]\d+)?(?![\w.])")
+_NUMBER_RE = re.compile(r"(?<![\w.])(?:[Øø⌀]\s*)?(\d+(?:[.,]\d+)?)(?![\w.])")
 
 
 _DIMENSION_FIELDS = {

@@ -465,7 +465,7 @@ Analytics
 
 `main.py → telegram_bot.handle_update → TelegramService → AIService →
 PurchaseRequest → normalize_request → validate_request → sort_items →
-format_normalized_request → sendMessage`.
+ordered_consolidation → format_normalized_request → sendMessage`.
 Существующий консольный Workbench и supplier formatter сохранены.
 
 Telegram принимает личные текстовые сообщения без /normalize. /start и /help
@@ -883,3 +883,15 @@ Windows обновлён до исправления `56125ea`, две реал�
 Обработка 21 позиции занимает 30–60 секунд по наблюдению пользователя;
 это не измерение отдельных этапов. Вложения пока не поддерживаются.
 Подробности и следующие задачи: [итоги сессии](docs/SESSION_2026-10-13.md).
+
+
+### Производная консолидация — 14.10.2026
+
+AI и source_fidelity подтверждают все исходные строки до любых сумм.
+consolidation.py затем строит отдельные группы с ссылками на исходные items,
+используя расширенный закупочный ключ product_identity и quantity.py для
+точного кг→т. Исходный список и original сохраняются; меньший размер ответа
+не используется в проверке missing_positions. Тот же механизм доступен
+Workbench; форматтер сортирует группы и их ссылки единым порядком.
+Корректировки адресуют конкретные исходные items, после чего группы строятся
+заново. Обновление не требует SQL-миграции и не подключает Metal Reference.

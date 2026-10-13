@@ -209,7 +209,10 @@ class TelegramTests(unittest.TestCase):
         for amount, unit in [('0.0015','т'),('0.0072','т'),('0.004','т'),('560.46','пог. м'),('620','м²'),('3.2','кг'),('2','шт'),('10','м')]:
             with self.subTest(unit=unit, amount=amount):
                 output = self.create(user=hash((amount,unit)), items=[item(quantity=amount, unit=unit)])
-                self.assertIn(amount.replace('.', ','), output[0])
+                from quantity import normalize_quantity
+                from formatter import format_number
+                displayed, _ = normalize_quantity(amount, unit)
+                self.assertIn(format_number(displayed), output[0])
                 self.assertEqual(self.repo.load(hash((amount,unit))).items[0].unit, unit)
 
     def test_long_response_splits_between_positions(self):

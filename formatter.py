@@ -3,6 +3,7 @@ from schemas import PurchaseRequest, RequestItem
 from typing import Optional
 from decimal import Decimal, ROUND_HALF_UP
 import re
+from consolidation import consolidate_items
 
 
 def format_number(value: Optional[float]) -> Optional[str]:
@@ -86,9 +87,19 @@ def sort_items(items):
     return sorted(items, key=key)
 
 
+
+def ordered_consolidation(items, originals=None, source_positions=None):
+    """One display order for groups and their provenance in both interfaces."""
+    groups = consolidate_items(items, originals=originals, source_positions=source_positions)
+    groups.sort(key=lambda group: min(group.source_positions))
+    by_item = {id(group.item): group for group in groups}
+    return [by_item[id(item)] for item in sort_items([group.item for group in groups])]
+
+
 def format_normalized_request(request):
     lines = []
-    for item in request.items:
+    for group in ordered_consolidation(request.items):
+        item = group.item
         line = format_item(item, 1).removeprefix('1. ')
         standard = DISPLAY_PRODUCTS.get(item.product_group, '')
         name = (item.product or '').casefold()

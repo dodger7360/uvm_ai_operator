@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 
 from ai import AIService
-from formatter import format_item
+from formatter import format_item, ordered_consolidation
+from source_fidelity import validate_source_coverage
 from normalizer import normalize_request
 from schemas import PurchaseRequest
 from validator import confirm_shared_attributes, validate_request
@@ -15,6 +16,13 @@ class WorkbenchResult:
 
     raw_request: str
     current_request: PurchaseRequest
+    original_items: tuple = ()
+    source_positions: tuple = ()
+
+    @property
+    def consolidated_groups(self):
+        """Recompute after source edits; never cache a sum as a source quantity."""
+        return ordered_consolidation(self.current_request.items, originals=self.original_items or None, source_positions=self.source_positions or None)
 
     @property
     def questions(self) -> tuple[str, ...]:
@@ -36,6 +44,7 @@ class NormalizationWorkbench:
     def process(self, raw_request: str) -> WorkbenchResult:
         """Return the complete current request state and its clarification questions."""
         current_request = self._ai_service.parse_request(raw_request)
+        source_positions = validate_source_coverage(current_request, raw_request, allow_heading_rows=True)
         normalize_request(current_request)
         confirmed = confirm_shared_attributes(raw_request, current_request)
         current_request.confirmed_shared_attributes = confirmed
@@ -64,6 +73,8 @@ class NormalizationWorkbench:
         return WorkbenchResult(
             raw_request=raw_request,
             current_request=current_request,
+            original_items=tuple(item.model_copy(deep=True) for item in current_request.items),
+            source_positions=tuple(source_positions or range(1, len(current_request.items) + 1)),
         )
 
 
@@ -73,7 +84,7 @@ def format_workbench_result(result: WorkbenchResult) -> str:
     if result.current_request.items:
         lines.extend(
             format_item(item, index)
-            for index, item in enumerate(result.current_request.items, start=1)
+            for index, item in enumerate([group.item for group in result.consolidated_groups], start=1)
         )
     else:
         lines.append("Товарные позиции не найдены.")

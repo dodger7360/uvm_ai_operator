@@ -12,7 +12,9 @@ from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
 from normalizer import normalize_request, UNIT_ALIASES
 from validator import validate_request, confirm_shared_attributes
-from formatter import format_normalized_request, sort_items
+from formatter import format_normalized_request, sort_items, ordered_consolidation
+from quantity import QUANTITY_RE
+from source_fidelity import PRODUCT_ROW, product_row_key, validate_source_coverage
 
 
 class MessagePlan(BaseModel):
@@ -26,6 +28,7 @@ class ActiveItem(RequestItem):
     item_id: str
     original: RequestItem
     source_context: Optional[str] = None
+    source_position: Optional[int] = None
 
 
 class ActiveRequest(PurchaseRequest):
@@ -46,15 +49,14 @@ GRADE_RE = re.compile(
     r'(?:[ВB])?[Сс][Тт]\s*\.?\s*(?:\d{2}[Гг][0-9][Сс]|\d+(?:пс|сп|кп)?\d*)(?:-\d+)?|'
     r'\d{2}[Гг][0-9][Сс](?:-\d+)?|12[Хх]18[Нн]10[Тт](?:-\d+)?)(?![\w])',
     re.IGNORECASE)
-QUANTITY_RE = re.compile(
-    r'(?<![\w.,xхХX×*])([0-9]+(?:[.,][0-9]+)?)\s*'
-    r'(пог\.?\s*м\.?|м\s*[²2]|тн|тонн(?:а|ы)?|кг|шт\.?|м\.?|т)(?![\w])',
-    re.IGNORECASE)
+
 
 
 def exact_source_attributes(item):
     """Recover full steel tokens and decimal quantities from literal source."""
     source = item.source_text or ''
+    if item.quantity is not None and item.quantity < 0:
+        raise PipelineError('invalid_quantity', 'Количество должно быть конечным положительным числом.')
     grades = [m.group() for m in GRADE_RE.finditer(source)]
     # A designation like strip contains a steel token inside its compound size.
     if len(grades) == 1 and item.product_group != 'strip':
@@ -176,24 +178,40 @@ def prepare_sheet_heading(text):
 
 
 def local_edit_plan(text, current):
-    """Only whole, explicit commands; everything ambiguous stays with AIService."""
+    """Explicit source edits; a multi-source display row is never a quantity target."""
     from normalizer import _normalize_grade
-    match = re.fullmatch(r'\s*(?:в\s+)?позиции\s+(\d+)\s+(?:измени|замени)\s+(марку|количество)\s+на\s+(.+?)\s*', text, re.I)
-    restore = re.fullmatch(r'\s*(?:верни|восстанови)\s+исходную\s+марку\s+позиции\s+(\d+)\s*', text, re.I)
-    if restore:
-        index = int(restore[1])-1
-        if 0 <= index < len(current.items):
-            return MessagePlan(intent='edit', edits=[Edit(item_id=current.items[index].item_id, field='grade', restore=True)])
-        return None
-    if match:
-        index = int(match[1])-1
-        if not 0 <= index < len(current.items):
-            return None
-        item_id = current.items[index].item_id
-        if match[2].casefold() == 'марку' and GRADE_RE.fullmatch(match[3]):
-            return MessagePlan(intent='edit', edits=[Edit(item_id=item_id, field='grade', value=_normalize_grade(match[3]))])
-        quantity = QUANTITY_RE.fullmatch(match[3])
-        if match[2].casefold() == 'количество' and quantity:
+    ordinals = {'первой': 1, 'второй': 2, 'третьей': 3, 'четвёртой': 4, 'четвертой': 4,
+                'пятой': 5, 'шестой': 6, 'седьмой': 7, 'восьмой': 8, 'девятой': 9, 'десятой': 10}
+    text = re.sub(r'\b(' + '|'.join(ordinals) + r')\s+(исходной\s+)?позиции\b',
+                  lambda m: (m[2] or '') + 'позиции ' + str(ordinals[m[1].casefold()]), text, flags=re.I)
+    match = re.fullmatch(r'\s*(?:в\s+)?(исходной\s+)?позиции\s+(\d+)\s+(?:измени|замени)\s+(марку|количество)\s+на\s+(.+?)\s*', text, re.I)
+    restore = re.fullmatch(r'\s*(?:верни|восстанови)\s+исходную\s+марку\s+(исходной\s+)?позиции\s+(\d+)\s*', text, re.I)
+    selection = match or restore
+    if selection:
+        number = int(selection[2])
+        if selection[1]:
+            candidates = [item for index, item in enumerate(current.items, 1)
+                          if (item.source_position or index) == number]
+        else:
+            groups = ordered_consolidation(current.items)
+            if not 1 <= number <= len(groups):
+                return MessagePlan(intent='clarify', question='Укажите существующую исходную позицию.')
+            group = groups[number - 1]
+            candidates = [current.items[index - 1] for index in group.source_indices]
+            if len(candidates) > 1:
+                positions = ', '.join(map(str, group.source_positions))
+                return MessagePlan(intent='clarify', question=(
+                    f'Итоговая строка {number} включает исходные строки {positions}. '
+                    'Укажите нужную командой «В исходной позиции N измени поле на значение».'))
+        if len(candidates) != 1:
+            return MessagePlan(intent='clarify', question='Укажите существующую исходную позицию.')
+        item_id = candidates[0].item_id
+        if restore:
+            return MessagePlan(intent='edit', edits=[Edit(item_id=item_id, field='grade', restore=True)])
+        if match[3].casefold() == 'марку' and GRADE_RE.fullmatch(match[4]):
+            return MessagePlan(intent='edit', edits=[Edit(item_id=item_id, field='grade', value=_normalize_grade(match[4]))])
+        quantity = QUANTITY_RE.fullmatch(match[4])
+        if match[3].casefold() == 'количество' and quantity:
             from clarifications import find_unit
             unit = find_unit(quantity[2])
             if unit:
@@ -208,7 +226,7 @@ def local_edit_plan(text, current):
     return None
 
 
-PRODUCT_ROW = re.compile(r'\b(балк\w*|двутавр\w*|лист\w*|труб\w*|угол\w*|швеллер\w*|арматур\w*|круг\w*|полос\w*|проволок\w*|лент\w*|сетк\w*|прут\w*|отвод\w*|фланец\w*|муфт\w*|тройник\w*)\b',re.I)
+
 
 
 def is_new_request(text):
@@ -217,13 +235,6 @@ def is_new_request(text):
     return any(PRODUCT_ROW.search(line) and QUANTITY_RE.search(line) for line in text.splitlines())
 
 
-def product_row_key(row, city):
-    """Ignore a request opener and the explicitly extracted trailing city."""
-    from ai import _compact_source_text
-    row = re.sub(r'^\s*(?:нужна|нужны|нужно|нужен|требуется|требуются)\s+', '', row, flags=re.I)
-    if city and city.strip():
-        row = re.sub(r'(?:[,;]\s*|\s+)' + re.escape(city.strip()) + r'[.!?]*\s*$', '', row, flags=re.I)
-    return _compact_source_text(row)[0]
 
 
 class TelegramService:
@@ -253,15 +264,21 @@ class TelegramService:
             candidate = True
         wording = text.strip().casefold().strip('.!?')
         operation_kind = unsupported_operation(text)
-        if (operation_kind in {'merge_items', 'convert_units'}
-                or (operation_kind == 'calculate_mass' and re.search(
-                    r'\b(?:рассчит\w*|посчит\w*|вычисл\w*|какова|какой|сколько)\b', text, re.I))):
+        command_verbs = r'\b(?:суммир\w*|объедин\w*|сложи|перевед\w*|перевест\w*|пересчит\w*|рассчит\w*|посчит\w*|вычисл\w*)\b'
+        plain_rows = [row for row in text.splitlines() if PRODUCT_ROW.search(row) and QUANTITY_RE.search(row)
+                      and not re.search(command_verbs, row[:PRODUCT_ROW.search(row).start()], re.I)]
+        if operation_kind and not plain_rows:
             candidate = False
         if current is not None and not candidate:
             if wording in {'нет', 'неверно', 'отмена', 'отмени', 'отменить', '/cancel', 'отмени операцию', 'отменить операцию'}:
                 if current.pending_operation or current.pending_clarification:
                     return self._cancel_operation(user_id, current)
-            if unsupported_operation(text):
+            if operation_kind == 'merge_items':
+                if re.search(r'перевед|перевест|пересчит', text, re.I) and any(
+                        group.item.unit != 'т' for group in ordered_consolidation(current.items)):
+                    return [UNSUPPORTED_MESSAGE]
+                return self._response(current, [])
+            if operation_kind:
                 return [UNSUPPORTED_MESSAGE]
         if current is not None and not candidate:
             if wording in {'новую', 'новая', 'создать новую', 'новую заявку'}:
@@ -314,6 +331,8 @@ class TelegramService:
             plan = local_edit_plan(text, current)
             if plan is not None:
                 emit('local_edit', stage='routing', edit_count=len(plan.edits))
+                if plan.intent == 'clarify':
+                    return self._begin_clarification(user_id, current, text, plan)
                 return self._edit(user_id, current, plan)
             for attempt in range(2):
                 phase('classification')
@@ -366,44 +385,7 @@ class TelegramService:
                 or re.search(r'\d', draft.city) or PRODUCT_ROW.search(draft.city)
                 or draft.city.strip().casefold().rstrip('.') in UNIT_ALIASES):
             raise SemanticExtractionError('city_mismatch','Город не подтверждается исходной заявкой. Повторите заявку.')
-        # Every physical row containing a product must be represented. Quoted Excel
-        # continuations remain within the item's literal source fragment.
-        product = PRODUCT_ROW
-        literal_rows = [line.strip().strip('"')
-            for line in parse_text.splitlines()
-            if product.search(line) and re.search(r'\d', line)]
-        phase('validation',source_count=len(literal_rows),extracted_count=len(draft.items))
-        for item in draft.items:
-            physical = [line for line in (item.source_text or '').splitlines() if product.search(line) and QUANTITY_RE.search(line)]
-            if len(physical) > 1:
-                raise SemanticExtractionError('merged_positions','Несколько исходных строк объединены в одну позицию. Повторите заявку.')
-        # Consume each physical row once, so a fragment cannot cover two rows
-        # and duplicate rows require separate extracted items.
-        unmatched_rows = list(literal_rows)
-        unmatched_items = []
-        for item in draft.items:
-            fragment = item.source_text or ''
-            if not _source_fragment_occurrences(parse_text, fragment):
-                raise SemanticExtractionError('source_fragment_mismatch','Исходный фрагмент позиции не найден в заявке. Повторите заявку.')
-            literal = next((row for row in unmatched_rows
-                if _source_fragment_occurrences(row, fragment)
-                and product_row_key(row, draft.city) == product_row_key(fragment, draft.city)), None)
-            if literal is not None:
-                item.source_text = literal
-            else:
-                # Preserve quoted Excel continuations within a literal excerpt.
-                literal = next((row for row in unmatched_rows
-                    if _source_fragment_occurrences(fragment, row)), None)
-            if literal is not None:
-                if len(list(product.finditer(fragment))) > len(list(product.finditer(literal))):
-                    raise SemanticExtractionError('merged_positions','Несколько исходных строк объединены в одну позицию. Повторите заявку.')
-                unmatched_rows.remove(literal)
-            else:
-                unmatched_items.append(item)
-        if unmatched_rows:
-            raise SemanticExtractionError('missing_positions','Не все исходные позиции распознаны. Повторите заявку; предыдущая сохранена.',source_count=len(literal_rows),extracted_count=len(draft.items))
-        if unmatched_items:
-            raise SemanticExtractionError('additional_positions','Извлечены лишние позиции без отдельной исходной строки. Повторите заявку.',source_count=len(literal_rows),extracted_count=len(draft.items))
+        source_positions = validate_source_coverage(draft, parse_text)
         for item in draft.items:
             exact_source_attributes(item)
         phase('normalization')
@@ -423,7 +405,8 @@ class TelegramService:
                 raise SemanticExtractionError('unsupported_attributes','Не удалось подтвердить марку или ГОСТ по исходной строке. Уточните эту позицию.')
         active = ActiveRequest(**{k:v for k,v in checked.model_dump().items() if k != 'items'},
             request_id=uuid4().hex, source_text=text,initial_extraction=initial,
-            items=[ActiveItem(**i.model_dump(), item_id=uuid4().hex, original=i.model_copy(deep=True)) for i in checked.items])
+            items=[ActiveItem(**i.model_dump(), item_id=uuid4().hex, original=i.model_copy(deep=True), source_position=source_positions[index - 1])
+                   for index, i in enumerate(checked.items, 1)])
         if heading_records:
             from ai import _compact_source_text
             unused = list(heading_records)
@@ -481,6 +464,8 @@ class TelegramService:
             raise PipelineError('missing_operation', 'Укажите операцию над заявкой.')
         if operation.kind == 'cancel':
             return self._cancel_operation(user_id, current)
+        if operation.kind == 'merge_items':
+            return self._response(current, [])
         if operation.kind != 'edit_fields':
             return [UNSUPPORTED_MESSAGE]
         return self._edit(user_id, current, MessagePlan(intent='edit', edits=operation.edits))

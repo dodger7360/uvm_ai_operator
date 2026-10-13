@@ -211,7 +211,7 @@ def test_error_before_execution_does_not_drop_state(context):
 
 
 @pytest.mark.parametrize('command', [
-    'Суммируй одинаковые позиции', 'Все переведи в тонны и объедини дубли',
+    'Все переведи в тонны и объедини дубли',
     'Штуки тоже переведи в тонны', 'Рассчитай теоретическую массу',
     'Переведи лист 6×1500×6000 4 шт в тонны',
     'Пожалуйста, переведи лист 6×1500×6000 4 шт в тонны'])
@@ -228,7 +228,9 @@ def test_unsupported_command_never_creates_fake_confirmation(context, command):
 def test_unsupported_operation_does_not_consume_existing_pending(context):
     service, repo, _, _ = context
     before = propose(context)
-    assert service.process(1, 'Суммируй одинаковые позиции') == [UNSUPPORTED_MESSAGE]
+    response = service.process(1, 'Суммируй одинаковые позиции')
+    assert response[0].endswith('4 шт.')
+    assert response[1] == before.pending_operation.question
     assert repo.load(1) == before
     service.process(1, 'Да')
     assert repo.load(1).items[0].grade == '09Г2С'
@@ -247,7 +249,7 @@ def test_model_unsupported_question_is_not_a_quantity_clarification(context, que
     assert 'Нет ожидающего' in service.process(1, '1,6956')[0]
 
 
-@pytest.mark.parametrize('kind', ['convert_units', 'calculate_mass', 'merge_items'])
+@pytest.mark.parametrize('kind', ['convert_units', 'calculate_mass'])
 def test_structured_unsupported_operation_does_not_execute_edits(context, kind):
     service, repo, responses, _ = context
     before = repo.load(1)

@@ -1,7 +1,7 @@
 """Typed request operations; execution stays in TelegramService.
 
-Only field edits and cancellation are enabled in stage one. Future operations
-have explicit kinds, but never execute through an unrelated quantity edit.
+Field edits and cancellation update source state. Consolidation is a derived
+view; future mass operations never execute through an unrelated quantity edit.
 """
 from hashlib import sha256
 from typing import Literal, Optional
@@ -37,12 +37,14 @@ class PendingOperation(BaseModel):
 
 def request_fingerprint(request):
     # Include all current/source attributes, not transient dialog state.
-    data = request.model_dump_json(include={'request_id', 'items'})
+    data = request.model_dump_json(include={'request_id', 'items'},
+        exclude={'items': {'__all__': {'source_position'}}})
     return sha256(data.encode('utf-8')).hexdigest()
 
 
-UNSUPPORTED_MESSAGE = ('Эта операция пока не поддерживается: пересчёт единиц и массы '
-                       'и объединение позиций. Заявка сохранена без изменений.')
+UNSUPPORTED_MESSAGE = ('Нормативный пересчёт штук/метров в тонны и теоретическая масса пока не поддерживаются. '
+                       'Кг→т и одинаковые позиции уже нормализуются автоматически. '
+                       'Исходная заявка сохранена без изменений.')
 
 
 def unsupported_operation(text):

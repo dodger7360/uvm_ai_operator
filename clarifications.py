@@ -35,13 +35,14 @@ def find_unit(text):
 
 def next_question(request):
     for index,item in enumerate(request.items,1):
+        source_position = getattr(item, 'source_position', None) or index
         if not item.unit:
             choices=[ClarificationOption(label=unit,values={'unit':unit}) for unit in ['т','кг','шт','м','пог. м','м²']]
             return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='unit',kind='choice',
-                question=f'Укажите единицу позиции {index}: 1 — т; 2 — кг; 3 — шт.; 4 — м; 5 — пог. м; 6 — м². Можно написать единицу словами.',options=choices)
+                question=f'Укажите единицу исходной позиции {source_position}: 1 — т; 2 — кг; 3 — шт.; 4 — м; 5 — пог. м; 6 — м². Можно написать единицу словами.',options=choices)
         if item.quantity is None:
             return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='quantity',kind='number',
-                question=f'Укажите количество позиции {index} в {item.unit}.')
+                question=f'Укажите количество исходной позиции {source_position} в {item.unit}.')
     return None
 
 
@@ -50,7 +51,16 @@ def question_state(question, request):
     if not question:
         return None
     match=re.search(r'позиц\w*\s*(\d+)',question,re.I)
-    index=int(match[1])-1 if match else (0 if len(request.items)==1 else -1)
+    if match and re.search(r'исходн\w*\s+позиц', question, re.I):
+        index = next((i for i, item in enumerate(request.items)
+                      if (getattr(item, 'source_position', None) or i + 1) == int(match[1])), -1)
+    elif match:
+        from formatter import ordered_consolidation
+        groups = ordered_consolidation(request.items)
+        display = int(match[1]) - 1
+        index = groups[display].source_indices[0] - 1 if (0 <= display < len(groups) and len(groups[display].source_indices) == 1) else -1
+    else:
+        index = 0 if len(request.items)==1 else -1
     if index < 0 or index >= len(request.items):
         return None
     item=request.items[index]
