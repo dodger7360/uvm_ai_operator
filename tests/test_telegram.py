@@ -53,6 +53,30 @@ class TelegramTests(unittest.TestCase):
         self.assertEqual(data.quantity, Decimal('0.0015'))
         self.assertEqual(data.unit, 'т')
 
+    def test_tonnage_format_command_does_not_change_quantity(self):
+        self.create()
+        before = self.repo.load(1)
+        output = self.service.process(1, 'тоннаж приведи к виду 0,100т , только три знака после запятой, либо два')
+        after = self.repo.load(1)
+        self.assertTrue(output[0].endswith('0,002т'))
+        self.assertEqual(after.items, before.items)
+        self.assertEqual(after.tonnage_decimals, 3)
+        self.ai.interpret_message.assert_not_called()
+        output = self.service.process(1, 'Тоннаж отображай с двумя знаками после запятой')
+        self.assertTrue(output[0].endswith('0,00т'))
+        self.assertEqual(self.repo.load(1).items[0].quantity, Decimal('0.0015'))
+
+    def test_tonnage_format_is_fixed_and_persists_through_edits(self):
+        self.create(items=[item(quantity='0.1')])
+        output = self.service.process(1, 'Тоннаж формат 0,100т')
+        self.assertTrue(output[0].endswith('0,100т'))
+        current = self.repo.load(1)
+        self.ai.interpret_message.return_value = MessagePlan(intent='edit', edits=[Edit(item_id=current.items[0].item_id, field='grade', value='09Г2С')])
+        self.assertTrue(self.service.process(1, 'Замени марку на 09Г2С')[0].endswith('0,100т'))
+        self.ai.interpret_message.return_value = MessagePlan(intent='new')
+        self.create(items=[item(quantity='0.1')])
+        self.assertIsNone(self.repo.load(1).tonnage_decimals)
+
     def test_initial_preserves_steel_category_and_quantity(self):
         output = self.create()[0]
         saved = self.repo.load(1)

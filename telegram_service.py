@@ -31,6 +31,7 @@ class ActiveItem(RequestItem):
 
 class ActiveRequest(PurchaseRequest):
     request_id: str
+    tonnage_decimals: Optional[Literal[2, 3]] = None
     source_text: str
     items: list[ActiveItem] = Field(default_factory=list)
 
@@ -113,6 +114,23 @@ class TelegramService:
     def process(self, user_id, text):
         current = self.repository.load(user_id)
         if current is not None:
+            # Formatting is a presentation setting, never a quantity edit.
+            wording = text.casefold()
+            if re.search(r'тоннаж|тонн|количеств', wording) and re.search(r'формат|виду|знак|отображ|округл', wording):
+                places = re.search(r'(три|тр[её]х|два|двух|двумя|[23])\s*(?:знак|цифр)', wording)
+                example = re.search(r'0[,.](0{2,3}|100)\s*т', wording)
+                exact = re.search(r'без округления|исходн\w* формат|точн\w* формат', wording)
+                if places or example or exact:
+                    changed = current.model_copy(deep=True)
+                    if exact:
+                        changed.tonnage_decimals = None
+                    elif places:
+                        changed.tonnage_decimals = 2 if places[1] in {'два', 'двух', 'двумя', '2'} else 3
+                    else:
+                        changed.tonnage_decimals = len(example[1])
+                    messages = self._response(changed, [])
+                    self.repository.save(user_id, changed)
+                    return messages
             plan = self.ai.interpret_message(text, current)
             if plan.intent == 'clarify':
                 return [plan.question or 'Уточните, какие позиции и поля изменить.']

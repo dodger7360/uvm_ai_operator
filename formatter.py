@@ -1,7 +1,7 @@
 from normalizer import DISPLAY_PRODUCTS
 from schemas import PurchaseRequest, RequestItem
 from typing import Optional
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import re
 
 
@@ -107,6 +107,12 @@ def format_normalized_request(request):
                 subtype = 'Труба бесшовная'
         if subtype:
             line = subtype + line[len(standard):]
+        places = getattr(request, 'tonnage_decimals', None)
+        if places is not None and item.unit == 'т' and item.quantity is not None:
+            # Quantize only the rendered value; the stored Decimal stays exact.
+            displayed = item.quantity.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
+            prefix = line.rsplit(' — ', 1)[0]
+            line = prefix + ' — ' + format(displayed, f'.{places}f').replace('.', ',') + 'т'
         if item.unit == 'шт' and line.endswith(' шт'):
             line += '.'
         for requirement in (item.form, item.length_requirement, item.wall_thickness_requirement):
