@@ -11,6 +11,8 @@ from ai import AIService
 from database import Database
 from repositories.telegram_repository import TelegramRepository
 from telegram_service import TelegramService
+from repositories.access_repository import AccessRepository, AuthorizedRequestRepository
+from telegram_access import TelegramAccess
 
 LOG = logging.getLogger('telegram_operator')
 
@@ -40,7 +42,16 @@ class TelegramAPI:
         return result['result']
 
 
-def handle_update(update, service, api):
+def handle_update(update, service, api, access=None):
+    # Fail closed even when a caller forgets to supply the access controller.
+    if access is not None:
+        if access.route(update, api):
+            return
+    else:
+        message = update.get('message', {})
+        if message.get('chat', {}).get('type') == 'private':
+            api.call('sendMessage', chat_id=message['chat']['id'], text='Доступ к боту ограничен. Администратор ещё не настроен.')
+        return
     message = update.get('message', {})
     if message.get('chat', {}).get('type') != 'private' or message.get('from', {}).get('is_bot'):
         return
@@ -56,14 +67,17 @@ def handle_update(update, service, api):
             messages = service.process(user_id, text)
         except ValueError as exc:
             # Only locally controlled validation errors are shown to users.
-            LOG.warning('validation_error user=%s', user_id)
+            LOG.warning('validation_error')
             messages = ['Не удалось безопасно обработать сообщение. Уточните марки, количество и номера изменяемых позиций. Активная заявка сохранена.']
         except Exception:
-            LOG.error('processing_error user=%s', user_id)
+            LOG.error('processing_error')
             messages = ['Сервис обработки временно недоступен. Повторите сообщение чуть позже.']
+    if not access.allowed(user_id):
+        api.call('sendMessage', chat_id=chat_id, text='Доступ к боту ограничен.')
+        return
     for text in messages:
         api.call('sendMessage', chat_id=chat_id, text=text)
-    LOG.info('message_processed user=%s response_parts=%s', user_id, len(messages))
+    LOG.info('message_processed response_parts=%s', len(messages))
 
 
 def main():
@@ -99,13 +113,24 @@ def main():
                 return 4
             LOG.info('bot_started username=%s pid=%s', me['username'], os.getpid())
             repository = TelegramRepository(Database(os.getenv('OPERATOR_DB', str(root / 'operator.sqlite3'))))
-            service = TelegramService(AIService(), repository)
+            access_repository = AccessRepository(repository.database)
+            configured_admin = os.getenv('ADMIN_TELEGRAM_ID')
+            if configured_admin:
+                try:
+                    access_repository.bootstrap_configured_admin(int(configured_admin))
+                except (ValueError, PermissionError):
+                    LOG.error('administrator_configuration_invalid')
+                    return 7
+            access = TelegramAccess(access_repository)
+            if access_repository.admin_id() is None:
+                LOG.warning('administrator_not_bound_access_closed')
+            service = TelegramService(AIService(), AuthorizedRequestRepository(repository, access_repository))
             offset = repository.get_offset()
             while True:
                 try:
-                    updates = api.call('getUpdates', offset=offset, timeout=25, allowed_updates=['message'])
+                    updates = api.call('getUpdates', offset=offset, timeout=25, allowed_updates=['message', 'callback_query'])
                     for update in updates:
-                        handle_update(update, service, api)
+                        handle_update(update, service, api, access)
                         offset = update['update_id'] + 1
                         repository.set_offset(offset)
                 except TelegramError as exc:
