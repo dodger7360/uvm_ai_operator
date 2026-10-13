@@ -32,3 +32,9 @@ atlas-singbox.json
 # Telegram runtime
 telegram.log
 telegram.lock
+
+# Windows operational state (local only)
+telegram-supervisor.log
+telegram-supervisor.lock
+telegram.maintenance
+telegram.ready
