@@ -181,7 +181,10 @@ class TelegramTests(unittest.TestCase):
         before = self.repo.load(1)
         self.ai.interpret_message.return_value = MessagePlan(intent='clarify', question='Какие позиции?')
         self.assertEqual(self.service.process(1, 'Замени сталь'), ['Какие позиции?'])
-        self.assertEqual(before, self.repo.load(1))
+        after = self.repo.load(1)
+        self.assertEqual(before.items, after.items)
+        self.assertEqual(before.source_text, after.source_text)
+        self.assertEqual(after.pending_operation.question, "Какие позиции?")
 
     def test_invalid_patch_is_atomic(self):
         self.create()

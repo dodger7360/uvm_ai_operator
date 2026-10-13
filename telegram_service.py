@@ -6,6 +6,8 @@ import re
 import os
 from diagnostics import operation, phase, emit, CURRENT, PipelineError, SemanticExtractionError
 from clarifications import PendingClarification, next_question, question_state, answer_values
+from request_operations import (Edit, RequestOperation, PendingOperation, request_fingerprint,
+                                unsupported_operation, UNSUPPORTED_MESSAGE)
 from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
 from normalizer import normalize_request, UNIT_ALIASES
@@ -13,17 +15,11 @@ from validator import validate_request, confirm_shared_attributes
 from formatter import format_normalized_request, sort_items
 
 
-class Edit(BaseModel):
-    item_id: str
-    field: Literal['grade', 'quantity', 'unit']
-    value: Optional[str] = None
-    restore: bool = False
-
-
 class MessagePlan(BaseModel):
-    intent: Literal['new', 'edit', 'clarify']
+    intent: Literal['new', 'edit', 'clarify', 'operation']
     edits: list[Edit] = Field(default_factory=list)
     question: Optional[str] = None
+    operation: Optional[RequestOperation] = None
 
 
 class ActiveItem(RequestItem):
@@ -37,6 +33,8 @@ class ActiveRequest(PurchaseRequest):
     dialog_state: Literal['active', 'choose_request', 'awaiting_new'] = 'active'
     tonnage_decimals: Optional[Literal[2, 3]] = None
     pending_clarification: Optional[PendingClarification] = None
+    pending_operation: Optional[PendingOperation] = None
+    clarification_cancelled: bool = False
     clarification_answers: list[str] = Field(default_factory=list)
     initial_extraction: Optional[PurchaseRequest] = None
     source_text: str
@@ -246,17 +244,32 @@ class TelegramService:
         phase('sqlite_load')
         current = self.repository.load(user_id)
         phase('routing')
-        if current is not None and current.pending_clarification is None:
+        if (current is not None and current.pending_clarification is None
+                and current.pending_operation is None and not current.clarification_cancelled):
             current.pending_clarification=next_question(current)
         parse_text, heading_records = prepare_sheet_heading(text)
         candidate = is_new_request(text) or bool(heading_records)
         if current is not None and current.dialog_state == 'awaiting_new' and PRODUCT_ROW.search(text) and re.search(r'\d', text):
             candidate = True
         wording = text.strip().casefold().strip('.!?')
+        operation_kind = unsupported_operation(text)
+        if (operation_kind in {'merge_items', 'convert_units'}
+                or (operation_kind == 'calculate_mass' and re.search(
+                    r'\b(?:рассчит\w*|посчит\w*|вычисл\w*|какова|какой|сколько)\b', text, re.I))):
+            candidate = False
+        if current is not None and not candidate:
+            if wording in {'нет', 'неверно', 'отмена', 'отмени', 'отменить', '/cancel', 'отмени операцию', 'отменить операцию'}:
+                if current.pending_operation or current.pending_clarification:
+                    return self._cancel_operation(user_id, current)
+            if unsupported_operation(text):
+                return [UNSUPPORTED_MESSAGE]
         if current is not None and not candidate:
             if wording in {'новую', 'новая', 'создать новую', 'новую заявку'}:
                 changed = current.model_copy(deep=True)
                 changed.dialog_state = 'awaiting_new'
+                changed.pending_operation = None
+                changed.pending_clarification = None
+                changed.clarification_cancelled = True
                 self._save(user_id, changed)
                 return ['Пришлите новую заявку на металлопрокат. Предыдущая заявка сохранена до успешной обработки новой.']
             if current.dialog_state == 'awaiting_new' and not PRODUCT_ROW.search(text):
@@ -264,21 +277,22 @@ class TelegramService:
             if current.dialog_state == 'choose_request' and wording in {'изменить', 'изменить заявку', 'старую'}:
                 changed = current.model_copy(deep=True)
                 changed.dialog_state = 'active'
+                changed.pending_operation = None
                 self._save(user_id, changed)
                 return ['Укажите позицию и поле, которое нужно изменить.']
             if wording in {'как дела', 'привет', 'здравствуйте', 'добрый день'}:
-                changed = current.model_copy(deep=True)
-                changed.dialog_state = 'choose_request'
-                self._save(user_id, changed)
-                return ['Вы хотите изменить активную заявку или создать новую?']
+                return self._begin_clarification(user_id, current, text,
+                    MessagePlan(intent='clarify', question='Вы хотите изменить активную заявку или создать новую?'))
         if current is None and not PRODUCT_ROW.search(text):
             return ['Пришлите заявку на металлопрокат с размерами и количеством.']
         if current is not None and not candidate:
             explicit_edit=re.search(r'\b(замени|заменить|измени|изменить|верни|восстанови|убери|удали)\b',text,re.I)
             formatting=re.search(r'тоннаж|тонн|количеств',text,re.I) and re.search(r'формат|виду|знак|отображ|округл',text,re.I)
+            if current.pending_operation and not explicit_edit and not formatting:
+                return self._answer_operation(user_id, current, text)
             if current.pending_clarification and not explicit_edit and not formatting:
                 return self._answer_clarification(user_id,current,text)
-            if text.strip().casefold() in {'да','нет'} or re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*',text):
+            if wording in {'да', 'нет', 'верно', 'подтверждаю', 'согласен', 'неверно'} or re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*',text):
                 return ['Нет ожидающего уточнения. Отправьте новую заявку или укажите позицию и поле для изменения.']
             # Formatting is a presentation setting, never a quantity edit.
             wording = text.casefold()
@@ -305,13 +319,9 @@ class TelegramService:
                 phase('classification')
                 plan = self.ai.interpret_message(text,current) if attempt==0 else self.ai.interpret_message(text,current,reasoning_effort=os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
                 if plan.intent == 'clarify':
-                    changed=current.model_copy(deep=True)
-                    changed.pending_clarification=question_state(plan.question,changed)
-                    if plan.question and re.search(r'нов\w*', plan.question, re.I) and re.search(r'измен|прав', plan.question, re.I):
-                        changed.dialog_state = 'choose_request'
-                    if changed.pending_clarification or changed.dialog_state != current.dialog_state:
-                        self._save(user_id,changed)
-                    return [plan.question or 'Уточните, какие позиции и поля изменить.']
+                    return self._begin_clarification(user_id, current, text, plan)
+                if plan.intent == 'operation':
+                    return self._execute_operation(user_id, current, plan.operation)
                 if plan.intent != 'edit':
                     break
                 try:
@@ -335,6 +345,12 @@ class TelegramService:
                 if attempt or not source_has_quantities or error.code not in eligible:
                     raise
                 emit('medium_retry',stage='extraction',reason=error.code)
+        if active.pending_clarification is None and active.clarification_questions:
+            active.pending_operation = PendingOperation(
+                user_id=user_id, request_id=active.request_id,
+                request_fingerprint=request_fingerprint(active),
+                operation=RequestOperation(kind='edit_fields'), command=text,
+                question='\n'.join(active.clarification_questions), expected_answer='details')
         messages=self._response(active,active.clarification_questions)
         self._save(user_id,active)
         return messages
@@ -429,10 +445,77 @@ class TelegramService:
         active.pending_clarification=next_question(active)
         return active
 
+    def _cancel_operation(self, user_id, current):
+        changed = current.model_copy(deep=True)
+        changed.pending_operation = None
+        changed.pending_clarification = None
+        changed.clarification_cancelled = True
+        changed.dialog_state = 'active'
+        self._save(user_id, changed)
+        return ['Ожидающая операция отменена. Заявка сохранена без изменений.']
+
+    def _begin_clarification(self, user_id, current, command, plan, answers=None):
+        question = plan.question or 'Укажите позиции и поля для изменения.'
+        if unsupported_operation(question) or (plan.operation and plan.operation.kind not in {'edit_fields', 'cancel'}):
+            return [UNSUPPORTED_MESSAGE]
+        changed = current.model_copy(deep=True)
+        operation = plan.operation or RequestOperation(kind='edit_fields', edits=plan.edits)
+        concrete = bool(operation.edits) or operation.kind == 'cancel'
+        changed.pending_clarification = None if concrete else question_state(question, changed)
+        changed.pending_operation = None
+        changed.clarification_cancelled = False
+        if changed.pending_clarification is None:
+            changed.pending_operation = PendingOperation(
+                user_id=user_id, request_id=current.request_id,
+                request_fingerprint=request_fingerprint(current),
+                operation=operation,
+                command=command, question=question,
+                expected_answer='confirmation' if concrete else 'details', answers=answers or [])
+        if re.search(r'нов\w*', question, re.I) and re.search(r'измен|прав', question, re.I):
+            changed.dialog_state = 'choose_request'
+        self._save(user_id, changed)
+        return [question]
+
+    def _execute_operation(self, user_id, current, operation):
+        if operation is None:
+            raise PipelineError('missing_operation', 'Укажите операцию над заявкой.')
+        if operation.kind == 'cancel':
+            return self._cancel_operation(user_id, current)
+        if operation.kind != 'edit_fields':
+            return [UNSUPPORTED_MESSAGE]
+        return self._edit(user_id, current, MessagePlan(intent='edit', edits=operation.edits))
+
+    def _answer_operation(self, user_id, current, text):
+        pending = current.pending_operation
+        if (pending.user_id != user_id or pending.request_id != current.request_id
+                or pending.request_fingerprint != request_fingerprint(current)):
+            raise PipelineError('stale_operation', 'Предложение относится к другой или изменённой заявке. Отмените его и повторите команду.')
+        answer = text.strip().casefold().strip('.!?')
+        if pending.expected_answer == 'confirmation':
+            if answer in {'да', 'верно', 'подтверждаю', 'согласен'}:
+                return self._execute_operation(user_id, current, pending.operation)
+            return [pending.question]
+        if answer in {'да', 'верно', 'подтверждаю', 'согласен'}:
+            return [pending.question + '\nУкажите конкретные позиции и значения; предложение ещё не определено.']
+        # Resume the same field-edit pipeline with the saved context. A reply
+        # cannot replace the active request through model classification.
+        answers = pending.answers + [text]
+        plan = self.ai.interpret_message(
+            'Исходная команда: ' + pending.command + '\nУточняющий вопрос: ' + pending.question
+            + '\nОтветы пользователя: ' + '\n'.join(answers), current)
+        if plan.intent == 'clarify':
+            return self._begin_clarification(user_id, current, pending.command, plan, answers=answers)
+        if plan.intent == 'edit':
+            return self._edit(user_id, current, plan)
+        if plan.intent == 'operation':
+            return self._execute_operation(user_id, current, plan.operation)
+        return [pending.question]
+
     def _edit(self, user_id, current, plan):
         phase('correction')
         if not plan.edits:
-            return [plan.question or 'Укажите полную марку и позиции, которые нужно изменить.']
+            return self._begin_clarification(user_id, current, '',
+                MessagePlan(intent='clarify', question=plan.question or 'Укажите полную марку и позиции, которые нужно изменить.'))
         changed = current.model_copy(deep=True)
         by_id = {i.item_id:i for i in changed.items}
         seen = set()
@@ -458,6 +541,8 @@ class TelegramService:
                     raise PipelineError('compound_grade','Уточните полное обозначение ленты для восстановления марки.')
                 item.size_designation = item.size_designation.replace(item.grade, value, 1)
             setattr(item, edit.field, value)
+        changed.pending_operation = None
+        changed.clarification_cancelled = False
         changed.pending_clarification=next_question(changed)
         questions=[]
         messages = self._response(changed, questions)
@@ -475,6 +560,7 @@ class TelegramService:
             raise PipelineError('stale_clarification','Позиция для уточнения не найдена.')
         values,question=answer_values(pending,text)
         if values is None:
+            self._save(user_id, current)
             return [question]
         changed=current.model_copy(deep=True)
         if question:
@@ -492,6 +578,8 @@ class TelegramService:
             if name=='unit' and converted not in {'т','кг','шт','шт.','м','пог. м','м²'}:
                 raise PipelineError('invalid_unit','Укажите единицу: т, кг, шт., м, пог. м или м².')
             setattr(target,name,converted)
+        changed.pending_operation = None
+        changed.clarification_cancelled = False
         changed.clarification_answers.append(text)
         changed.pending_clarification=next_question(changed)
         changed.missing_fields=[field for field in changed.missing_fields if not field.endswith(('.quantity','.unit'))]
@@ -504,7 +592,9 @@ class TelegramService:
     @staticmethod
     def _response(request, questions):
         phase('formatting')
-        if request.pending_clarification:
+        if request.pending_operation:
+            questions=[request.pending_operation.question]
+        elif request.pending_clarification:
             questions=[request.pending_clarification.question]
         messages = split_positions(format_normalized_request(request))
         if questions:

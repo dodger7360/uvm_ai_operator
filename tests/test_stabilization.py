@@ -172,7 +172,8 @@ class StabilizationTests(unittest.TestCase):
         self.service.process(1,'нет')
         active=self.repo.load(1)
         self.assertIsNone(active.items[0].quantity)
-        self.assertEqual(active.pending_clarification.kind,'number')
+        self.assertIsNone(active.pending_clarification)
+        self.assertTrue(active.clarification_cancelled)
 
     def test_number_selects_typed_option(self):
         active=self.pending_pipe()
