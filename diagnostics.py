@@ -35,6 +35,11 @@ class Trace:
     source_count: int | None = None
     extracted_count: int | None = None
     started: float = field(default_factory=time.monotonic)
+    phase_started: float = field(default_factory=time.monotonic)
+    stage_ms: dict = field(default_factory=dict)
+    http_attempts: int = 0
+    sdk_retries: int = 0
+    result: str = 'ok'
 
 
 CURRENT = ContextVar('operator_trace',default=None)
@@ -43,6 +48,9 @@ CURRENT = ContextVar('operator_trace',default=None)
 def phase(stage, source_count=None, extracted_count=None):
     trace = CURRENT.get()
     if trace:
+        now = time.monotonic()
+        trace.stage_ms[trace.stage] = trace.stage_ms.get(trace.stage, 0) + (now-trace.phase_started)*1000
+        trace.phase_started = now
         trace.stage=stage
         if source_count is not None:
             trace.source_count=source_count
@@ -52,6 +60,18 @@ def phase(stage, source_count=None, extracted_count=None):
 
 def emit(event, **fields):
     LOG.info(json.dumps({'event':event,**fields},ensure_ascii=False))
+
+
+def http_attempt(request):
+    """Public HTTP hook: record SDK retry metadata, never URLs or headers."""
+    trace = CURRENT.get()
+    if trace:
+        trace.http_attempts += 1
+        try:
+            retry = int(request.headers.get('x-stainless-retry-count', '0'))
+        except (TypeError, ValueError):
+            retry = 0
+        trace.sdk_retries += int(retry > 0)
 
 
 def safe_code(error):
@@ -66,28 +86,39 @@ def safe_code(error):
         'PermissionError':'access_denied'}.get(name,'program_error' if not isinstance(error,ValueError) else 'validation_error')
 
 
+def record_error(error):
+    trace = CURRENT.get()
+    if trace is None:
+        return
+    trace.result = safe_code(error)
+    if isinstance(error, PipelineError):
+        if error.source_count is not None:
+            trace.source_count = error.source_count
+        if error.extracted_count is not None:
+            trace.extracted_count = error.extracted_count
+    emit('processing_error', operation=trace.operation_id, stage=trace.stage,
+         exception=type(error).__name__, reason=trace.result, source_count=trace.source_count,
+         extracted_count=trace.extracted_count, calls=trace.calls, medium=trace.medium,
+         model=trace.model or os.getenv('OPENAI_MODEL','gpt-6-luna'),
+         reasoning=trace.reasoning or os.getenv('OPENAI_REASONING_EFFORT','low'))
+
+
 @contextmanager
 def operation():
     trace=Trace()
     token=CURRENT.set(trace)
-    result='ok'
     try:
         yield trace
     except Exception as error:
-        result=safe_code(error)
-        if isinstance(error,PipelineError):
-            if error.source_count is not None:
-                trace.source_count=error.source_count
-            if error.extracted_count is not None:
-                trace.extracted_count=error.extracted_count
-        emit('processing_error',operation=trace.operation_id,stage=trace.stage,
-             exception=type(error).__name__,reason=result,source_count=trace.source_count,
-             extracted_count=trace.extracted_count,calls=trace.calls,medium=trace.medium,
-             model=trace.model or os.getenv('OPENAI_MODEL','gpt-6-luna'),reasoning=trace.reasoning or os.getenv('OPENAI_REASONING_EFFORT','low'))
+        record_error(error)
         raise
     finally:
-        emit('operation_complete',operation=trace.operation_id,stage=trace.stage,result=result,
-             calls=trace.calls,stage_calls=trace.stage_calls,medium=trace.medium,duration_ms=round((time.monotonic()-trace.started)*1000))
+        phase(trace.stage)
+        emit('operation_complete',operation=trace.operation_id,stage=trace.stage,result=trace.result,
+             calls=trace.calls,stage_calls=trace.stage_calls,medium=trace.medium,
+             stage_ms={key:round(value,3) for key,value in trace.stage_ms.items()},
+             http_attempts=trace.http_attempts,sdk_retries=trace.sdk_retries,
+             duration_ms=round((time.monotonic()-trace.started)*1000,3))
         CURRENT.reset(token)
 
 

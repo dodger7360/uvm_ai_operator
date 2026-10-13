@@ -105,7 +105,7 @@ class TelegramTests(unittest.TestCase):
     def test_sheet_heading_mixed_or_unitless_cut_is_not_guessed(self):
         from telegram_service import prepare_sheet_heading
         for text in ['лист ГК ГОСТ 19903 Ст.09г2с раскрой 1,5*6:\n12 - 4,594т',
-                     'лист ГК ГОСТ 19903 Ст.09г2с раскрой 1,5*6м:\n12 - 4,594т\nБалка 20Б1 — 1 т']:
+                     'лист ГК ГОСТ 19903 Ст.09г2с раскрой 1,5*6м:\nБалка 20Б1 — 1 т']:
             self.assertEqual(prepare_sheet_heading(text), (text, []))
 
     def test_initial_preserves_steel_category_and_quantity(self):

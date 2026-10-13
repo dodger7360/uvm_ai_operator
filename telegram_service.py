@@ -35,6 +35,7 @@ class ActiveItem(RequestItem):
 
 class ActiveRequest(PurchaseRequest):
     request_id: str
+    dialog_state: Literal['active', 'choose_request', 'awaiting_new'] = 'active'
     tonnage_decimals: Optional[Literal[2, 3]] = None
     pending_clarification: Optional[PendingClarification] = None
     clarification_answers: list[str] = Field(default_factory=list)
@@ -44,7 +45,7 @@ class ActiveRequest(PurchaseRequest):
 
 
 GRADE_RE = re.compile(
-    r'(?<![\w])(?:\d{3}-\d+-)?(?:[СC]\d{3}(?:-\d+)?|'
+    r'(?<![\w])(?:\d{3}-\d+-)?(?:[СC]\s*\d{3}(?:-\d+)?|'
     r'(?:[ВB])?[Сс][Тт]\s*\.?\s*(?:\d{2}[Гг][0-9][Сс]|\d+(?:пс|сп|кп)?\d*)(?:-\d+)?|'
     r'\d{2}[Гг][0-9][Сс](?:-\d+)?|12[Хх]18[Нн]10[Тт](?:-\d+)?)(?![\w])',
     re.IGNORECASE)
@@ -70,9 +71,14 @@ def exact_source_attributes(item):
         else:
             raise PipelineError('ambiguous_grades','Укажите, являются ли перечисленные марки разрешёнными альтернативами («или»).')
     # Restore every explicitly written standard, rather than trusting omissions.
-    standards = re.findall(r'(?:ГОСТ(?:\s+Р)?|ТУ|СТО\s+АСЧМ)\s+[0-9][0-9.\-]*(?:\s*-[0-9]+)?', source, re.I)
+    standards = re.findall(r'(?<!\w)(?:ГОСТ(?:\s+Р)?|ТУ|СТО\s+АСЧМ)\s*[0-9][0-9.\-]*(?:\s*-[0-9]+)?', source, re.I)
     if standards:
-        item.gost_tu = ', '.join(re.sub(r'\s+', ' ', token.strip().rstrip('-')) for token in standards)
+        canonical = []
+        for token in standards:
+            token = re.sub(r'\s+', ' ', token.strip().rstrip('-'))
+            canonical.append(re.sub(r'^(ГОСТ(?:\s+Р)?|ТУ|СТО\s+АСЧМ)\s*',
+                                    lambda match: match[1].upper()+' ', token, flags=re.I))
+        item.gost_tu = ', '.join(canonical)
     name = (source + ' ' + (item.product or '')).casefold()
     if item.product_group == 'sheet':
         if re.search(r'х/?к|холоднокатан', name):
@@ -124,44 +130,85 @@ def exact_source_attributes(item):
 
 
 def prepare_sheet_heading(text):
-    """Expand only an explicit single sheet heading with unambiguous rows.
-
-    Numeric unit conversion is deterministic; keep original heading and row
-    separately for provenance. Unrecognized/mixed blocks use normal AI parsing.
-    """
+    """Expand scoped sheet blocks; retain each literal row and its own heading."""
     lines = [line.strip().rstrip('\\').strip() for line in text.splitlines() if line.strip()]
-    if len(lines) < 2:
-        return text, []
-    heading = lines[0]
-    if not re.match(r'^лист\b', heading, re.I) or not heading.endswith(':'):
-        return text, []
-    cut = re.search(r'раскрой\s*(\d+(?:[.,]\d+)?)\s*[xхХX×*]\s*(\d+(?:[.,]\d+)?)\s*(мм|м)\s*:', heading, re.I)
-    grades = list(GRADE_RE.finditer(heading))
-    standards = re.findall(r'(?:ГОСТ(?:\s+Р)?|ТУ)\s+[0-9][0-9.\-]*', heading, re.I)
-    if not cut or len(grades) != 1 or not standards:
-        return text, []
-    factor = Decimal(1000) if cut[3].casefold() == 'м' else Decimal(1)
-    dimensions = [Decimal(cut[n].replace(',', '.')) * factor for n in [1, 2]]
-    if any(value <= 0 for value in dimensions):
-        return text, []
-    if re.search(r'г/?к|горячекатан', heading, re.I):
-        product = 'Лист Г/К'
-    elif re.search(r'х/?к|холоднокатан', heading, re.I):
-        product = 'Лист Х/К'
-    else:
-        product = 'Лист'
-    def number(value):
-        result = format(value, 'f')
-        return (result.rstrip('0').rstrip('.') if '.' in result else result).replace('.', ',')
-    records = []
-    for row in lines[1:]:
-        match = re.fullmatch(r'(\d+(?:[.,]\d+)?)\s*[-—–]\s*(\d+(?:[.,]\d+)?)\s*(тн|т|кг|шт\.?)', row, re.I)
-        if not match:
-            return text, []
-        size = '×'.join([match[1]] + [number(value) for value in dimensions])
-        prepared = f'{product} {size} {grades[0][0]} {", ".join(standards)} — {match[2]} {match[3]}'
-        records.append((prepared, row, heading))
-    return '\n'.join(record[0] for record in records), records
+    prepared, records = [], []
+    index = 0
+    while index < len(lines):
+        heading = lines[index]
+        cut = re.search(r'раскрой\s*(\d+(?:[.,]\d+)?)\s*[xхХX×*]\s*(\d+(?:[.,]\d+)?)\s*(мм|м)\s*:', heading, re.I)
+        grades = list(GRADE_RE.finditer(heading))
+        standards = re.findall(r'(?:ГОСТ(?:\s+Р)?|ТУ)\s*[0-9][0-9.\-]*', heading, re.I)
+        if not (re.match(r'^лист\b', heading, re.I) and heading.endswith(':') and cut and len(grades) == 1 and standards):
+            prepared.append(heading)
+            index += 1
+            continue
+        factor = Decimal(1000) if cut[3].casefold() == 'м' else Decimal(1)
+        dimensions = [Decimal(cut[n].replace(',', '.')) * factor for n in (1, 2)]
+        if any(value <= 0 for value in dimensions):
+            prepared.append(heading)
+            index += 1
+            continue
+        product = 'Лист Г/К' if re.search(r'г/?к|горячекатан', heading, re.I) else 'Лист Х/К' if re.search(r'х/?к|холоднокатан', heading, re.I) else 'Лист'
+        from normalizer import _normalize_grade
+        grade = _normalize_grade(grades[0][0])
+        def number(value):
+            result = format(value, 'f')
+            return (result.rstrip('0').rstrip('.') if '.' in result else result).replace('.', ',')
+        block = []
+        cursor = index + 1
+        while cursor < len(lines):
+            row = lines[cursor]
+            match = re.fullmatch(r'(\d+(?:[.,]\d+)?)\s*[-—–]\s*(\d+(?:[.,]\d+)?)\s*(тн|т|кг|шт\.?)', row, re.I)
+            if not match:
+                if re.match(r'^\d', row):
+                    raise PipelineError('sheet_row_format', 'Не удалось однозначно разобрать строку под шапкой листов. Укажите толщину, количество и единицу.')
+                break
+            size = '×'.join([match[1]] + [number(value) for value in dimensions])
+            expanded = f'{product} {size} {grade} {", ".join(standards)} — {match[2]} {match[3]}'
+            block.append((expanded, row, heading))
+            cursor += 1
+        if not block:
+            prepared.append(heading)
+            index += 1
+            continue
+        prepared.extend(record[0] for record in block)
+        records.extend(block)
+        index = cursor
+    return ('\n'.join(prepared), records) if records else (text, [])
+
+
+def local_edit_plan(text, current):
+    """Only whole, explicit commands; everything ambiguous stays with AIService."""
+    from normalizer import _normalize_grade
+    match = re.fullmatch(r'\s*(?:в\s+)?позиции\s+(\d+)\s+(?:измени|замени)\s+(марку|количество)\s+на\s+(.+?)\s*', text, re.I)
+    restore = re.fullmatch(r'\s*(?:верни|восстанови)\s+исходную\s+марку\s+позиции\s+(\d+)\s*', text, re.I)
+    if restore:
+        index = int(restore[1])-1
+        if 0 <= index < len(current.items):
+            return MessagePlan(intent='edit', edits=[Edit(item_id=current.items[index].item_id, field='grade', restore=True)])
+        return None
+    if match:
+        index = int(match[1])-1
+        if not 0 <= index < len(current.items):
+            return None
+        item_id = current.items[index].item_id
+        if match[2].casefold() == 'марку' and GRADE_RE.fullmatch(match[3]):
+            return MessagePlan(intent='edit', edits=[Edit(item_id=item_id, field='grade', value=_normalize_grade(match[3]))])
+        quantity = QUANTITY_RE.fullmatch(match[3])
+        if match[2].casefold() == 'количество' and quantity:
+            from clarifications import find_unit
+            unit = find_unit(quantity[2])
+            if unit:
+                return MessagePlan(intent='edit', edits=[Edit(item_id=item_id,field='quantity',value=quantity[1]), Edit(item_id=item_id,field='unit',value=unit)])
+        return None
+    global_grade = re.fullmatch(r'\s*везде\s+(.+?)\s+(?:замени|заменить)\s+на\s+(.+?)\s*', text, re.I)
+    if global_grade and all(GRADE_RE.fullmatch(global_grade[n]) for n in (1, 2)):
+        original, replacement = (_normalize_grade(global_grade[n]) for n in (1, 2))
+        edits = [Edit(item_id=item.item_id,field='grade',value=replacement) for item in current.items if _normalize_grade(item.grade) == original]
+        if edits:
+            return MessagePlan(intent='edit', edits=edits)
+    return None
 
 
 PRODUCT_ROW = re.compile(r'\b(балк\w*|двутавр\w*|лист\w*|труб\w*|угол\w*|швеллер\w*|арматур\w*|круг\w*|полос\w*|проволок\w*|лент\w*|сетк\w*|прут\w*|отвод\w*|фланец\w*|муфт\w*|тройник\w*)\b',re.I)
@@ -178,15 +225,47 @@ class TelegramService:
         self.ai, self.repository = ai, repository
 
     def process(self, user_id, text):
+        if CURRENT.get() is not None:
+            return self._process(user_id, text)
         with operation():
             return self._process(user_id,text)
 
+    def _save(self, user_id, request):
+        phase('sqlite_save')
+        self.repository.save(user_id, request)
+
     def _process(self, user_id, text):
+        phase('sqlite_load')
         current = self.repository.load(user_id)
+        phase('routing')
         if current is not None and current.pending_clarification is None:
             current.pending_clarification=next_question(current)
         parse_text, heading_records = prepare_sheet_heading(text)
-        if current is not None and not heading_records and not is_new_request(text):
+        candidate = is_new_request(text) or bool(heading_records)
+        if current is not None and current.dialog_state == 'awaiting_new' and PRODUCT_ROW.search(text) and re.search(r'\d', text):
+            candidate = True
+        wording = text.strip().casefold().strip('.!?')
+        if current is not None and not candidate:
+            if wording in {'новую', 'новая', 'создать новую', 'новую заявку'}:
+                changed = current.model_copy(deep=True)
+                changed.dialog_state = 'awaiting_new'
+                self._save(user_id, changed)
+                return ['Пришлите новую заявку на металлопрокат. Предыдущая заявка сохранена до успешной обработки новой.']
+            if current.dialog_state == 'awaiting_new' and not PRODUCT_ROW.search(text):
+                return ['Пришлите новую заявку с наименованиями, размерами и количеством.']
+            if current.dialog_state == 'choose_request' and wording in {'изменить', 'изменить заявку', 'старую'}:
+                changed = current.model_copy(deep=True)
+                changed.dialog_state = 'active'
+                self._save(user_id, changed)
+                return ['Укажите позицию и поле, которое нужно изменить.']
+            if wording in {'как дела', 'привет', 'здравствуйте', 'добрый день'}:
+                changed = current.model_copy(deep=True)
+                changed.dialog_state = 'choose_request'
+                self._save(user_id, changed)
+                return ['Вы хотите изменить активную заявку или создать новую?']
+        if current is None and not PRODUCT_ROW.search(text):
+            return ['Пришлите заявку на металлопрокат с размерами и количеством.']
+        if current is not None and not candidate:
             explicit_edit=re.search(r'\b(замени|заменить|измени|изменить|верни|восстанови|убери|удали)\b',text,re.I)
             formatting=re.search(r'тоннаж|тонн|количеств',text,re.I) and re.search(r'формат|виду|знак|отображ|округл',text,re.I)
             if current.pending_clarification and not explicit_edit and not formatting:
@@ -208,16 +287,22 @@ class TelegramService:
                     else:
                         changed.tonnage_decimals = len(example[1])
                     messages = self._response(changed, [])
-                    self.repository.save(user_id, changed)
+                    self._save(user_id, changed)
                     return messages
+            plan = local_edit_plan(text, current)
+            if plan is not None:
+                emit('local_edit', stage='routing', edit_count=len(plan.edits))
+                return self._edit(user_id, current, plan)
             for attempt in range(2):
                 phase('classification')
                 plan = self.ai.interpret_message(text,current) if attempt==0 else self.ai.interpret_message(text,current,reasoning_effort=os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
                 if plan.intent == 'clarify':
                     changed=current.model_copy(deep=True)
                     changed.pending_clarification=question_state(plan.question,changed)
-                    if changed.pending_clarification:
-                        self.repository.save(user_id,changed)
+                    if plan.question and re.search(r'нов\w*', plan.question, re.I) and re.search(r'измен|прав', plan.question, re.I):
+                        changed.dialog_state = 'choose_request'
+                    if changed.pending_clarification or changed.dialog_state != current.dialog_state:
+                        self._save(user_id,changed)
                     return [plan.question or 'Уточните, какие позиции и поля изменить.']
                 if plan.intent != 'edit':
                     break
@@ -236,14 +321,17 @@ class TelegramService:
             except SemanticExtractionError as error:
                 complete_rows=[row for row in parse_text.splitlines() if PRODUCT_ROW.search(row) and not row.strip().endswith(':')]
                 source_has_quantities=bool(complete_rows) and all(QUANTITY_RE.search(row) for row in complete_rows)
-                if attempt or not source_has_quantities:
+                eligible = {'source_fragment_mismatch','missing_positions','merged_positions',
+                            'unsupported_attributes','header_mapping','header_positions_missing'}
+                if attempt or not source_has_quantities or error.code not in eligible:
                     raise
                 emit('medium_retry',stage='extraction',reason=error.code)
         messages=self._response(active,active.clarification_questions)
-        self.repository.save(user_id,active)
+        self._save(user_id,active)
         return messages
 
     def _build_active(self,text,parse_text,heading_records,effort=None):
+        from ai import _compact_source_text, _source_fragment_occurrences
         phase('extraction',source_count=sum(bool(PRODUCT_ROW.search(row)) for row in parse_text.splitlines()))
         draft = self.ai.parse_request(parse_text) if effort is None else self.ai.parse_request(parse_text,reasoning_effort=effort)
         initial=draft.model_copy(deep=True)
@@ -251,25 +339,30 @@ class TelegramService:
             raise PipelineError('no_items','Отправьте перечень металлопроката с количеством и единицами.')
         # Every physical row containing a product must be represented. Quoted Excel
         # continuations remain within the item's literal source fragment.
-        product = re.compile(r'\b(балк\w*|двутавр\w*|лист\w*|труб\w*|угол\w*|'
-                             r'швеллер\w*|арматур\w*|круг\w*|полос\w*|'
-                             r'проволок\w*|лент\w*|сетк\w*|прут\w*|'
-                             r'отвод\w*|фланец\w*|муфт\w*|тройник\w*)\b', re.I)
-        source_rows = Counter(
-            ''.join(line.casefold().split()).strip('"')
+        product = PRODUCT_ROW
+        literal_rows = [line.strip().strip('"')
             for line in parse_text.splitlines()
-            if product.search(line) and re.search(r'\d', line))
+            if product.search(line) and re.search(r'\d', line)]
+        source_rows = Counter(_compact_source_text(line)[0] for line in literal_rows)
         phase('validation',source_count=sum(source_rows.values()),extracted_count=len(draft.items))
         for compact, count in source_rows.items():
-            represented = sum(compact in ''.join((i.source_text or '').casefold().split()).strip('"') for i in draft.items)
+            represented = sum(bool(_source_fragment_occurrences(i.source_text or '', compact)) for i in draft.items)
             if represented < count:
-                raise SemanticExtractionError('missing_positions','Не все строки распознаны. Разделите позиции переносами строк.')
+                raise SemanticExtractionError('missing_positions','Не все исходные позиции распознаны. Повторите заявку; предыдущая сохранена.',source_count=sum(source_rows.values()),extracted_count=len(draft.items))
+        unused_literals = list(literal_rows)
         for item in draft.items:
             physical = [line for line in (item.source_text or '').splitlines() if product.search(line) and QUANTITY_RE.search(line)]
             if len(physical) > 1:
                 raise SemanticExtractionError('merged_positions','Несколько исходных строк объединены в одну позицию. Повторите заявку.')
         for item in draft.items:
+            # Source excerpts may differ only in punctuation/case. Recover the
+            # literal row before extracting standards and exact Decimal amounts.
+            literal = next((row for row in unused_literals if _compact_source_text(row)[0] == _compact_source_text(item.source_text or '')[0]), None)
+            if literal is not None:
+                unused_literals.remove(literal)
+                item.source_text = literal
             exact_source_attributes(item)
+        phase('normalization')
         normalize_request(draft)
         confirmed = confirm_shared_attributes(parse_text, draft)
         draft.confirmed_shared_attributes = confirmed
@@ -278,6 +371,7 @@ class TelegramService:
                 if draft.items[position-1].grade is None:
                     draft.items[position-1].grade = evidence.value
         original = [i.model_copy(deep=True) for i in draft.items]
+        phase('validation')
         checked = validate_request(draft, raw_request=parse_text)
         # Never publish a silently erased source attribute.
         for before, after in zip(original, checked.items):
@@ -293,13 +387,16 @@ class TelegramService:
                 compact = _compact_source_text(item.source_text or '')[0]
                 record = next((row for row in unused if _compact_source_text(row[0])[0] == compact), None)
                 if record is None:
-                    raise SemanticExtractionError('header_mapping','Не удалось сопоставить позицию с общей шапкой.')
+                    if any(_compact_source_text(row[0])[0] == compact for row in heading_records):
+                        raise SemanticExtractionError('header_mapping','Повторно извлечена позиция общей шапки.')
+                    continue
                 unused.remove(record)
                 item.source_text = record[1]
                 item.original.source_text = record[1]
                 item.source_context = record[2]
             if unused:
                 raise SemanticExtractionError('header_positions_missing','Не все позиции под общей шапкой распознаны.')
+        phase('sorting')
         active.items = sort_items(active.items)
         active.pending_clarification=next_question(active)
         return active
@@ -336,7 +433,8 @@ class TelegramService:
         changed.pending_clarification=next_question(changed)
         questions=[]
         messages = self._response(changed, questions)
-        self.repository.save(user_id, changed)
+        changed.dialog_state = 'active'
+        self._save(user_id, changed)
         return messages
 
     def _answer_clarification(self,user_id,current,text):
@@ -354,7 +452,7 @@ class TelegramService:
         if question:
             changed.pending_clarification=PendingClarification(request_id=changed.request_id,item_id=pending.item_id,
                 field='quantity',kind='number',question=question)
-            self.repository.save(user_id,changed)
+            self._save(user_id,changed)
             return [question]
         target=next(i for i in changed.items if i.item_id==pending.item_id)
         for name,value in values.items():
@@ -372,7 +470,7 @@ class TelegramService:
         changed.is_valid=not changed.missing_fields and changed.pending_clarification is None
         changed.clarification_questions=[]
         messages=self._response(changed,[])
-        self.repository.save(user_id,changed)
+        self._save(user_id,changed)
         return messages
 
     @staticmethod

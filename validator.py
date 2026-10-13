@@ -1,7 +1,7 @@
 import re
 from decimal import Decimal, InvalidOperation
 
-from normalizer import UNIT_ALIASES
+from normalizer import UNIT_ALIASES, explicit_equal_angle
 from rules import GRADE_ALIASES, PRODUCT_GROUPS, field_label, required_fields
 from schemas import PurchaseRequest, RequestItem, SharedAttributeEvidence
 
@@ -121,6 +121,9 @@ def _has_dimension_sequence_evidence(item: RequestItem, source_text: str) -> boo
             for pattern in patterns
             for match in pattern.finditer(source_text)
         )
+        source_sequences = ((sequence[0], sequence[0], sequence[1])
+                            if len(sequence) == 2 and explicit_equal_angle(item) else sequence
+                            for sequence in source_sequences)
         return any(
             len(sequence) == len(expected_values)
             and all(

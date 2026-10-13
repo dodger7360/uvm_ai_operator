@@ -14,7 +14,7 @@ from repositories.telegram_repository import TelegramRepository
 from telegram_service import TelegramService
 from repositories.access_repository import AccessRepository, AuthorizedRequestRepository
 from telegram_access import TelegramAccess
-from diagnostics import PipelineError, safe_code
+from diagnostics import PipelineError, safe_code, operation, phase, emit, record_error
 
 LOG = logging.getLogger('telegram_operator')
 
@@ -52,20 +52,23 @@ class TypingIndicator:
         self.thread=None
 
     def _pulse(self):
+        started = time.monotonic()
         try:
             self.api.call('sendChatAction', chat_id=self.chat_id, action='typing', _timeout=3)
         except Exception:
             # Indicator failure never cancels the actual request.
             LOG.warning('typing_indicator_unavailable')
+        finally:
+            emit('typing_action', duration_ms=round((time.monotonic()-started)*1000,3))
 
     def _refresh(self):
+        self._pulse()
         deadline=time.monotonic()+self.interval
         while not self.stopped.wait(max(0,deadline-time.monotonic())):
             self._pulse()
             deadline+=self.interval
 
     def __enter__(self):
-        self._pulse()
         self.thread=threading.Thread(target=self._refresh,daemon=True,name='telegram-typing')
         self.thread.start()
         return self
@@ -73,11 +76,18 @@ class TypingIndicator:
     def __exit__(self, *args):
         self.stopped.set()
         if self.thread:
-            self.thread.join(timeout=3.2)
+            # A slow network call for the indicator must not delay the reply.
+            self.thread.join(timeout=0.05)
         return False
 
 
 def handle_update(update, service, api, access=None):
+    with operation():
+        return _handle_update(update, service, api, access)
+
+
+def _handle_update(update, service, api, access=None):
+    phase('authorization')
     # Fail closed even when a caller forgets to supply the access controller.
     if access is not None:
         if access.route(update, api):
@@ -102,11 +112,14 @@ def handle_update(update, service, api, access=None):
             with TypingIndicator(api,chat_id):
                 messages = service.process(user_id, text)
         except PipelineError as exc:
+            record_error(exc)
             messages = [exc.public_message]
         except ValueError as exc:
+            record_error(exc)
             LOG.warning('validation_error class=%s reason=%s',type(exc).__name__,safe_code(exc))
             messages = ['Ответ модели не прошёл проверку данных. Повторите заявку, сохраняя каждую позицию отдельной строкой. Активная заявка не изменена.']
         except Exception as exc:
+            record_error(exc)
             code=safe_code(exc)
             LOG.error('processing_error class=%s reason=%s',type(exc).__name__,code)
             messages = [{'api_connection':'Не удалось подключиться к сервису AI. Повторите сообщение позже.',
@@ -120,6 +133,7 @@ def handle_update(update, service, api, access=None):
         api.call('sendMessage', chat_id=chat_id, text='Доступ к боту ограничен.')
         return
     for text in messages:
+        phase('sending')
         api.call('sendMessage', chat_id=chat_id, text=text)
     LOG.info('message_processed response_parts=%s', len(messages))
 

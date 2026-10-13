@@ -45,6 +45,11 @@ _LONG_PRODUCT_GROUPS = {
 }
 
 
+def explicit_equal_angle(item):
+    """Only ГОСТ 8509 explicitly identifies an equal-leg angle."""
+    return item.product_group == 'angle' and bool(re.search(r'\bГОСТ\s*8509(?:-\d+)?\b', item.source_text or '', re.I))
+
+
 def _normalize_length(item: RequestItem) -> None:
     """Fill only an explicit single length with a source-provided unit."""
     if item.product_group not in _LONG_PRODUCT_GROUPS or item.length_mm is not None:
@@ -204,6 +209,8 @@ def _normalize_item(item: RequestItem) -> None:
             .removeprefix("ПВЛ-")
             .removeprefix("ПВЛ ")
         )
+        if re.fullmatch(r'\d+(?:[.,]\d+)?(?:×\d+(?:[.,]\d+)?)*\s*ММ', item.size_designation):
+            item.size_designation = re.sub(r'\s*ММ$', '', item.size_designation)
 
     elif group == "sheet" and len(values) == 3:
         for field, value in zip(
@@ -225,6 +232,11 @@ def _normalize_item(item: RequestItem) -> None:
         )
 
         item.size_designation = _format_number(values[0])
+
+    elif group == 'angle' and len(values) == 2 and explicit_equal_angle(item):
+        for field, value in zip(('side_a_mm', 'side_b_mm', 'thickness_mm'), (values[0], values[0], values[1])):
+            _set_if_missing(item, field, value)
+        item.size_designation = '×'.join(_format_number(value) for value in values)
 
     elif group == "angle" and len(values) == 3:
         for field, value in zip(

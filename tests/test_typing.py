@@ -43,8 +43,10 @@ class TypingTests(unittest.TestCase):
         api,service,access=Mock(),Mock(),Mock()
         access.route.return_value=False
         access.allowed.return_value=True
+        indicator_started = threading.Event()
+        api.call.side_effect = lambda method, **payload: indicator_started.set() if method == 'sendChatAction' else None
         def process(*args):
-            self.assertEqual(api.call.call_args.args[0],'sendChatAction')
+            self.assertTrue(indicator_started.wait(1))
             return ['готовая заявка']
         service.process.side_effect=process
         update={'message':{'chat':{'type':'private','id':5},'from':{'id':5},'text':'заявка'}}
