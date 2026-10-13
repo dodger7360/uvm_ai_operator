@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from database import Database
 from metal_reference.ingest_armatura_price import (
     BASE_CATEGORIES,
@@ -19,6 +21,7 @@ class ArmaturaPriceIngestionTests(unittest.TestCase):
         self.database = Database(Path(self.temp_dir.name) / "armatura.sqlite3")
         self.database.initialize()
 
+    @pytest.mark.legacy_23met
     def test_ingests_three_categories_and_snapshot_confirmed_assortment(self):
         counts = ingest_armatura_price(self.database, DEFAULT_RESEARCH_DIR)
         self.assertEqual(counts["families"], 1)
@@ -90,6 +93,7 @@ class ArmaturaPriceIngestionTests(unittest.TestCase):
             self.assertTrue(all("tmp/23met_research/armatura_" in row["url_path"]
                                 for row in sources))
 
+    @pytest.mark.legacy_23met
     def test_same_size_has_distinct_grade_variants_and_category_scoped_items(self):
         ingest_armatura_price(self.database, DEFAULT_RESEARCH_DIR)
         with self.database.connection() as connection:
@@ -167,6 +171,7 @@ class ArmaturaPriceIngestionTests(unittest.TestCase):
             # Their current lack of variants therefore records source coverage,
             # not a claim that the real assortment has no other marks.
 
+    @pytest.mark.legacy_23met
     def test_only_price_reference_fields_are_stored_and_provenance_is_attached(self):
         ingest_armatura_price(self.database, DEFAULT_RESEARCH_DIR)
         with self.database.connection() as connection:
@@ -211,6 +216,7 @@ class ArmaturaPriceIngestionTests(unittest.TestCase):
                 6,
             )
 
+    @pytest.mark.legacy_23met
     def test_repeated_import_is_idempotent(self):
         first = ingest_armatura_price(self.database, DEFAULT_RESEARCH_DIR)
         second = ingest_armatura_price(self.database, DEFAULT_RESEARCH_DIR)
