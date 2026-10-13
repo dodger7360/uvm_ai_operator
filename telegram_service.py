@@ -27,6 +27,7 @@ class MessagePlan(BaseModel):
 class ActiveItem(RequestItem):
     item_id: str
     original: RequestItem
+    source_context: Optional[str] = None
 
 
 class ActiveRequest(PurchaseRequest):
@@ -107,13 +108,55 @@ def exact_source_attributes(item):
         raise ValueError('Количество должно быть конечным положительным числом.')
 
 
+def prepare_sheet_heading(text):
+    """Expand only an explicit single sheet heading with unambiguous rows.
+
+    Numeric unit conversion is deterministic; keep original heading and row
+    separately for provenance. Unrecognized/mixed blocks use normal AI parsing.
+    """
+    lines = [line.strip().rstrip('\\').strip() for line in text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return text, []
+    heading = lines[0]
+    if not re.match(r'^лист\b', heading, re.I) or not heading.endswith(':'):
+        return text, []
+    cut = re.search(r'раскрой\s*(\d+(?:[.,]\d+)?)\s*[xхХX×*]\s*(\d+(?:[.,]\d+)?)\s*(мм|м)\s*:', heading, re.I)
+    grades = list(GRADE_RE.finditer(heading))
+    standards = re.findall(r'(?:ГОСТ(?:\s+Р)?|ТУ)\s+[0-9][0-9.\-]*', heading, re.I)
+    if not cut or len(grades) != 1 or not standards:
+        return text, []
+    factor = Decimal(1000) if cut[3].casefold() == 'м' else Decimal(1)
+    dimensions = [Decimal(cut[n].replace(',', '.')) * factor for n in [1, 2]]
+    if any(value <= 0 for value in dimensions):
+        return text, []
+    if re.search(r'г/?к|горячекатан', heading, re.I):
+        product = 'Лист Г/К'
+    elif re.search(r'х/?к|холоднокатан', heading, re.I):
+        product = 'Лист Х/К'
+    else:
+        product = 'Лист'
+    def number(value):
+        result = format(value, 'f')
+        return (result.rstrip('0').rstrip('.') if '.' in result else result).replace('.', ',')
+    records = []
+    for row in lines[1:]:
+        match = re.fullmatch(r'(\d+(?:[.,]\d+)?)\s*[-—–]\s*(\d+(?:[.,]\d+)?)\s*(тн|т|кг|шт\.?)', row, re.I)
+        if not match:
+            return text, []
+        size = '×'.join([match[1]] + [number(value) for value in dimensions])
+        prepared = f'{product} {size} {grades[0][0]} {", ".join(standards)} — {match[2]} {match[3]}'
+        records.append((prepared, row, heading))
+    return '\n'.join(record[0] for record in records), records
+
+
 class TelegramService:
     def __init__(self, ai, repository):
         self.ai, self.repository = ai, repository
 
     def process(self, user_id, text):
         current = self.repository.load(user_id)
-        if current is not None:
+        parse_text, heading_records = prepare_sheet_heading(text)
+        if current is not None and not heading_records:
             # Formatting is a presentation setting, never a quantity edit.
             wording = text.casefold()
             if re.search(r'тоннаж|тонн|количеств', wording) and re.search(r'формат|виду|знак|отображ|округл', wording):
@@ -138,7 +181,7 @@ class TelegramService:
                 return self._edit(user_id, current, plan)
         elif re.search(r'\b(замени|заменить|измени|верни|убери)\b', text, re.I):
             return ['Сначала отправьте заявку, затем команду изменения.']
-        draft = self.ai.parse_request(text)
+        draft = self.ai.parse_request(parse_text)
         if not draft.items:
             return ['Отправьте перечень металлопроката с количеством и единицами.']
         # Every physical row containing a product must be represented. Quoted Excel
@@ -149,7 +192,7 @@ class TelegramService:
                              r'отвод\w*|фланец\w*|муфт\w*|тройник\w*)\b', re.I)
         source_rows = Counter(
             ''.join(line.casefold().split()).strip('"')
-            for line in text.splitlines()
+            for line in parse_text.splitlines()
             if product.search(line) and re.search(r'\d', line))
         for compact, count in source_rows.items():
             represented = sum(compact in ''.join((i.source_text or '').casefold().split()).strip('"') for i in draft.items)
@@ -162,14 +205,14 @@ class TelegramService:
         for item in draft.items:
             exact_source_attributes(item)
         normalize_request(draft)
-        confirmed = confirm_shared_attributes(text, draft)
+        confirmed = confirm_shared_attributes(parse_text, draft)
         draft.confirmed_shared_attributes = confirmed
         for evidence in confirmed:
             for position in evidence.applies_to:
                 if draft.items[position-1].grade is None:
                     draft.items[position-1].grade = evidence.value
         original = [i.model_copy(deep=True) for i in draft.items]
-        checked = validate_request(draft, raw_request=text)
+        checked = validate_request(draft, raw_request=parse_text)
         # Never publish a silently erased source attribute.
         for before, after in zip(original, checked.items):
             if before.grade != after.grade or before.gost_tu != after.gost_tu:
@@ -177,6 +220,20 @@ class TelegramService:
         active = ActiveRequest(**{k:v for k,v in checked.model_dump().items() if k != 'items'},
             request_id=uuid4().hex, source_text=text,
             items=[ActiveItem(**i.model_dump(), item_id=uuid4().hex, original=i.model_copy(deep=True)) for i in checked.items])
+        if heading_records:
+            from ai import _compact_source_text
+            unused = list(heading_records)
+            for item in active.items:
+                compact = _compact_source_text(item.source_text or '')[0]
+                record = next((row for row in unused if _compact_source_text(row[0])[0] == compact), None)
+                if record is None:
+                    raise ValueError('Не удалось сопоставить строку с общей шапкой заявки.')
+                unused.remove(record)
+                item.source_text = record[1]
+                item.original.source_text = record[1]
+                item.source_context = record[2]
+            if unused:
+                raise ValueError('Не все позиции из списка под общей шапкой распознаны.')
         active.items = sort_items(active.items)
         messages = self._response(active, checked.clarification_questions)
         self.repository.save(user_id, active)

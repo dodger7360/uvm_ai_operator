@@ -92,7 +92,10 @@ def _normalize_grade(grade: Optional[str]) -> Optional[str]:
     lower = compact.lower()
 
     if lower.startswith("ст"):
-        return "Ст" + compact[2:]
+        suffix = compact[2:].lstrip('.')
+        if re.match(r'\d{2}[гg]', suffix, re.I):
+            suffix = suffix.upper().replace('G', 'Г')
+        return "Ст" + suffix
 
     if lower.startswith("а"):
         return "А" + compact[1:].upper()

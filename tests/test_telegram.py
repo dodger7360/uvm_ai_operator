@@ -77,6 +77,37 @@ class TelegramTests(unittest.TestCase):
         self.create(items=[item(quantity='0.1')])
         self.assertIsNone(self.repo.load(1).tonnage_decimals)
 
+    def test_sheet_heading_expansion_preserves_provenance(self):
+        from telegram_service import prepare_sheet_heading
+        text = 'лист ГК ГОСТ 19903 Ст.09г2с раскрой 1,5*6м:\n12 - 4,594т\n16- 1,994т\n30-9,182т\n50 - 1,312т\n80 - 2,413 т'
+        expanded, records = prepare_sheet_heading(text)
+        self.assertEqual(len(records), 5)
+        rows = []
+        for prepared, source, header in records:
+            size = prepared.split()[2]
+            quantity = prepared.split(' — ')[1].split()[0]
+            rows.append(RequestItem(product='Лист Г/К', product_group='sheet', size_designation=size,
+                grade='Ст.09г2с', gost_tu='ГОСТ 19903', quantity=quantity, unit='т', source_text=prepared))
+        self.ai.parse_request.return_value = PurchaseRequest(items=rows)
+        output = self.service.process(1, text)
+        self.ai.parse_request.assert_called_once_with(expanded)
+        active = self.repo.load(1)
+        self.assertEqual(len(active.items), 5)
+        self.assertEqual([i.quantity for i in active.items], list(map(Decimal, ['4.594','1.994','9.182','1.312','2.413'])))
+        self.assertEqual(active.source_text, text)
+        self.assertTrue(all(i.grade == 'Ст09Г2С' and i.gost_tu == 'ГОСТ 19903' for i in active.items))
+        self.assertTrue(all(i.width_mm == 1500 and i.length_mm == 6000 for i in active.items))
+        self.assertEqual(active.items[0].source_text, '12 - 4,594т')
+        self.assertEqual(active.items[0].source_context, records[0][2])
+        self.assertEqual(len(output), 1)
+        self.assertEqual(len(output[0].splitlines()), 5)
+
+    def test_sheet_heading_mixed_or_unitless_cut_is_not_guessed(self):
+        from telegram_service import prepare_sheet_heading
+        for text in ['лист ГК ГОСТ 19903 Ст.09г2с раскрой 1,5*6:\n12 - 4,594т',
+                     'лист ГК ГОСТ 19903 Ст.09г2с раскрой 1,5*6м:\n12 - 4,594т\nБалка 20Б1 — 1 т']:
+            self.assertEqual(prepare_sheet_heading(text), (text, []))
+
     def test_initial_preserves_steel_category_and_quantity(self):
         output = self.create()[0]
         saved = self.repo.load(1)
