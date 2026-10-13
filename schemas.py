@@ -1,6 +1,24 @@
 from decimal import Decimal
 from typing import Annotated, List, Literal, Optional
 from pydantic import BaseModel, Field, WithJsonSchema, BeforeValidator
+from pydantic.json_schema import SkipJsonSchema
+
+
+class MassCalculation(BaseModel):
+    """Python-owned derived result; all numerical values serialize as Decimal strings."""
+    status: Literal['estimate', 'unavailable']
+    reason: Optional[str] = None
+    method: Optional[str] = None
+    assumption_id: Optional[str] = None
+    basis: Optional[str] = None
+    density_kg_m3: Optional[Decimal] = None
+    dimensions_mm: dict[str, Decimal] = Field(default_factory=dict)
+    input_quantity: Optional[Decimal] = None
+    input_unit: Optional[str] = None
+    source_unit: Optional[str] = None
+    per_piece_kg: Optional[Decimal] = None
+    total_kg: Optional[Decimal] = None
+    total_t: Optional[Decimal] = None
 
 
 class RequestItem(BaseModel):
@@ -32,6 +50,9 @@ class RequestItem(BaseModel):
 
     source_text: Optional[str] = None
     interpreted_fields: List[str] = Field(default_factory=list)
+
+    # Stored in request JSON, omitted from the AI structured-output schema.
+    mass_calculation: SkipJsonSchema[Optional[MassCalculation]] = None
 
 
 class SharedAttributeEvidence(BaseModel):

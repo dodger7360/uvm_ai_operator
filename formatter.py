@@ -1,7 +1,7 @@
 from normalizer import DISPLAY_PRODUCTS
 from schemas import PurchaseRequest, RequestItem
 from typing import Optional
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 import re
 from consolidation import consolidate_items
 
@@ -55,6 +55,15 @@ def format_item(item: RequestItem, index: int) -> str:
         description += f" — {format_number(item.quantity)}"
         if item.unit:
             description += f" {item.unit}"
+    from quantity import calculate_theoretical_mass
+    mass = calculate_theoretical_mass(item)
+    if mass.status == 'estimate':
+        if description.endswith(' шт'):
+            description += '.'
+        with localcontext() as context:
+            context.prec = max(28, len(mass.total_t.as_tuple().digits) + max(0, mass.total_t.adjusted()) + 5)
+            displayed = mass.total_t.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+        description += ' = ' + format_number(displayed) + ' т'
     return f"{index}. {description}"
 
 

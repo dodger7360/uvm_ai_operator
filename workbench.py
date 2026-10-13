@@ -22,6 +22,8 @@ class WorkbenchResult:
     @property
     def consolidated_groups(self):
         """Recompute after source edits; never cache a sum as a source quantity."""
+        from quantity import refresh_mass_calculations
+        refresh_mass_calculations(self.current_request.items)
         return ordered_consolidation(self.current_request.items, originals=self.original_items or None, source_positions=self.source_positions or None)
 
     @property
@@ -45,6 +47,12 @@ class NormalizationWorkbench:
         """Return the complete current request state and its clarification questions."""
         current_request = self._ai_service.parse_request(raw_request)
         source_positions = validate_source_coverage(current_request, raw_request, allow_heading_rows=True)
+        # Use the existing literal-attribute recovery for sheet mass inputs,
+        # rather than calculating from an AI quantity that contradicts the row.
+        from telegram_service import exact_source_attributes
+        for item in current_request.items:
+            if item.product_group == 'sheet':
+                exact_source_attributes(item)
         normalize_request(current_request)
         confirmed = confirm_shared_attributes(raw_request, current_request)
         current_request.confirmed_shared_attributes = confirmed

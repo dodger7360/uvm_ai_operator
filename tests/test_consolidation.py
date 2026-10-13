@@ -36,7 +36,7 @@ LINES = [
 ]
 SOURCE = '\n'.join(LINES)
 EXPECTED = ('Труба профильная 40×40×3 — 2 т\n'
-            'Лист 6×1500×6000 Ст3 — 4 шт.\n'
+            'Лист 6×1500×6000 Ст3 — 4 шт. = 1,696 т\n'
             'Уголок 100×100×4 Ст3 — 0,5 т\n'
             'Арматура А500С Ø12 — 2,35 т')
 
@@ -324,7 +324,10 @@ def test_schema_access_history_and_legacy_pending_compatibility(context):
     # Legacy fingerprint lacked source_position. It must remain the same.
     import hashlib
     legacy=json.loads(active.model_dump_json(include={'request_id','items'}))
-    for item in legacy['items']: item.pop('source_position')
+    for item in legacy['items']:
+        item.pop('source_position')
+        item.pop('mass_calculation')
+        item['original'].pop('mass_calculation')
     assert hashlib.sha256(json.dumps(legacy,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()==fingerprint
     original_tables=None
     with repo.database.connection() as c:

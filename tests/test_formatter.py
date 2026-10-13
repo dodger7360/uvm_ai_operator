@@ -22,7 +22,7 @@ class FormatterTests(unittest.TestCase):
 
         self.assertEqual(format_normalized_item(
             product="лист", size_designation="6 1500*6000", grade="ст3", quantity=2, unit="шт",
-        ), "1. Лист 6×1500×6000 Ст3 — 2 шт")
+        ), "1. Лист 6×1500×6000 Ст3 — 2 шт. = 0,848 т")
 
     def test_formats_round_pipe_and_rebar_with_diameter_symbol(self):
         self.assertEqual(format_normalized_item(

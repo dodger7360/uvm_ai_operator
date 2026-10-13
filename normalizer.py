@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from typing import Optional
 
 from rules import normalize_grade_rule
@@ -75,6 +76,11 @@ def _format_number(value: float) -> str:
         if float(value).is_integer()
         else str(value).replace(".", ",")
     )
+
+
+def _format_exact_dimension(token):
+    number = format(Decimal(token.replace(',', '.')), 'f')
+    return number.rstrip('0').rstrip('.') if '.' in number else number
 
 
 def _numbers(value: str) -> list[float]:
@@ -219,10 +225,11 @@ def _normalize_item(item: RequestItem) -> None:
         ):
             _set_if_missing(item, field, value)
 
-        item.size_designation = "×".join(
-            _format_number(value)
-            for value in values
-        )
+        # Keep literal dimension precision for the Decimal mass calculator.
+        if re.search(r'(?:^|[×xхХX*])\s*[-−]', size):
+            item.size_designation = size  # Do not erase invalid signed dimensions.
+        else:
+            item.size_designation = "×".join(_format_exact_dimension(token) for token in NUMBER_RE.findall(size))
 
     elif group == "sheet" and len(values) == 1:
         _set_if_missing(
@@ -314,4 +321,6 @@ def normalize_request(
     for item in request.items:
         _normalize_item(item)
 
+    from quantity import refresh_mass_calculations
+    refresh_mass_calculations(request.items)
     return request

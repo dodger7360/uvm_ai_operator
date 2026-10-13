@@ -36,9 +36,10 @@ class PendingOperation(BaseModel):
 
 
 def request_fingerprint(request):
-    # Include all current/source attributes, not transient dialog state.
+    # Include current/source facts, not transient state or derived mass.
+    # Excluding the new field (including original) preserves legacy hashes.
     data = request.model_dump_json(include={'request_id', 'items'},
-        exclude={'items': {'__all__': {'source_position'}}})
+        exclude={'items': {'__all__': {'source_position': True, 'mass_calculation': True, 'original': {'mass_calculation': True}}}})
     return sha256(data.encode('utf-8')).hexdigest()
 
 

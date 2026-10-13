@@ -465,4 +465,6 @@ def validate_request(
     request.warnings = warnings
     request.is_valid = not missing_fields and not missing_source_evidence
 
+    from quantity import refresh_mass_calculations
+    refresh_mass_calculations(request.items)
     return request

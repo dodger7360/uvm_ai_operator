@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 from schemas import RequestItem
 from product_identity import consolidation_key
-from quantity import normalize_quantity, sum_quantities
+from quantity import normalize_quantity, sum_quantities, refresh_mass_calculations
 
 
 @dataclass(frozen=True)
@@ -53,4 +53,5 @@ def consolidate_items(items, originals=None, source_positions=None):
     covered = [index for group in groups for index in group.source_indices]
     if sorted(covered) != list(range(1, len(items) + 1)):
         raise ValueError('Нарушена полнота консолидированного представления.')
+    refresh_mass_calculations([group.item for group in groups])
     return groups

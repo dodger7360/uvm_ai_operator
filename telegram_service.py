@@ -577,6 +577,8 @@ class TelegramService:
     @staticmethod
     def _response(request, questions):
         phase('formatting')
+        from quantity import refresh_mass_calculations
+        refresh_mass_calculations(request.items)
         if request.pending_operation:
             questions=[request.pending_operation.question]
         elif request.pending_clarification:

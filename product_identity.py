@@ -83,7 +83,7 @@ def build_identity_key(item: Any) -> str:
 
 
 # This key is a derived-view identity, not a new version of persisted Product v1.
-_SOURCE_ONLY = {'quantity', 'unit', 'source_unit', 'source_text', 'interpreted_fields'}
+_SOURCE_ONLY = {'quantity', 'unit', 'source_unit', 'source_text', 'interpreted_fields', 'mass_calculation'}
 _PRODUCT_ALIASES = {
     'profile_pipe': ('труба профильная', 'труба проф.', 'труба проф', 'труба'),
     'angle': ('уголок', 'угол'),

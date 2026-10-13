@@ -229,7 +229,7 @@ def test_unsupported_operation_does_not_consume_existing_pending(context):
     service, repo, _, _ = context
     before = propose(context)
     response = service.process(1, 'Суммируй одинаковые позиции')
-    assert response[0].endswith('4 шт.')
+    assert response[0].endswith('4 шт. = 1,696 т')
     assert response[1] == before.pending_operation.question
     assert repo.load(1) == before
     service.process(1, 'Да')
