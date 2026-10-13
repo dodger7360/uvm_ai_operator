@@ -13,6 +13,7 @@ from repositories.telegram_repository import TelegramRepository
 from telegram_service import TelegramService
 from repositories.access_repository import AccessRepository, AuthorizedRequestRepository
 from telegram_access import TelegramAccess
+from diagnostics import PipelineError, safe_code
 
 LOG = logging.getLogger('telegram_operator')
 
@@ -65,13 +66,21 @@ def handle_update(update, service, api, access=None):
     else:
         try:
             messages = service.process(user_id, text)
+        except PipelineError as exc:
+            messages = [exc.public_message]
         except ValueError as exc:
-            # Only locally controlled validation errors are shown to users.
-            LOG.warning('validation_error')
-            messages = ['Не удалось безопасно обработать сообщение. Уточните марки, количество и номера изменяемых позиций. Активная заявка сохранена.']
-        except Exception:
-            LOG.error('processing_error')
-            messages = ['Сервис обработки временно недоступен. Повторите сообщение чуть позже.']
+            LOG.warning('validation_error class=%s reason=%s',type(exc).__name__,safe_code(exc))
+            messages = ['Ответ модели не прошёл проверку данных. Повторите заявку, сохраняя каждую позицию отдельной строкой. Активная заявка не изменена.']
+        except Exception as exc:
+            code=safe_code(exc)
+            LOG.error('processing_error class=%s reason=%s',type(exc).__name__,code)
+            messages = [{'api_connection':'Не удалось подключиться к сервису AI. Повторите сообщение позже.',
+                'api_timeout':'AI не ответил вовремя. Повторите сообщение позже.',
+                'api_authentication':'AI временно недоступен из-за конфигурации доступа. Сообщите администратору.',
+                'api_bad_request':'API отклонил настройки обработки. Сообщите администратору.',
+                'api_model_not_found':'Настроенная модель AI недоступна. Сообщите администратору.',
+                'api_response_length':'Ответ AI оборвался по лимиту длины. Разделите заявку на меньшие части.'}.get(code,
+                'Не удалось завершить обработку. Активная заявка не изменена. Сообщите администратору.')]
     if not access.allowed(user_id):
         api.call('sendMessage', chat_id=chat_id, text='Доступ к боту ограничен.')
         return
@@ -111,7 +120,7 @@ def main():
             if api.call('getWebhookInfo').get('url'):
                 LOG.error('existing_webhook_requires_review')
                 return 4
-            LOG.info('bot_started username=%s pid=%s', me['username'], os.getpid())
+            LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
             repository = TelegramRepository(Database(os.getenv('OPERATOR_DB', str(root / 'operator.sqlite3'))))
             access_repository = AccessRepository(repository.database)
             configured_admin = os.getenv('ADMIN_TELEGRAM_ID')

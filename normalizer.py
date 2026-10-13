@@ -88,6 +88,10 @@ def _normalize_grade(grade: Optional[str]) -> Optional[str]:
     if not grade:
         return grade
 
+    alternative = re.fullmatch(r"(.+?)\s*\(\s*или\s+(.+?)\s*\)",grade,re.I)
+    if alternative:
+        parts=re.split(r"\s+или\s+",alternative[2],flags=re.I)
+        return _normalize_grade(alternative[1])+" (или "+" или ".join(_normalize_grade(part) for part in parts)+")"
     compact = re.sub(r"\s+", "", grade)
     lower = compact.lower()
 

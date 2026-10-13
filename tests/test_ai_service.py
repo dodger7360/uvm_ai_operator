@@ -36,7 +36,8 @@ class AIServiceTests(unittest.TestCase):
         load_dotenv.assert_called_once_with()
         openai.assert_called_once()
         client.beta.chat.completions.parse.assert_called_once_with(
-            model="gpt-5.6-luna",
+            model="gpt-6-luna",
+            reasoning_effort="low",
             response_format=PurchaseRequestExtraction,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
