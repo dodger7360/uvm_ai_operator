@@ -43,9 +43,10 @@ def safe_chunks(text, limit=3200):
 
 
 def _is_question(text):
+    from work_intent import normative_inquiry
     if re.match(r'^\s*(?:исправь|замени|измени|удали|добавь|покажи)\b', text, re.I):
         return False
-    return bool(re.search(r'^\s*(?:чем\b|что\b|кто\b|как\b|какой\b|какая\b|какие\b|'
+    return normative_inquiry(text) or bool(re.search(r'^\s*(?:чем\b|что\b|кто\b|как\b|какой\b|какая\b|какие\b|'
                           r'где\b|когда\b|сколько\b|сравни\b|посоветуй\b|почему\b|объясни\b|расскажи\b|найди\b|поищи\b|найти\b|'
                           r'подскажи\b|проверь\s+(?:актуальн|действующ)|можно\s+ли\b)', text, re.I)
                 or '?' in text)
@@ -248,7 +249,7 @@ def _process_operator(service, user_id, text, *, commercial_decisions=None):
                 return _recover(service, user_id, text)
             if active:
                 represented = '\n'.join((i.source_context or '') + '\n' + (i.source_text or '') for i in active.items)
-                omitted = [line for line in text.splitlines() if line.strip()
+                omitted = [line for line in logical_source_rows(text) if line.strip()
                            and line.strip() not in represented]
                 if omitted:
                     active.fallback_status, active.unprocessed_source = 'partial', omitted
