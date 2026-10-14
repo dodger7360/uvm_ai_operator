@@ -2,6 +2,7 @@
 from decimal import Decimal
 from typing import Literal, Optional
 from uuid import uuid4
+from contextlib import nullcontext
 import re
 import os
 import math
@@ -12,11 +13,15 @@ from request_operations import (Edit, RequestOperation, PendingOperation, reques
                                 unsupported_operation, UNSUPPORTED_MESSAGE)
 from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
+from nomenclature import NomenclatureSpec
 from normalizer import normalize_request, UNIT_ALIASES
 from validator import validate_request, confirm_shared_attributes, grouped_questions_for_missing_fields
-from formatter import format_normalized_request, sort_items, ordered_consolidation
+from formatter import format_normalized_request, sort_items, request_consolidation
+from commercial import CommercialDecision
 from quantity import QUANTITY_RE, without_mass_annotation
-from source_fidelity import PRODUCT_ROW, product_row_key, validate_source_coverage
+from source_fidelity import (PRODUCT_ROW, product_row_key, validate_source_coverage,
+                             source_product_rows, source_has_complete_quantities)
+from source_attributes import GRADE_RE, source_standards, source_grade_matches
 
 
 class MessagePlan(BaseModel):
@@ -46,14 +51,13 @@ class ActiveRequest(PurchaseRequest):
     initial_extraction: Optional[PurchaseRequest] = None
     source_text: str
     items: list[ActiveItem] = Field(default_factory=list)
-
-
-GRADE_RE = re.compile(
-    r'(?<![\w])(?:\d{3}-\d+-)?(?:[СC]\s*\d{3}(?:-\d+)?|'
-    r'(?:[ВB])?[Сс][Тт]\s*\.?\s*(?:\d{2}[Гг][0-9][Сс]|\d+(?:пс|сп|кп)?\d*)(?:-\d+)?|'
-    r'\d{2}[Гг][0-9][Сс](?:-\d+)?|12[Хх]18[Нн]10[Тт](?:-\d+)?)(?![\w])',
-    re.IGNORECASE)
-
+    # Python-owned derived-view policy; absent in old JSON and AI schemas.
+    commercial_view: bool = False
+    commercial_decisions: list[CommercialDecision] = Field(default_factory=list)
+    # Additive JSON metadata; legacy requests and SQLite tables stay compatible.
+    fallback_status: Optional[Literal['partial', 'original']] = None
+    unprocessed_source: list[str] = Field(default_factory=list)
+    recovery_specs: list[NomenclatureSpec] = Field(default_factory=list)
 
 
 def alternative_grade_value(source):
@@ -76,12 +80,13 @@ def exact_source_attributes(item, defer_grade_question=False):
     source = item.source_text or ''
     if item.quantity is not None and item.quantity < 0:
         raise PipelineError('invalid_quantity', 'Количество должно быть конечным положительным числом.')
-    grades = [m.group() for m in GRADE_RE.finditer(source)]
+    matches = source_grade_matches(source)
+    grades = [m.group() for m in matches]
     # A designation like strip contains a steel token inside its compound size.
     if len(grades) == 1 and item.product_group != 'strip':
-        item.grade = re.sub(r'\s+', '', grades[0]).replace('ст.', 'Ст').replace('Ст.', 'Ст')
+        from normalizer import _normalize_grade
+        item.grade = _normalize_grade(grades[0])
     elif len(grades) > 1:
-        matches=list(GRADE_RE.finditer(source))
         if all(re.search(r'\bили\b',source[a.end():b.start()],re.I) for a,b in zip(matches,matches[1:])):
             from normalizer import _normalize_grade
             normalized=[_normalize_grade(match[0]) for match in matches]
@@ -91,14 +96,9 @@ def exact_source_attributes(item, defer_grade_question=False):
                 raise PipelineError('ambiguous_grades','Укажите, являются ли перечисленные марки разрешёнными альтернативами («или»).')
             item.grade = None  # Persist the literal request and a typed proposal first.
     # Restore every explicitly written standard, rather than trusting omissions.
-    standards = re.findall(r'(?<!\w)(?:ГОСТ(?:\s+Р)?|ТУ|СТО\s+АСЧМ)\s*[0-9][0-9.\-]*(?:\s*-[0-9]+)?', source, re.I)
+    standards = source_standards(source)
     if standards:
-        canonical = []
-        for token in standards:
-            token = re.sub(r'\s+', ' ', token.strip().rstrip('-'))
-            canonical.append(re.sub(r'^(ГОСТ(?:\s+Р)?|ТУ|СТО\s+АСЧМ)\s*',
-                                    lambda match: match[1].upper()+' ', token, flags=re.I))
-        item.gost_tu = ', '.join(canonical)
+        item.gost_tu = ', '.join(standards)
     name = (source + ' ' + (item.product or '')).casefold()
     qualifier = re.search(r'(?<!\w)БТ-ПН-О(?!\w)', source, re.I)
     if qualifier:
@@ -218,7 +218,7 @@ def local_edit_plan(text, current):
             candidates = [item for index, item in enumerate(current.items, 1)
                           if (item.source_position or index) == number]
         else:
-            groups = ordered_consolidation(current.items)
+            groups = request_consolidation(current)
             if not 1 <= number <= len(groups):
                 return MessagePlan(intent='clarify', question='Укажите существующую исходную позицию.')
             group = groups[number - 1]
@@ -266,7 +266,7 @@ def scoped_plan(text, current, plan, confirmed=False):
     selected = selections[-1] if selections else None
     if not selected:
         proposed_ids = {edit.item_id for edit in plan.edits}
-        for group in ordered_consolidation(current.items):
+        for group in request_consolidation(current):
             group_ids = set(group.source_item_ids)
             group_edits = [edit for edit in plan.edits if edit.item_id in group_ids]
             if len(group.source_indices) > 1 and group_edits:
@@ -306,7 +306,7 @@ def scoped_plan(text, current, plan, confirmed=False):
         targets = [item for index, item in enumerate(current.items, 1)
                    if (item.source_position or index) == number]
     else:
-        groups = ordered_consolidation(current.items)
+        groups = request_consolidation(current)
         targets = [current.items[index - 1] for index in groups[number - 1].source_indices] if 0 < number <= len(groups) else []
     ids = {item.item_id for item in targets}
     if not ids or any(edit.item_id not in ids for edit in plan.edits):
@@ -334,28 +334,36 @@ def scoped_plan(text, current, plan, confirmed=False):
 def is_new_request(text):
     if re.search(EDIT_WORDS + '|' + DISPLAY_WORDS, text, re.I):
         return False
-    return any(PRODUCT_ROW.search(line) and QUANTITY_RE.search(line) for line in text.splitlines())
+    return any(QUANTITY_RE.search(row) for row in source_product_rows(text))
 
 
 
 
 class TelegramService:
-    def __init__(self, ai, repository):
+    def __init__(self, ai, repository, commercial_view=False, *, assistant=None, reliable=False):
         self.ai, self.repository = ai, repository
+        self.commercial_view = commercial_view
+        self.assistant, self.reliable = assistant, reliable
 
-    def process(self, user_id, text):
+    def process(self, user_id, text, *, commercial_decisions=None):
+        if self.reliable:
+            from telegram_operator import process_operator
+            with operation() if CURRENT.get() is None else nullcontext():
+                return process_operator(self, user_id, text, commercial_decisions=commercial_decisions)
         if CURRENT.get() is not None:
-            return self._process(user_id, text)
+            return self._process(user_id, text, commercial_decisions=commercial_decisions)
         with operation():
-            return self._process(user_id,text)
+            return self._process(user_id,text, commercial_decisions=commercial_decisions)
 
     def _save(self, user_id, request):
         phase('sqlite_save')
         self.repository.save(user_id, request)
 
-    def _process(self, user_id, text):
+    def _process(self, user_id, text, *, commercial_decisions=None, force_new=False):
         phase('sqlite_load')
         current = self.repository.load(user_id)
+        if force_new:
+            current = None
         phase('routing')
         wording = text.strip().casefold().strip('.!?')
         if wording in {'покажи текущую заявку', 'покажи заявку', 'текущая заявка', '/show'}:
@@ -390,7 +398,7 @@ class TelegramService:
                     return self._cancel_operation(user_id, current)
             if operation_kind == 'merge_items':
                 if re.search(r'перевед|перевест|пересчит', text, re.I) and any(
-                        group.item.unit != 'т' for group in ordered_consolidation(current.items)):
+                        group.item.unit != 'т' for group in request_consolidation(current)):
                     return [UNSUPPORTED_MESSAGE]
                 return self._response(current, [])
             if operation_kind:
@@ -415,7 +423,7 @@ class TelegramService:
             if wording in {'как дела', 'привет', 'здравствуйте', 'добрый день'}:
                 return self._begin_clarification(user_id, current, text,
                     MessagePlan(intent='clarify', question='Вы хотите изменить активную заявку или создать новую?'))
-        if current is None and not PRODUCT_ROW.search(text):
+        if current is None and not PRODUCT_ROW.search(text) and not source_product_rows(text):
             return ['Пришлите заявку на металлопрокат с размерами и количеством.']
         if current is not None and not candidate:
             explicit_edit=re.search(EDIT_WORDS, text, re.I)
@@ -478,14 +486,17 @@ class TelegramService:
                 active=self._build_active(text,parse_text,heading_records,effort=None if attempt==0 else os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
                 break
             except SemanticExtractionError as error:
-                complete_rows=[row for row in parse_text.splitlines() if PRODUCT_ROW.search(row) and not row.strip().endswith(':')]
-                source_has_quantities=bool(complete_rows) and all(QUANTITY_RE.search(row) for row in complete_rows)
+                source_has_quantities = source_has_complete_quantities(parse_text)
                 eligible = {'source_fragment_mismatch','missing_positions','merged_positions',
                             'unsupported_attributes','header_mapping','header_positions_missing',
                             'additional_positions','city_mismatch'}
                 if attempt or not source_has_quantities or error.code not in eligible:
                     raise
                 emit('medium_retry',stage='extraction',reason=error.code)
+        if commercial_decisions is not None:
+            if not active.commercial_view:
+                raise ValueError('Коммерческие решения требуют коммерческого представления.')
+            active.commercial_decisions = commercial_decisions(active)
         grade_edits = [Edit(item_id=item.item_id, field='grade', value=value)
                        for item in active.items
                        if (value := alternative_grade_value(item.source_text or ''))]
@@ -506,12 +517,21 @@ class TelegramService:
         self._save(user_id,active)
         return messages
 
-    def _build_active(self,text,parse_text,heading_records,effort=None):
+    def _build_active(self,text,parse_text,heading_records,effort=None, *, draft=None):
         from ai import _source_fragment_occurrences
-        phase('extraction',source_count=sum(bool(PRODUCT_ROW.search(row)) for row in parse_text.splitlines()))
-        draft = self.ai.parse_request(parse_text) if effort is None else self.ai.parse_request(parse_text,reasoning_effort=effort)
+        source_count = len(source_product_rows(parse_text))
+        phase('extraction',source_count=source_count)
+        if draft is None:
+            draft = self.ai.parse_request(parse_text) if effort is None else self.ai.parse_request(parse_text,reasoning_effort=effort)
+            if self.reliable:
+                from telegram_operator import capture_extraction
+                capture_extraction(draft)
         initial=draft.model_copy(deep=True)
         if not draft.items:
+            if source_count:
+                raise SemanticExtractionError('missing_positions',
+                    'Не все исходные позиции распознаны. Повторите заявку; предыдущая сохранена.',
+                    source_count=source_count, extracted_count=0)
             raise PipelineError('no_items','Отправьте перечень металлопроката с количеством и единицами.')
         if draft.city and (not _source_fragment_occurrences(parse_text, draft.city)
                 or re.search(r'\d', draft.city) or PRODUCT_ROW.search(draft.city)
@@ -537,6 +557,7 @@ class TelegramService:
                 raise SemanticExtractionError('unsupported_attributes','Не удалось подтвердить марку или ГОСТ по исходной строке. Уточните эту позицию.')
         active = ActiveRequest(**{k:v for k,v in checked.model_dump().items() if k != 'items'},
             request_id=uuid4().hex, source_text=text,initial_extraction=initial,
+            commercial_view=self.commercial_view,
             items=[ActiveItem(**i.model_dump(), item_id=uuid4().hex, original=i.model_copy(deep=True), source_position=source_positions[index - 1])
                    for index, i in enumerate(checked.items, 1)])
         if heading_records:
@@ -567,7 +588,7 @@ class TelegramService:
         template = re.fullmatch(r'\s*пропиши\s+арматура\s+[фФØø]\s*(\d+(?:[.,]\d+)?)\s+([аАA]\d{3}[сСC]?)\s*[-—–]\s*(\d+(?:[.,]\d+)?)\s*(т|кг)\s*', text, re.I)
         if not template:
             return None
-        groups = [group for group in ordered_consolidation(current.items)
+        groups = [group for group in request_consolidation(current)
                   if group.item.product_group == 'rebar' and group.item.diameter_mm is not None
                   and Decimal(str(group.item.diameter_mm)) == Decimal(template[1].replace(',', '.'))]
         if len(groups) != 1:
@@ -669,7 +690,7 @@ class TelegramService:
                 edits = pending.operation.edits
                 if edits and all(edit.field == 'grade' for edit in edits):
                     ids = {edit.item_id for edit in edits}
-                    groups = ordered_consolidation(current.items)
+                    groups = request_consolidation(current)
                     if any(len(group.source_indices) > 1 and ids == set(group.source_item_ids) for group in groups):
                         confirmed_current = current.model_copy(deep=True)
                         confirmed_current.clarification_answers.append(text)
@@ -859,6 +880,9 @@ class TelegramService:
 
     @staticmethod
     def _response(request, questions):
+        if request.fallback_status:
+            from telegram_operator import fallback_messages
+            return fallback_messages(request)
         phase('formatting')
         from quantity import refresh_mass_calculations
         refresh_mass_calculations(request.items)

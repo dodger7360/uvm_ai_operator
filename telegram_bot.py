@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import time
 import threading
+from html import escape
 import urllib.request
 import urllib.error
 import socket
@@ -15,6 +16,8 @@ from ai import AIService
 from database import Database
 from repositories.telegram_repository import TelegramRepository
 from telegram_service import TelegramService
+from telegram_operator import ClarificationMessage, safe_chunks
+from work_assistant import WorkAssistantService
 from repositories.access_repository import AccessRepository, AuthorizedRequestRepository
 from telegram_access import TelegramAccess
 from diagnostics import PipelineError, safe_code, operation, phase, emit, record_error
@@ -165,8 +168,29 @@ def _handle_update(update, service, api, access=None):
         return
     for text in messages:
         phase('sending')
-        api.call('sendMessage', chat_id=chat_id, text=text)
+        send_operator_message(api, chat_id, text)
     LOG.info('message_processed response_parts=%s', len(messages))
+
+
+def send_operator_message(api, chat_id, text):
+    """Only trusted presentation metadata enables markup; all content escapes.
+
+    Retry plain text only on a rejected HTML request (400), never on an
+    uncertain network delivery. Escape expansion is accounted for in chunks.
+    """
+    if not isinstance(text, ClarificationMessage):
+        for part in safe_chunks(text):
+            api.call('sendMessage', chat_id=chat_id, text=part)
+        return
+    for part in safe_chunks(text, limit=600):
+        html = '<b>Уточнение</b>\n' + escape(part)
+        try:
+            api.call('sendMessage', chat_id=chat_id, text=html, parse_mode='HTML')
+        except TelegramError as error:
+            if error.code != 400:
+                raise
+            emit('telegram_plain_text_retry', reason='html_rejected')
+            api.call('sendMessage', chat_id=chat_id, text=part)
 
 
 def main():
@@ -212,7 +236,10 @@ def run_bot(root, token):
         access = TelegramAccess(access_repository)
         if access_repository.admin_id() is None:
             LOG.warning('administrator_not_bound_access_closed')
-        service = TelegramService(AIService(), AuthorizedRequestRepository(repository, access_repository))
+        ai = AIService()
+        service = TelegramService(ai, AuthorizedRequestRepository(repository, access_repository),
+                                  commercial_view=True, reliable=True,
+                                  assistant=WorkAssistantService(ai.assistant_transport))
         offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')
         LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))

@@ -142,6 +142,11 @@ class AIService:
         options = {"api_key": os.getenv("OPENAI_API_KEY"), "http_client": DefaultHttpxClient(**transport)}
         self._client = OpenAI(**options)
 
+    @property
+    def assistant_transport(self):
+        """Share the configured client; consumers never reload keys or proxies."""
+        return self._client
+
     def _invoke(self, stage, response_format, messages, reasoning_effort=None):
         effort = reasoning_effort or os.getenv('OPENAI_REASONING_EFFORT','low')
         model = os.getenv('OPENAI_MODEL','gpt-6-luna')

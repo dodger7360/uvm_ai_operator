@@ -189,3 +189,100 @@ def consolidation_key(item, original=None):
             value = re.sub(r'\s+', ' ', value.strip()).casefold()
         values.append((field, value))
     return tuple(values)
+
+
+def commercial_family(grade):
+    """Commercial cohorts preserve technical grades; no global grade alias."""
+    from source_attributes import parse_carbon_designation
+    parsed = parse_carbon_designation(grade or '')
+    if (parsed and parsed.steel_number == '3' and parsed.supply_group in {'', 'В'}
+            and parsed.deoxidation in {'', 'пс', 'сп'}):
+        return 'ст3'
+    if re.fullmatch(r'[СC]255(?:-\d+)?', grade or '', re.I):
+        return 'ст3'
+    if re.fullmatch(r'[СC](?:345|355)(?:-\d+)?', grade or '', re.I):
+        return 'С345/С355'
+    return None
+
+
+def commercial_shape_key(item):
+    """All structured execution requirements except the approved material/docs."""
+    from schemas import RequestItem
+    if item.product_group not in PRODUCT_GROUPS or not item.product:
+        return None
+    if any(getattr(item, field) is None for field in required_fields(item.product_group)):
+        return None
+    values = []
+    for field in RequestItem.model_fields:
+        if field in _SOURCE_ONLY | {'grade', 'gost_tu'}:
+            continue
+        value = getattr(item, field)
+        if field == 'product':
+            value = _commercial_product_name(item)
+        elif field in NUMERIC_FIELDS and value is not None:
+            value = _canonical_number(value)
+            if Decimal(value) <= 0:
+                return None
+        elif isinstance(value, str):
+            value = re.sub(r'\s+', ' ', value.strip()).casefold()
+        values.append((field, value))
+    return tuple(values)
+
+
+_COMMERCIAL_LABELS = {
+    'angle': ('уголки стальные горячекатаные равнополочные', 'уголок стальной горячекатаный равнополочный'),
+    'channel': ('швеллеры стальные горячекатаные', 'швеллер стальной горячекатаный'),
+}
+
+
+def _commercial_product_name(item):
+    name = re.sub(r'\s+', ' ', (item.product or '').strip().casefold())
+    if name in _COMMERCIAL_LABELS.get(item.product_group, ()):
+        return 'уголок' if item.product_group == 'angle' else 'швеллер'
+    return _product_name(item)
+
+
+def commercial_source_guard(item, original=None):
+    """Known family labels are spelling variants; unknown qualifiers still block."""
+    candidate = item.model_copy(deep=True)
+    for phrase in _COMMERCIAL_LABELS.get(item.product_group, ()):
+        if item.product_group == 'angle' and item.side_a_mm != item.side_b_mm:
+            continue
+        candidate.source_text = re.sub(r'(?<!\w)' + r'\s+'.join(map(re.escape, phrase.split())) + r'(?!\w)',
+            'Уголок' if item.product_group == 'angle' else 'Швеллер', candidate.source_text or '', flags=re.I)
+    return not _unmapped_source(candidate, original=original or getattr(item, 'original', None) or item)
+
+
+def commercial_documents(item):
+    """Grade specification families may differ commercially, never by edition.
+
+    Assortment/other documents remain exact constraints. Original document
+    lists stay on every source member; the view uses one source representative.
+    """
+    from source_attributes import source_standards, has_standard_evidence
+    if item.gost_tu and not has_standard_evidence(item.gost_tu, item.gost_tu):
+        return ('unparsed:' + item.gost_tu.strip().casefold(),), {}
+    result, grade_docs = [], {}
+    for standard in source_standards(item.gost_tu or ''):
+        match = re.fullmatch(r'ГОСТ (535|27772)(-\d+)?', standard)
+        if match and commercial_family(item.grade):
+            grade_docs.setdefault(match[1], set()).add(match[2] or '')
+        else:
+            result.append(standard)
+    return tuple(sorted(result)), grade_docs
+
+
+def commercial_documents_compatible(a, b):
+    other_a, grade_a = commercial_documents(a)
+    other_b, grade_b = commercial_documents(b)
+    return other_a == other_b and all(grade_a[number] == grade_b[number]
+                                     for number in grade_a.keys() & grade_b.keys())
+
+
+def commercial_key(item, original=None):
+    if not commercial_family(item.grade):
+        return consolidation_key(item, original)
+    if not commercial_source_guard(item, original):
+        return None
+    shape = commercial_shape_key(item)
+    return (shape, commercial_family(item.grade), commercial_documents(item)[0]) if shape else None
