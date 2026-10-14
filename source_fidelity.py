@@ -53,6 +53,23 @@ def _product_start(line):
                 or (dimension and re.search(r'[А-Яа-яA-Za-z]', line[:dimension.start()])))
 
 
+def _inline_product_rows(physical):
+    """Split punctuation only before an explicit next product name.
+
+    Decimal points, abbreviated grades and standards cannot match the right
+    boundary. Keep separators in literal source fragments for source fidelity.
+    Unknown products still use the existing conservative coverage mechanism.
+    """
+    start = 0
+    for boundary in re.finditer(r'[.;]\s+(?=[А-Яа-яA-Za-z])', physical):
+        suffix = physical[boundary.end():]
+        if (PRODUCT_ROW.match(suffix) and re.search(r'\d', suffix)
+                and _product_start(physical[start:boundary.start()])):
+            yield physical[start:boundary.start() + 1]
+            start = boundary.end()
+    yield physical[start:]
+
+
 def logical_source_rows(parse_text):
     """Join physical continuations before counting procurement rows.
 
@@ -65,7 +82,8 @@ def logical_source_rows(parse_text):
     rows = []
     continuation = []
 
-    for physical in parse_text.splitlines():
+    for physical in (part for line in parse_text.splitlines()
+                     for part in _inline_product_rows(line)):
         line = physical.strip()
         if not line:
             continue
