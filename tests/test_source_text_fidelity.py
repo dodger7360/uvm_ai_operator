@@ -186,8 +186,8 @@ def test_real_oct13_2109_all_21_positions_and_source_attributes(context):
     from telegram_service import prepare_sheet_heading
 
     fixtures = Path(__file__).parent / 'fixtures'
-    text = (fixtures / 'mixed_21_20261013_2109.txt').read_text().rstrip('\n')
-    draft = PurchaseRequest.model_validate_json((fixtures / 'mixed_21_extraction.json').read_text())
+    text = (fixtures / 'mixed_21_20261013_2109.txt').read_text(encoding='utf-8').rstrip('\n')
+    draft = PurchaseRequest.model_validate_json((fixtures / 'mixed_21_extraction.json').read_text(encoding='utf-8'))
     prepared, records = prepare_sheet_heading(text)
     assert len(records) == 9
     assert len(prepared.splitlines()) == 21
@@ -199,7 +199,7 @@ def test_real_oct13_2109_all_21_positions_and_source_attributes(context):
     assert saved.is_valid
     assert saved.source_text == text
     assert len(saved.items) == len('\n'.join(replies).splitlines()) == 21
-    assert '\n'.join(replies) == (fixtures / 'mixed_21_expected.txt').read_text().strip()
+    assert '\n'.join(replies) == (fixtures / 'mixed_21_expected.txt').read_text(encoding='utf-8').strip()
     expected = [
         ('round_pipe', '530×10', 'Ст3 (или Ст20)', 'ГОСТ 10704-91', '71.380'),
         ('round_pipe', '219×6', 'Ст3 (или Ст20)', 'ГОСТ 10704-91', '2.951'),

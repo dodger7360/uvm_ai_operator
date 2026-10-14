@@ -135,8 +135,8 @@ def test_empty_edit_question_also_has_state(context):
 def test_new_21_position_request_replaces_pending_and_preserves_sources(context):
     service, repo, responses, _ = context
     old = propose(context)
-    text = (FIXTURES / 'mixed_21_original.txt').read_text().strip()
-    responses.append(PurchaseRequestExtraction.model_validate_json((FIXTURES / 'mixed_21_extraction.json').read_text()))
+    text = (FIXTURES / 'mixed_21_original.txt').read_text(encoding='utf-8').strip()
+    responses.append(PurchaseRequestExtraction.model_validate_json((FIXTURES / 'mixed_21_extraction.json').read_text(encoding='utf-8')))
     service.process(1, text)
     active = repo.load(1)
     assert active.request_id != old.request_id

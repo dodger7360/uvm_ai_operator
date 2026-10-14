@@ -48,7 +48,7 @@ def format_item(item: RequestItem, index: int, rebar_diameter_first=False) -> st
         parts.append(dimensions)
     if item.product_group == 'rebar' and item.grade and rebar_diameter_first:
         parts.append(item.grade)
-    values = (item.gost_tu, item.processing) if item.product_group == "rebar" else (item.grade, item.gost_tu, item.processing)
+    values = (item.gost_tu, item.processing) if item.product_group == "rebar" else (item.grade, item.form, item.gost_tu, item.processing)
     for value in values:
         if value and not (item.product_group == "strip" and value == item.grade and value in (item.size_designation or "")):
             parts.append(value)

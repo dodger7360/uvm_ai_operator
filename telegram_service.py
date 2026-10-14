@@ -4,14 +4,16 @@ from typing import Literal, Optional
 from uuid import uuid4
 import re
 import os
+import math
 from diagnostics import operation, phase, emit, CURRENT, PipelineError, SemanticExtractionError
-from clarifications import PendingClarification, next_question, question_state, answer_values
+from clarifications import (PendingClarification, next_question, question_state, answer_values,
+                            parse_bulk_quantity, parse_dimension_answers)
 from request_operations import (Edit, RequestOperation, PendingOperation, request_fingerprint,
                                 unsupported_operation, UNSUPPORTED_MESSAGE)
 from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
 from normalizer import normalize_request, UNIT_ALIASES
-from validator import validate_request, confirm_shared_attributes
+from validator import validate_request, confirm_shared_attributes, grouped_questions_for_missing_fields
 from formatter import format_normalized_request, sort_items, ordered_consolidation
 from quantity import QUANTITY_RE, without_mass_annotation
 from source_fidelity import PRODUCT_ROW, product_row_key, validate_source_coverage
@@ -98,6 +100,9 @@ def exact_source_attributes(item, defer_grade_question=False):
                                     lambda match: match[1].upper()+' ', token, flags=re.I))
         item.gost_tu = ', '.join(canonical)
     name = (source + ' ' + (item.product or '')).casefold()
+    qualifier = re.search(r'(?<!\w)БТ-ПН-О(?!\w)', source, re.I)
+    if qualifier:
+        item.form = qualifier.group().upper()
     if item.product_group == 'sheet':
         if re.search(r'х/?к|холоднокатан', name):
             item.product = 'Лист Х/К'
@@ -417,7 +422,8 @@ class TelegramService:
             formatting=re.search(r'тоннаж|тонн|количеств',text,re.I) and re.search(r'формат|виду|знак|отображ|округл',text,re.I)
             if current.pending_operation and not explicit_edit and not formatting:
                 return self._answer_operation(user_id, current, text)
-            if current.pending_clarification and not explicit_edit and not formatting:
+            if (current.pending_clarification and not formatting
+                    and (not explicit_edit or parse_bulk_quantity(text, current) is not None)):
                 return self._answer_clarification(user_id,current,text)
             if wording in {'да', 'нет', 'верно', 'подтверждаю', 'согласен', 'неверно', 'обеим', 'к обеим', 'для суммы', 'обоим', 'к обоим'} or re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*',text):
                 return ['Нет ожидающего уточнения. Отправьте новую заявку или укажите позицию и поле для изменения.']
@@ -524,7 +530,7 @@ class TelegramService:
                     draft.items[position-1].grade = evidence.value
         original = [i.model_copy(deep=True) for i in draft.items]
         phase('validation')
-        checked = validate_request(draft, raw_request=parse_text)
+        checked = validate_request(draft, raw_request=parse_text, source_positions=source_positions)
         # Never publish a silently erased source attribute.
         for before, after in zip(original, checked.items):
             if before.grade != after.grade or before.gost_tu != after.gost_tu:
@@ -675,6 +681,49 @@ class TelegramService:
         # cannot replace the active request through model classification.
         if answer in {'для суммы', 'обеим', 'к обеим', 'обоим', 'к обоим'} and re.search(r'количеств', pending.command, re.I):
             return [pending.question]
+        if pending.expected_answer == 'details':
+            dimensions = parse_dimension_answers(text, current)
+            if dimensions:
+                changed = current.model_copy(deep=True)
+                by_source = {item.source_position: (index, item)
+                             for index, item in enumerate(changed.items)
+                             if item.source_position is not None}
+                by_source.update({index + 1: (index, item)
+                                  for index, item in enumerate(changed.items)
+                                  if item.source_position is None})
+                resolved = set()
+                for position, fields in dimensions.items():
+                    entry = by_source.get(position)
+                    if entry is None:
+                        continue
+                    index, target = entry
+                    for field, value in fields.items():
+                        converted = float(value)
+                        if not math.isfinite(converted) or converted <= 0 or Decimal(str(converted)) != value:
+                            continue
+                        setattr(target, field, converted)
+                        resolved.add(f'items[{index}].{field}')
+                        legacy_index = (target.source_position or index + 1) - 1
+                        resolved.add(f'items[{legacy_index}].{field}')
+                changed.missing_fields = [field for field in changed.missing_fields if field not in resolved]
+                changed.clarification_answers.append(text)
+                changed.pending_clarification = next_question(changed)
+                validate_request(changed)
+                remaining_questions = grouped_questions_for_missing_fields(changed, changed.missing_fields)
+                changed.pending_operation = None
+                if remaining_questions and changed.pending_clarification is None:
+                    changed.pending_operation = PendingOperation(
+                        user_id=user_id, request_id=changed.request_id,
+                        request_fingerprint=request_fingerprint(changed),
+                        operation=RequestOperation(kind='edit_fields'), command=pending.command,
+                        question='\n'.join(remaining_questions), expected_answer='details',
+                        answers=pending.answers + [text])
+                changed.is_valid = not changed.missing_fields and changed.pending_clarification is None
+                messages = self._response(changed, remaining_questions)
+                self._save(user_id, changed)
+                return messages
+            if re.search(r'ширин|высот|толщин|длин|диаметр|сторон', text, re.I):
+                return [pending.question]
         answers = pending.answers + [text]
         plan = self.ai.interpret_message(
             'Исходная команда: ' + pending.command + '\nУточняющий вопрос: ' + pending.question
@@ -738,6 +787,29 @@ class TelegramService:
         pending=current.pending_clarification
         if pending.request_id != current.request_id:
             raise PipelineError('stale_clarification','Уточнение относится к другой заявке. Отправьте новую заявку.')
+        bulk = parse_bulk_quantity(text, current)
+        if bulk == []:
+            return ['Массовое изменение конфликтует с уже заданными количествами или единицами. Ничего не изменено. Уточните позиции или задайте новое количество явно.']
+        if bulk:
+            changed = current.model_copy(deep=True)
+            by_id = {item.item_id: item for item in changed.items}
+            for item_id, quantity, unit in bulk:
+                target = by_id[item_id]
+                target.quantity = quantity
+                target.unit = unit
+                target.source_unit = unit
+            changed.pending_operation = None
+            changed.clarification_cancelled = False
+            changed.clarification_answers.append(text)
+            changed.pending_clarification = next_question(changed)
+            changed.missing_fields = [field for field in changed.missing_fields
+                                      if not field.endswith(('.quantity', '.unit'))]
+            self._queue_remaining_field_questions(user_id, changed, pending.question,
+                                                  current.clarification_answers + [text])
+            changed.is_valid = not changed.missing_fields and changed.pending_clarification is None
+            messages = self._response(changed, [])
+            self._save(user_id, changed)
+            return messages
         item=next((i for i in current.items if i.item_id==pending.item_id),None)
         if item is None:
             raise PipelineError('stale_clarification','Позиция для уточнения не найдена.')
@@ -766,11 +838,24 @@ class TelegramService:
         changed.clarification_answers.append(text)
         changed.pending_clarification=next_question(changed)
         changed.missing_fields=[field for field in changed.missing_fields if not field.endswith(('.quantity','.unit'))]
+        self._queue_remaining_field_questions(user_id, changed, pending.question,
+                                              current.clarification_answers + [text])
         changed.is_valid=not changed.missing_fields and changed.pending_clarification is None
-        changed.clarification_questions=[]
         messages=self._response(changed,[])
         self._save(user_id,changed)
         return messages
+
+    @staticmethod
+    def _queue_remaining_field_questions(user_id, request, command, answers):
+        questions = grouped_questions_for_missing_fields(request, request.missing_fields)
+        request.clarification_questions = questions
+        request.pending_operation = None
+        if questions and request.pending_clarification is None:
+            request.pending_operation = PendingOperation(
+                user_id=user_id, request_id=request.request_id,
+                request_fingerprint=request_fingerprint(request),
+                operation=RequestOperation(kind='edit_fields'), command=command,
+                question='\n'.join(questions), expected_answer='details', answers=answers)
 
     @staticmethod
     def _response(request, questions):
