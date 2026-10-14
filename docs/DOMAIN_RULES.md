@@ -278,6 +278,21 @@ unavailable. Перевод кг → т остаётся прежним и не 
 - The display preference defaults to false for old JSON. SQL schemas and the
   existing request fingerprint format remain unchanged. Decision replies use
   the existing `clarification_answers` field and immutable history snapshots.
+- Quoted spreadsheet rows may wrap across physical lines. Source coverage
+  counts the quoted logical row once while preserving every literal fragment;
+  unquoted rows and duplicate positions remain separate, and uncovered or
+  invented positions continue to fail closed.
+- An explicit «все позиции по N единиц» instruction or a numbered position
+  range applies one exact Decimal quantity to that stated scope. The update is
+  atomic and rejects mixed incompatible units; absent an explicit scope,
+  quantities already stated on positions are not inferred or redistributed.
+- Repeated missing-field prompts are grouped by source position for display.
+  Grouping does not fill missing facts: answers must still identify the
+  requested fields and pass the existing validation before the request is
+  treated as complete.
+- Known sheet execution `БТ-ПН-О` is recovered from its literal source row and
+  rendered with the item's existing form field. No other execution or grade
+  is inferred from it.
 - «Отмени последнее изменение» remains a separate future feature: Telegram
   has snapshot history but no supported undo command. Return an explicit
   unsupported response; do not confuse this with cancellation of a pending

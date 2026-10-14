@@ -5,8 +5,90 @@ import re
 from pydantic import BaseModel, Field
 
 
-UNITS={'т':'т','тн':'т','тоннах':'т','тонны':'т','кг':'кг','шт':'шт','шт.':'шт','штуках':'шт','штук':'шт','штуки':'шт',
+UNITS={'т':'т','тн':'т','тоннах':'т','тонны':'т','кг':'кг','шт':'шт','шт.':'шт','штуках':'шт','штуке':'шт','штуку':'шт','штук':'шт','штуки':'шт',
        'м':'м','метрах':'м','м²':'м²','м2':'м²','пог. м':'пог. м','пог.м':'пог. м'}
+
+_BULK_NUMBER = r'(?:\d+(?:[.,]\d+)?|один|одна|одну|одной|одно)'
+_BULK_UNIT = r'(?:пог\.?\s*м\.?|м\s*[²2]|тн|тонн(?:а|ы)?|кг|шт\.?|штук(?:а|и|у|е)?|м\.?|т)'
+
+
+def parse_bulk_quantity(text, request):
+    """Parse an explicit all-position or source-position quantity instruction.
+
+    The caller applies the parsed values atomically and rejects incompatible
+    existing units. No dimensions or quantities are inferred from item text.
+    """
+    amount = rf'(?P<amount>{_BULK_NUMBER})\s*(?P<unit>{_BULK_UNIT})'
+    match = re.fullmatch(rf'\s*(?:(?P<all>все(?:\s+позиции)?|каждого|каждую|каждой)\s+|'
+                         rf'поз(?:иция|\.)?\s*(?P<start>\d+)\s*(?:[-–—]\s*(?P<end>\d+))?\s+)'
+                         rf'по\s+{amount}\s*[.!]?\s*', text, re.I)
+    if not match:
+        return None
+    words = {'один': '1', 'одна': '1', 'одну': '1', 'одной': '1', 'одно': '1'}
+    try:
+        quantity = Decimal(words.get(match['amount'].casefold(), match['amount'].replace(',', '.')))
+    except (InvalidOperation, AttributeError):
+        return None
+    if not quantity.is_finite() or quantity <= 0:
+        return None
+    unit = find_unit(match['unit'])
+    if not unit:
+        return None
+    if match['all']:
+        targets = list(request.items)
+    else:
+        first = int(match['start'])
+        last = int(match['end'] or first)
+        if first < 1 or last < first:
+            return None
+        targets = [item for index, item in enumerate(request.items, 1)
+                   if (getattr(item, 'source_position', None) or index) in range(first, last + 1)]
+        if len(targets) != last - first + 1:
+            return None
+    if not targets or any(item.unit and item.unit != unit for item in targets):
+        return None
+    return [(item.item_id if hasattr(item, 'item_id') else id(item), quantity, unit) for item in targets]
+
+
+def parse_dimension_answers(text, request):
+    """Parse explicit geometry fields in one or more numbered clarification answers."""
+    position_re = re.compile(r'(?<!\w)(?:исходной\s+)?поз(?:иция|\.)\s*(\d+)', re.I)
+    matches = list(position_re.finditer(text))
+    missing = {}
+    for entry in request.missing_fields:
+        match = re.fullmatch(r'items\[(\d+)\]\.([a-z_]+)', entry)
+        if match:
+            missing.setdefault(int(match[1]) + 1, set()).add(match[2])
+    if not missing:
+        return {}
+    blocks = []
+    if matches:
+        for n, match in enumerate(matches):
+            blocks.append((int(match[1]), text[match.end():matches[n + 1].start() if n + 1 < len(matches) else len(text)]))
+    elif len(missing) == 1:
+        blocks = [(next(iter(missing)), text)]
+    else:
+        return {}
+    field_patterns = (
+        ('wall_thickness_mm', r'толщин\w*\s+стенк\w*'),
+        ('width_mm', r'ширин\w*'), ('height_mm', r'высот\w*'),
+        ('length_mm', r'длин\w*'), ('diameter_mm', r'диаметр\w*'),
+        ('side_a_mm', r'сторон\w*\s*a'), ('side_b_mm', r'сторон\w*\s*b'),
+        ('thickness_mm', r'толщин\w*'),
+    )
+    values = {}
+    for position, block in blocks:
+        target = next((item for index, item in enumerate(request.items, 1)
+                       if (getattr(item, 'source_position', None) or index) == position), None)
+        if target is None or position not in missing:
+            continue
+        for field, label in field_patterns:
+            match = re.search(rf'(?<!\w){label}\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:мм)?', block, re.I)
+            if match and field in missing[position]:
+                value = Decimal(match[1].replace(',', '.'))
+                if value.is_finite() and value > 0:
+                    values.setdefault(position, {})[field] = value
+    return values
 
 
 class ClarificationOption(BaseModel):

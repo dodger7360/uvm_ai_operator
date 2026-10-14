@@ -4,7 +4,44 @@ from diagnostics import phase, SemanticExtractionError
 from quantity import QUANTITY_RE, without_mass_annotation
 
 
-PRODUCT_ROW = re.compile(r'\b(балк\w*|двутавр\w*|лист\w*|труб\w*|угол\w*|швеллер\w*|арматур\w*|круг\w*|полос\w*|проволок\w*|лент\w*|сетк\w*|прут\w*|отвод\w*|фланец\w*|муфт\w*|тройник\w*)\b',re.I)
+PRODUCT_ROW = re.compile(r'\b(балк\w*|двутавр\w*|лист\w*|труб\w*|угол\w*|швеллер\w*|арматур\w*|круг\w*|полос\w*|проволок\w*|лент\w*|сетк\w*|прут\w*|соединительн\w*|отвод\w*|фланец\w*|муфт\w*|тройник\w*)\b',re.I)
+
+
+def logical_source_rows(parse_text):
+    """Join quoted physical continuations before counting procurement rows.
+
+    Spreadsheet exports commonly wrap one quoted row over multiple lines,
+    especially between a grade and a ГОСТ. Treating each physical line as an
+    independent row creates phantom source positions and then rejects a
+    complete extraction. Other input lines retain their original boundaries.
+    """
+    rows = []
+    continuation = []
+
+    for physical in parse_text.splitlines():
+        line = physical.strip()
+        if not line:
+            continue
+        if continuation:
+            if PRODUCT_ROW.search(line) and line.count('"') % 2 == 0:
+                rows.append('\n'.join(continuation))
+                continuation = []
+            else:
+                continuation.append(line)
+                if sum(part.count('"') for part in continuation) % 2 == 0:
+                    rows.append('\n'.join(continuation))
+                    continuation = []
+                continue
+        if PRODUCT_ROW.search(line):
+            if line.startswith('"') or line.count('"') % 2:
+                continuation = [line]
+            else:
+                rows.append(line)
+            continue
+        rows.append(line)
+    if continuation:
+        rows.append('\n'.join(continuation))
+    return rows
 
 
 def product_row_key(row, city):
@@ -20,12 +57,11 @@ def product_row_key(row, city):
 
 def validate_source_coverage(draft, parse_text, allow_heading_rows=False):
     from ai import _source_fragment_occurrences
-    # Every physical row containing a product must be represented. Quoted Excel
-    # continuations remain within the item's literal source fragment.
+    # Every logical row containing a product must be represented. Quoted
+    # continuations remain within one item's literal source fragment.
     product = PRODUCT_ROW
-    literal_rows = [line.strip().strip('"')
-        for line in parse_text.splitlines()
-        if product.search(line) and re.search(r'\d', line)]
+    literal_rows = [row for row in logical_source_rows(parse_text)
+        if product.search(row) and re.search(r'\d', row)]
     if allow_heading_rows and not literal_rows:
         return
     phase('validation',source_count=len(literal_rows),extracted_count=len(draft.items))

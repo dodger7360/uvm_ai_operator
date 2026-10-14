@@ -25,15 +25,15 @@ FIXTURES = Path(__file__).parent / 'fixtures'
 
 
 def pipes():
-    text = (FIXTURES / 'pipes_5_original.txt').read_text().strip()
+    text = (FIXTURES / 'pipes_5_original.txt').read_text(encoding='utf-8').strip()
     return text, PurchaseRequest(items=[RequestItem(product='Труба', product_group='round_pipe',
         size_designation=line.split()[1], quantity=line.rsplit('-', 1)[1].split()[0], unit='т', source_text=line)
         for line in text.splitlines()])
 
 
 def mixed():
-    return ((FIXTURES / 'mixed_21_original.txt').read_text().strip(),
-            PurchaseRequest.model_validate_json((FIXTURES / 'mixed_21_extraction.json').read_text()))
+    return ((FIXTURES / 'mixed_21_original.txt').read_text(encoding='utf-8').strip(),
+            PurchaseRequest.model_validate_json((FIXTURES / 'mixed_21_extraction.json').read_text(encoding='utf-8')))
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ def test_five_pipes_through_authorized_handler_with_normalized_punctuation(conte
     access.allowed.return_value = True
     handle_update({'message': {'chat': {'type': 'private', 'id': 1}, 'from': {'id': 1}, 'text': pipes()[0]}}, service, api, access)
     replies = [call.kwargs['text'] for call in api.call.call_args_list if call.args[0] == 'sendMessage']
-    assert '\n'.join(replies) == (FIXTURES / 'pipes_5_expected.txt').read_text().strip()
+    assert '\n'.join(replies) == (FIXTURES / 'pipes_5_expected.txt').read_text(encoding='utf-8').strip()
     assert len(repo.load(1).items) == 5
     ai.parse_request.assert_called_once()
     ai.interpret_message.assert_not_called()
@@ -78,7 +78,7 @@ def test_mixed_21_complete_and_scoped(context):
     text, draft = mixed()
     ai.parse_request.side_effect = lambda *args, **kwargs: draft.model_copy(deep=True)
     result = service.process(1, text)
-    assert '\n'.join(result) == (FIXTURES / 'mixed_21_expected.txt').read_text().strip()
+    assert '\n'.join(result) == (FIXTURES / 'mixed_21_expected.txt').read_text(encoding='utf-8').strip()
     active = repo.load(1)
     assert active.is_valid
     assert len(active.items) == len('\n'.join(result).splitlines()) == 21
