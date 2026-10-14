@@ -19,6 +19,18 @@ QUANTITY_RE = re.compile(
     re.IGNORECASE)
 
 
+def without_mass_annotation(source):
+    """A rendered `pieces = tonnes` suffix is not a second source quantity.
+
+    Keep the raw source unchanged in storage. Only this explicit annotation is
+    ignored by quantity extraction and source matching; other facts stay intact.
+    """
+    return re.sub(
+        r'(?P<pieces>(?<![\w.,])\d+(?:[.,]\d+)?\s*шт\.?)'
+        r'\s*=\s*\d+(?:[.,]\d+)?\s*(?:тн|тонн(?:а|ы)?|т)(?!\w)',
+        lambda match: match['pieces'], source, flags=re.I)
+
+
 def normalize_quantity(value, unit, allow_zero=False):
     """Exact display quantity; kg -> tonnes without a fixed SQLite scale.
 

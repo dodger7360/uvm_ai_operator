@@ -1,7 +1,7 @@
 """Shared source-row accounting before any derived consolidation."""
 import re
 from diagnostics import phase, SemanticExtractionError
-from quantity import QUANTITY_RE
+from quantity import QUANTITY_RE, without_mass_annotation
 
 
 PRODUCT_ROW = re.compile(r'\b(балк\w*|двутавр\w*|лист\w*|труб\w*|угол\w*|швеллер\w*|арматур\w*|круг\w*|полос\w*|проволок\w*|лент\w*|сетк\w*|прут\w*|отвод\w*|фланец\w*|муфт\w*|тройник\w*)\b',re.I)
@@ -10,6 +10,7 @@ PRODUCT_ROW = re.compile(r'\b(балк\w*|двутавр\w*|лист\w*|труб
 def product_row_key(row, city):
     """Ignore a request opener and the explicitly extracted trailing city."""
     from ai import _compact_source_text
+    row = without_mass_annotation(row)
     row = re.sub(r'^\s*(?:нужна|нужны|нужно|нужен|требуется|требуются)\s+', '', row, flags=re.I)
     if city and city.strip():
         row = re.sub(r'(?:[,;]\s*|\s+)' + re.escape(city.strip()) + r'[.!?]*\s*$', '', row, flags=re.I)

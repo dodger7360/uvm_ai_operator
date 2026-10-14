@@ -326,13 +326,15 @@ def test_cannot_return_question_when_sqlite_save_failed(context):
     assert repo.load(1) == before
 
 
-def test_structured_field_edit_uses_existing_executor(context):
+def test_unstated_structured_grade_edit_requires_confirmation(context):
     service, repo, responses, _ = context
     active = repo.load(1)
     responses.append(MessagePlan(intent='operation', operation=RequestOperation(kind='edit_fields',
         edits=[Edit(item_id=active.items[0].item_id, field='grade', value='09Г2С')])))
-    service.process(1, 'Исправь сталь')
-    assert repo.load(1).items[0].grade == '09Г2С'
+    reply = service.process(1, 'Исправь сталь')[0]
+    assert 'не указанную явно' in reply
+    assert repo.load(1).items == active.items
+    assert repo.load(1).pending_operation is not None
 
 
 def test_structured_cancel_clears_pending_without_changing_items(context):

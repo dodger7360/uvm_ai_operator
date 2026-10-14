@@ -13,15 +13,16 @@ from schemas import PurchaseRequest, RequestItem
 from normalizer import normalize_request, UNIT_ALIASES
 from validator import validate_request, confirm_shared_attributes
 from formatter import format_normalized_request, sort_items, ordered_consolidation
-from quantity import QUANTITY_RE
+from quantity import QUANTITY_RE, without_mass_annotation
 from source_fidelity import PRODUCT_ROW, product_row_key, validate_source_coverage
 
 
 class MessagePlan(BaseModel):
-    intent: Literal['new', 'edit', 'clarify', 'operation']
+    intent: Literal['new', 'edit', 'clarify', 'operation', 'display', 'show']
     edits: list[Edit] = Field(default_factory=list)
     question: Optional[str] = None
     operation: Optional[RequestOperation] = None
+    display_format: Optional[Literal['rebar_diameter_first', 'rebar_grade_first']] = None
 
 
 class ActiveItem(RequestItem):
@@ -35,6 +36,7 @@ class ActiveRequest(PurchaseRequest):
     request_id: str
     dialog_state: Literal['active', 'choose_request', 'awaiting_new'] = 'active'
     tonnage_decimals: Optional[Literal[2, 3]] = None
+    rebar_diameter_first: bool = False
     pending_clarification: Optional[PendingClarification] = None
     pending_operation: Optional[PendingOperation] = None
     clarification_cancelled: bool = False
@@ -52,7 +54,22 @@ GRADE_RE = re.compile(
 
 
 
-def exact_source_attributes(item):
+def alternative_grade_value(source):
+    """Offer only the literal separate grade tokens; never infer equivalence."""
+    matches = list(GRADE_RE.finditer(source))
+    if len(matches) < 2 or all(re.search(r'\bили\b', source[a.end():b.start()], re.I)
+                              for a, b in zip(matches, matches[1:])):
+        return None
+    from normalizer import _normalize_grade
+    values = [_normalize_grade(match[0]) for match in matches]
+    return values[0] + ' (или ' + ' или '.join(values[1:]) + ')'
+
+
+EDIT_WORDS = r'\b(?:замени|заменить|измени|изменить|поменяй|верни|восстанови|убери|удали|допиши|добавь|укажи|пропиши)\b'
+DISPLAY_WORDS = r'\b(?:напиши|пропиши|покажи|переставь|оформи)\b'
+
+
+def exact_source_attributes(item, defer_grade_question=False):
     """Recover full steel tokens and decimal quantities from literal source."""
     source = item.source_text or ''
     if item.quantity is not None and item.quantity < 0:
@@ -68,7 +85,9 @@ def exact_source_attributes(item):
             normalized=[_normalize_grade(match[0]) for match in matches]
             item.grade=normalized[0]+' (или '+' или '.join(normalized[1:])+')'
         else:
-            raise PipelineError('ambiguous_grades','Укажите, являются ли перечисленные марки разрешёнными альтернативами («или»).')
+            if not defer_grade_question:
+                raise PipelineError('ambiguous_grades','Укажите, являются ли перечисленные марки разрешёнными альтернативами («или»).')
+            item.grade = None  # Persist the literal request and a typed proposal first.
     # Restore every explicitly written standard, rather than trusting omissions.
     standards = re.findall(r'(?<!\w)(?:ГОСТ(?:\s+Р)?|ТУ|СТО\s+АСЧМ)\s*[0-9][0-9.\-]*(?:\s*-[0-9]+)?', source, re.I)
     if standards:
@@ -93,9 +112,10 @@ def exact_source_attributes(item):
             item.product = 'Труба бесшовная'
         elif re.search(r'ГОСТ\s*10704(?:-91)?', source, re.I):
             item.product = 'Труба э/с'
-    quantities = [m for m in QUANTITY_RE.finditer(source)
-                  if not re.search(r'[×хx*]\s*$',source[max(0,m.start()-20):m.start()],re.I)
-                  and not re.search(r'(?:длина|раскрой)\s*[:=]?\s*$', source[max(0,m.start()-20):m.start()], re.I)]
+    quantity_source = without_mass_annotation(source)
+    quantities = [m for m in QUANTITY_RE.finditer(quantity_source)
+                  if not re.search(r'[×хx*]\s*$',quantity_source[max(0,m.start()-20):m.start()],re.I)
+                  and not re.search(r'(?:длина|раскрой)\s*[:=]?\s*$', quantity_source[max(0,m.start()-20):m.start()], re.I)]
     reverse_quantity = re.search(r'(?<=[|;\t])\s*(пог\.?\s*м\.?|м[²2]|тн|кг|шт\.?|м|т)\s*[|;\t]\s*\d+(?:[.,]\d+)?(?![\w.,])', source, re.I)
     if reverse_quantity:
         quantities = []
@@ -184,7 +204,7 @@ def local_edit_plan(text, current):
                 'пятой': 5, 'шестой': 6, 'седьмой': 7, 'восьмой': 8, 'девятой': 9, 'десятой': 10}
     text = re.sub(r'\b(' + '|'.join(ordinals) + r')\s+(исходной\s+)?позиции\b',
                   lambda m: (m[2] or '') + 'позиции ' + str(ordinals[m[1].casefold()]), text, flags=re.I)
-    match = re.fullmatch(r'\s*(?:в\s+)?(исходной\s+)?позиции\s+(\d+)\s+(?:измени|замени)\s+(марку|количество)\s+на\s+(.+?)\s*', text, re.I)
+    match = re.fullmatch(r'\s*(?:(?:в|во)\s+)?(исходной\s+)?позиции\s+(\d+)\s+(?:измени|замени|поменяй|допиши|добавь|укажи|пропиши)\s+(?:(марку(?:\s+стали)?|количество)\s+(?:на\s+)?)?(.+?)\s*', text, re.I)
     restore = re.fullmatch(r'\s*(?:верни|восстанови)\s+исходную\s+марку\s+(исходной\s+)?позиции\s+(\d+)\s*', text, re.I)
     selection = match or restore
     if selection:
@@ -198,20 +218,20 @@ def local_edit_plan(text, current):
                 return MessagePlan(intent='clarify', question='Укажите существующую исходную позицию.')
             group = groups[number - 1]
             candidates = [current.items[index - 1] for index in group.source_indices]
-            if len(candidates) > 1:
+            if len(candidates) > 1 and not (restore or (match and (match[3] or '').casefold() != 'количество')):
                 positions = ', '.join(map(str, group.source_positions))
                 return MessagePlan(intent='clarify', question=(
                     f'Итоговая строка {number} включает исходные строки {positions}. '
                     'Укажите нужную командой «В исходной позиции N измени поле на значение».'))
-        if len(candidates) != 1:
+        if not candidates:
             return MessagePlan(intent='clarify', question='Укажите существующую исходную позицию.')
         item_id = candidates[0].item_id
         if restore:
-            return MessagePlan(intent='edit', edits=[Edit(item_id=item_id, field='grade', restore=True)])
-        if match[3].casefold() == 'марку' and GRADE_RE.fullmatch(match[4]):
-            return MessagePlan(intent='edit', edits=[Edit(item_id=item_id, field='grade', value=_normalize_grade(match[4]))])
+            return MessagePlan(intent='edit', edits=[Edit(item_id=item.item_id, field='grade', restore=True) for item in candidates])
+        if (match[3] or '').casefold() != 'количество' and GRADE_RE.fullmatch(match[4]):
+            return MessagePlan(intent='edit', edits=[Edit(item_id=item.item_id, field='grade', value=_normalize_grade(match[4])) for item in candidates])
         quantity = QUANTITY_RE.fullmatch(match[4])
-        if match[3].casefold() == 'количество' and quantity:
+        if match[3] and match[3].casefold() == 'количество' and quantity:
             from clarifications import find_unit
             unit = find_unit(quantity[2])
             if unit:
@@ -229,8 +249,85 @@ def local_edit_plan(text, current):
 
 
 
+def scoped_plan(text, current, plan, confirmed=False):
+    """Bind model edits to the explicitly numbered source/display row in Python."""
+    if not plan.edits:
+        return plan
+    ordinals = {'первой': 1, 'второй': 2, 'третьей': 3, 'четвертой': 4, 'четвёртой': 4,
+                'пятой': 5, 'шестой': 6, 'седьмой': 7, 'восьмой': 8, 'девятой': 9, 'десятой': 10}
+    command = re.sub(r'\b(' + '|'.join(ordinals) + r')\s+(исходной\s+)?позиции\b',
+                     lambda m: (m[2] or '') + 'позиции ' + str(ordinals[m[1].casefold()]), text, flags=re.I)
+    selections = list(re.finditer(r'(?P<source>исходной\s+)?позиции\s+(?P<number>\d+)\b', command, re.I))
+    selected = selections[-1] if selections else None
+    if not selected:
+        proposed_ids = {edit.item_id for edit in plan.edits}
+        for group in ordered_consolidation(current.items):
+            group_ids = set(group.source_item_ids)
+            group_edits = [edit for edit in plan.edits if edit.item_id in group_ids]
+            if len(group.source_indices) > 1 and group_edits:
+                fields = {edit.field for edit in group_edits}
+                explicit_global_grade = bool(re.search(r'\bвезде\b', command, re.I)) and fields == {'grade'}
+                unsafe_quantity = bool(fields & {'quantity', 'unit'})
+                partial_group = not group_ids <= proposed_ids
+                if fields == {'grade'}:
+                    from normalizer import _normalize_grade
+                    literal_values = {_normalize_grade(match[0]) for match in GRADE_RE.finditer(command)}
+                    literal_values.update('А' + match[0][1:].upper().replace('C', 'С')
+                                          for match in re.finditer(r'(?<!\w)[АаAa]\d{3}[СсCc]?(?!\w)', command))
+                    literal_grade = all(edit.restore or _normalize_grade(edit.value) in literal_values
+                                        for edit in group_edits)
+                else:
+                    literal_grade = False
+                unscoped_grade = fields == {'grade'} and not explicit_global_grade and not literal_grade
+                if not (unsafe_quantity or partial_group or unscoped_grade):
+                    continue
+                positions = ', '.join(map(str, group.source_positions))
+                return MessagePlan(intent='clarify', question=(
+                    f'Правка затрагивает строку с исходными позициями {positions}. '
+                    'Укажите номер отображаемой позиции для изменения марки всей строки '
+                    'или номер исходной позиции для изменения только этой строки.'))
+        if not confirmed and plan.intent == 'edit' and all(edit.field == 'grade' for edit in plan.edits):
+            from normalizer import _normalize_grade
+            literal_values = {_normalize_grade(match[0]) for match in GRADE_RE.finditer(text)}
+            literal_values.update('А' + match[0][1:].upper().replace('C', 'С')
+                                  for match in re.finditer(r'(?<!\w)[АаAa]\d{3}[СсCc]?(?!\w)', text))
+            proposed = {edit.value for edit in plan.edits if not edit.restore}
+            if any(_normalize_grade(value) not in literal_values for value in proposed):
+                values = ', '.join(sorted(str(value) for value in proposed))
+                return plan.model_copy(update={'intent': 'clarify', 'question': f'Модель предложила марку {values}, не указанную явно в команде. Подтвердите замену: да или нет.'})
+        return plan
+    number = int(selected['number'])
+    if selected['source']:
+        targets = [item for index, item in enumerate(current.items, 1)
+                   if (item.source_position or index) == number]
+    else:
+        groups = ordered_consolidation(current.items)
+        targets = [current.items[index - 1] for index in groups[number - 1].source_indices] if 0 < number <= len(groups) else []
+    ids = {item.item_id for item in targets}
+    if not ids or any(edit.item_id not in ids for edit in plan.edits):
+        raise SemanticExtractionError('edit_target_mismatch', 'Правка не соответствует указанной позиции. Уточните номер.')
+    if len(targets) > 1:
+        values = {(edit.value, edit.restore) for edit in plan.edits}
+        if all(edit.field == 'grade' for edit in plan.edits) and len(values) == 1:
+            value, restore = next(iter(values))
+            plan = plan.model_copy(update={'edits': [Edit(item_id=item.item_id, field='grade', value=value, restore=restore)
+                                                    for item in targets]})
+        else:
+            return MessagePlan(intent='clarify', question='Эта итоговая строка содержит несколько исходных позиций. Укажите исходную позицию и новое значение; суммарное количество не распределяется автоматически.')
+    if not confirmed and plan.intent == 'edit' and all(edit.field == 'grade' for edit in plan.edits):
+        from normalizer import _normalize_grade
+        literal_values = {_normalize_grade(match[0]) for match in GRADE_RE.finditer(text)}
+        literal_values.update('А' + match[0][1:].upper().replace('C', 'С')
+                              for match in re.finditer(r'(?<!\w)[АаAa]\d{3}[СсCc]?(?!\w)', text))
+        proposed = {edit.value for edit in plan.edits if not edit.restore}
+        if any(_normalize_grade(value) not in literal_values for value in proposed):
+            values = ', '.join(sorted(str(value) for value in proposed))
+            return plan.model_copy(update={'intent': 'clarify', 'question': f'Модель предложила марку {values}, не указанную явно в команде. Подтвердите замену: да или нет.'})
+    return plan
+
+
 def is_new_request(text):
-    if re.search(r'\b(замени|заменить|измени|изменить|верни|восстанови|убери|удали)\b',text,re.I):
+    if re.search(EDIT_WORDS + '|' + DISPLAY_WORDS, text, re.I):
         return False
     return any(PRODUCT_ROW.search(line) and QUANTITY_RE.search(line) for line in text.splitlines())
 
@@ -255,12 +352,25 @@ class TelegramService:
         phase('sqlite_load')
         current = self.repository.load(user_id)
         phase('routing')
+        wording = text.strip().casefold().strip('.!?')
+        if wording in {'покажи текущую заявку', 'покажи заявку', 'текущая заявка', '/show'}:
+            return self._response(current, []) if current is not None else ['Активной заявки нет. Пришлите новую заявку.']
+        if re.fullmatch(r'отмени(?:ть)?\s+последнее\s+изменение', wording):
+            return ['Отмена последнего сохранённого изменения пока не поддерживается. Можно явно восстановить исходное поле или отменить ожидающую операцию.']
+        if current is None and wording in {'да', 'нет', 'верно', 'подтверждаю', 'согласен', 'неверно', 'обеим', 'к обеим', 'для суммы'}:
+            return ['Нет ожидающего уточнения. Сначала отправьте заявку.']
+        if current is not None:
+            displayed = self._display_command(user_id, current, text)
+            if displayed is not None:
+                return displayed
         if (current is not None and current.pending_clarification is None
                 and current.pending_operation is None and not current.clarification_cancelled):
             current.pending_clarification=next_question(current)
         parse_text, heading_records = prepare_sheet_heading(text)
         candidate = is_new_request(text) or bool(heading_records)
-        if current is not None and current.dialog_state == 'awaiting_new' and PRODUCT_ROW.search(text) and re.search(r'\d', text):
+        if (current is not None and current.dialog_state == 'awaiting_new'
+                and PRODUCT_ROW.search(text) and re.search(r'\d', text)
+                and not re.search(EDIT_WORDS + '|' + DISPLAY_WORDS, text, re.I)):
             candidate = True
         wording = text.strip().casefold().strip('.!?')
         operation_kind = unsupported_operation(text)
@@ -303,13 +413,13 @@ class TelegramService:
         if current is None and not PRODUCT_ROW.search(text):
             return ['Пришлите заявку на металлопрокат с размерами и количеством.']
         if current is not None and not candidate:
-            explicit_edit=re.search(r'\b(замени|заменить|измени|изменить|верни|восстанови|убери|удали)\b',text,re.I)
+            explicit_edit=re.search(EDIT_WORDS, text, re.I)
             formatting=re.search(r'тоннаж|тонн|количеств',text,re.I) and re.search(r'формат|виду|знак|отображ|округл',text,re.I)
             if current.pending_operation and not explicit_edit and not formatting:
                 return self._answer_operation(user_id, current, text)
             if current.pending_clarification and not explicit_edit and not formatting:
                 return self._answer_clarification(user_id,current,text)
-            if wording in {'да', 'нет', 'верно', 'подтверждаю', 'согласен', 'неверно'} or re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*',text):
+            if wording in {'да', 'нет', 'верно', 'подтверждаю', 'согласен', 'неверно', 'обеим', 'к обеим', 'для суммы', 'обоим', 'к обоим'} or re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*',text):
                 return ['Нет ожидающего уточнения. Отправьте новую заявку или укажите позицию и поле для изменения.']
             # Formatting is a presentation setting, never a quantity edit.
             wording = text.casefold()
@@ -333,23 +443,29 @@ class TelegramService:
                 emit('local_edit', stage='routing', edit_count=len(plan.edits))
                 if plan.intent == 'clarify':
                     return self._begin_clarification(user_id, current, text, plan)
-                return self._edit(user_id, current, plan)
+                return self._edit(user_id, current, plan, command=text)
             for attempt in range(2):
                 phase('classification')
                 plan = self.ai.interpret_message(text,current) if attempt==0 else self.ai.interpret_message(text,current,reasoning_effort=os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
+                if plan.intent == 'show':
+                    return self._response(current, [])
+                if plan.intent == 'display':
+                    return self._set_display(user_id, current, plan.display_format)
                 if plan.intent == 'clarify':
                     return self._begin_clarification(user_id, current, text, plan)
                 if plan.intent == 'operation':
-                    return self._execute_operation(user_id, current, plan.operation)
+                    return self._execute_operation(user_id, current, plan.operation, command=text)
                 if plan.intent != 'edit':
+                    if re.search(EDIT_WORDS + '|' + DISPLAY_WORDS, text, re.I):
+                        return ['Команда относится к активной заявке. Укажите позицию и поле для изменения; новая заявка не создавалась.']
                     break
                 try:
-                    return self._edit(user_id,current,plan)
+                    return self._edit(user_id,current,plan,command=text)
                 except SemanticExtractionError:
                     if attempt:
                         raise
                     emit('medium_retry',stage='classification',reason='edit_target_mismatch')
-        elif re.search(r'\b(замени|заменить|измени|верни|убери)\b', text, re.I):
+        elif re.search(EDIT_WORDS + '|' + DISPLAY_WORDS, text, re.I):
             return ['Сначала отправьте заявку, затем команду изменения.']
         for attempt in range(2):
             try:
@@ -364,7 +480,17 @@ class TelegramService:
                 if attempt or not source_has_quantities or error.code not in eligible:
                     raise
                 emit('medium_retry',stage='extraction',reason=error.code)
-        if active.pending_clarification is None and active.clarification_questions:
+        grade_edits = [Edit(item_id=item.item_id, field='grade', value=value)
+                       for item in active.items
+                       if (value := alternative_grade_value(item.source_text or ''))]
+        if grade_edits:
+            active.is_valid = False
+            active.pending_operation = PendingOperation(user_id=user_id,
+                request_id=active.request_id, request_fingerprint=request_fingerprint(active),
+                operation=RequestOperation(kind='confirm_grade_alternatives', edits=grade_edits),
+                command=text, question='Укажите, являются ли перечисленные марки разрешёнными альтернативами («или»). Ответьте да, нет или отмена.',
+                expected_answer='confirmation')
+        elif active.pending_clarification is None and active.clarification_questions:
             active.pending_operation = PendingOperation(
                 user_id=user_id, request_id=active.request_id,
                 request_fingerprint=request_fingerprint(active),
@@ -387,7 +513,7 @@ class TelegramService:
             raise SemanticExtractionError('city_mismatch','Город не подтверждается исходной заявкой. Повторите заявку.')
         source_positions = validate_source_coverage(draft, parse_text)
         for item in draft.items:
-            exact_source_attributes(item)
+            exact_source_attributes(item, defer_grade_question=True)
         phase('normalization')
         normalize_request(draft)
         confirmed = confirm_shared_attributes(parse_text, draft)
@@ -428,6 +554,44 @@ class TelegramService:
         active.pending_clarification=next_question(active)
         return active
 
+    def _display_command(self, user_id, current, text):
+        """Presentation commands cannot replace source rows or technical facts."""
+        if re.fullmatch(r'\s*арматура\s+(?:напиши|поставь|укажи)\s+диаметр\s+(?:вначале|в начале|сначала)\s*[.!]?\s*', text, re.I):
+            return self._set_display(user_id, current, 'rebar_diameter_first')
+        template = re.fullmatch(r'\s*пропиши\s+арматура\s+[фФØø]\s*(\d+(?:[.,]\d+)?)\s+([аАA]\d{3}[сСC]?)\s*[-—–]\s*(\d+(?:[.,]\d+)?)\s*(т|кг)\s*', text, re.I)
+        if not template:
+            return None
+        groups = [group for group in ordered_consolidation(current.items)
+                  if group.item.product_group == 'rebar' and group.item.diameter_mm is not None
+                  and Decimal(str(group.item.diameter_mm)) == Decimal(template[1].replace(',', '.'))]
+        if len(groups) != 1:
+            return ['Укажите номер отображаемой позиции арматуры; одного диаметра недостаточно для выбора.']
+        group = groups[0]
+        from quantity import normalize_quantity
+        if normalize_quantity(template[3], template[4]) != (group.item.quantity, group.item.unit):
+            return ['Количество в шаблоне отличается от заявки. Укажите исходную позицию и новое количество отдельной командой.']
+        requested_grade = 'А' + template[2][1:].upper().replace('C', 'С')
+        if requested_grade != group.item.grade:
+            edits = [Edit(item_id=current.items[index - 1].item_id, field='grade', value=requested_grade)
+                     for index in group.source_indices]
+            return self._begin_clarification(user_id, current, text,
+                MessagePlan(intent='clarify', edits=edits,
+                    question=f'Вы указали {requested_grade} вместо {group.item.grade}. Заменить марку для всех исходных строк этой позиции? Ответьте да или нет.'))
+        changed = current.model_copy(deep=True)
+        changed.rebar_diameter_first = True
+        messages = self._response(changed, [])
+        self._save(user_id, changed)
+        return messages
+
+    def _set_display(self, user_id, current, display_format):
+        if display_format not in {'rebar_diameter_first', 'rebar_grade_first'}:
+            return ['Укажите порядок: диаметр арматуры перед маркой или после марки.']
+        changed = current.model_copy(deep=True)
+        changed.rebar_diameter_first = display_format == 'rebar_diameter_first'
+        messages = self._response(changed, [])
+        self._save(user_id, changed)
+        return messages
+
     def _cancel_operation(self, user_id, current):
         changed = current.model_copy(deep=True)
         changed.pending_operation = None
@@ -438,11 +602,14 @@ class TelegramService:
         return ['Ожидающая операция отменена. Заявка сохранена без изменений.']
 
     def _begin_clarification(self, user_id, current, command, plan, answers=None):
+        if plan.operation and plan.operation.kind == 'edit_fields':
+            plan = plan.model_copy(update={'edits': plan.operation.edits})
+        plan = scoped_plan(command, current, plan)
         question = plan.question or 'Укажите позиции и поля для изменения.'
         if unsupported_operation(question) or (plan.operation and plan.operation.kind not in {'edit_fields', 'cancel'}):
             return [UNSUPPORTED_MESSAGE]
         changed = current.model_copy(deep=True)
-        operation = plan.operation or RequestOperation(kind='edit_fields', edits=plan.edits)
+        operation = plan.operation.model_copy(update={'edits': plan.edits}) if plan.operation and plan.operation.kind == 'edit_fields' else plan.operation or RequestOperation(kind='edit_fields', edits=plan.edits)
         concrete = bool(operation.edits) or operation.kind == 'cancel'
         changed.pending_clarification = None if concrete else question_state(question, changed)
         changed.pending_operation = None
@@ -459,16 +626,27 @@ class TelegramService:
         self._save(user_id, changed)
         return [question]
 
-    def _execute_operation(self, user_id, current, operation):
+    def _execute_operation(self, user_id, current, operation, command='', confirmed=False):
         if operation is None:
             raise PipelineError('missing_operation', 'Укажите операцию над заявкой.')
         if operation.kind == 'cancel':
             return self._cancel_operation(user_id, current)
         if operation.kind == 'merge_items':
             return self._response(current, [])
+        if operation.kind == 'confirm_grade_alternatives':
+            if not confirmed:
+                return ['Разрешённые альтернативы марок нужно подтвердить ответом на ожидающий вопрос.']
+            by_id = {item.item_id: item for item in current.items}
+            for edit in operation.edits:
+                item = by_id.get(edit.item_id)
+                if (item is None or edit.field != 'grade' or edit.restore
+                        or edit.value != alternative_grade_value(item.source_text or '')):
+                    raise PipelineError('invalid_grade_confirmation', 'Уточнение марок не соответствует исходным строкам.')
+            return self._edit(user_id, current, MessagePlan(intent='edit', edits=operation.edits),
+                              command=command, confirmed=True)
         if operation.kind != 'edit_fields':
             return [UNSUPPORTED_MESSAGE]
-        return self._edit(user_id, current, MessagePlan(intent='edit', edits=operation.edits))
+        return self._edit(user_id, current, MessagePlan(intent='edit', edits=operation.edits), command=command, confirmed=confirmed)
 
     def _answer_operation(self, user_id, current, text):
         pending = current.pending_operation
@@ -478,12 +656,25 @@ class TelegramService:
         answer = text.strip().casefold().strip('.!?')
         if pending.expected_answer == 'confirmation':
             if answer in {'да', 'верно', 'подтверждаю', 'согласен'}:
-                return self._execute_operation(user_id, current, pending.operation)
+                confirmed_current = current.model_copy(deep=True)
+                confirmed_current.clarification_answers.append(text)
+                return self._execute_operation(user_id, confirmed_current, pending.operation, command=pending.command, confirmed=True)
+            if answer in {'для суммы', 'обеим', 'к обеим', 'обоим', 'к обоим'}:
+                edits = pending.operation.edits
+                if edits and all(edit.field == 'grade' for edit in edits):
+                    ids = {edit.item_id for edit in edits}
+                    groups = ordered_consolidation(current.items)
+                    if any(len(group.source_indices) > 1 and ids == set(group.source_item_ids) for group in groups):
+                        confirmed_current = current.model_copy(deep=True)
+                        confirmed_current.clarification_answers.append(text)
+                        return self._execute_operation(user_id, confirmed_current, pending.operation, command=pending.command, confirmed=True)
             return [pending.question]
         if answer in {'да', 'верно', 'подтверждаю', 'согласен'}:
             return [pending.question + '\nУкажите конкретные позиции и значения; предложение ещё не определено.']
         # Resume the same field-edit pipeline with the saved context. A reply
         # cannot replace the active request through model classification.
+        if answer in {'для суммы', 'обеим', 'к обеим', 'обоим', 'к обоим'} and re.search(r'количеств', pending.command, re.I):
+            return [pending.question]
         answers = pending.answers + [text]
         plan = self.ai.interpret_message(
             'Исходная команда: ' + pending.command + '\nУточняющий вопрос: ' + pending.question
@@ -491,13 +682,16 @@ class TelegramService:
         if plan.intent == 'clarify':
             return self._begin_clarification(user_id, current, pending.command, plan, answers=answers)
         if plan.intent == 'edit':
-            return self._edit(user_id, current, plan)
+            return self._edit(user_id, current, plan, command=pending.command + '\n' + '\n'.join(answers))
         if plan.intent == 'operation':
-            return self._execute_operation(user_id, current, plan.operation)
+            return self._execute_operation(user_id, current, plan.operation, command=pending.command + '\n' + '\n'.join(answers))
         return [pending.question]
 
-    def _edit(self, user_id, current, plan):
+    def _edit(self, user_id, current, plan, command='', confirmed=False):
         phase('correction')
+        plan = scoped_plan(command, current, plan, confirmed=confirmed)
+        if plan.intent == 'clarify':
+            return self._begin_clarification(user_id, current, command, plan)
         if not plan.edits:
             return self._begin_clarification(user_id, current, '',
                 MessagePlan(intent='clarify', question=plan.question or 'Укажите полную марку и позиции, которые нужно изменить.'))
@@ -521,6 +715,9 @@ class TelegramService:
                 raise PipelineError('invalid_unit','Укажите единицу: т, кг, шт., м, пог. м или м².')
             elif edit.field == 'grade' and not edit.restore and (not value or '\n' in value or len(value) > 100):
                 raise PipelineError('invalid_grade','Укажите полную марку стали.')
+            if edit.field == 'grade':
+                from normalizer import _normalize_grade
+                value = _normalize_grade(value)
             if edit.field == 'grade' and item.product_group == 'strip' and item.grade and item.grade in (item.size_designation or ''):
                 if value is None:
                     raise PipelineError('compound_grade','Уточните полное обозначение ленты для восстановления марки.')
@@ -529,6 +726,7 @@ class TelegramService:
         changed.pending_operation = None
         changed.clarification_cancelled = False
         changed.pending_clarification=next_question(changed)
+        changed.is_valid = not changed.missing_fields and changed.pending_clarification is None
         questions=[]
         messages = self._response(changed, questions)
         changed.dialog_state = 'active'
