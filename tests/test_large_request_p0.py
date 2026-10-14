@@ -160,4 +160,3 @@ def test_grouped_dimension_answer_accepts_partial_followup_without_reasking_know
     assert completed.items[0].wall_thickness_mm == 4
     assert completed.missing_fields == [] and completed.is_valid
     assert completed.pending_operation is None
-
