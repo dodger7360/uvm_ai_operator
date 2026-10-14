@@ -4,6 +4,7 @@ from typing import Literal, Optional
 from uuid import uuid4
 import re
 import os
+import math
 from diagnostics import operation, phase, emit, CURRENT, PipelineError, SemanticExtractionError
 from clarifications import (PendingClarification, next_question, question_state, answer_values,
                             parse_bulk_quantity, parse_dimension_answers)
@@ -683,18 +684,30 @@ class TelegramService:
             dimensions = parse_dimension_answers(text, current)
             if dimensions:
                 changed = current.model_copy(deep=True)
-                by_source = {item.source_position: item for item in changed.items}
+                by_source = {item.source_position: (index, item)
+                             for index, item in enumerate(changed.items)
+                             if item.source_position is not None}
+                by_source.update({index + 1: (index, item)
+                                  for index, item in enumerate(changed.items)
+                                  if item.source_position is None})
                 resolved = set()
                 for position, fields in dimensions.items():
-                    target = by_source.get(position)
-                    if target is None:
+                    entry = by_source.get(position)
+                    if entry is None:
                         continue
+                    index, target = entry
                     for field, value in fields.items():
-                        setattr(target, field, float(value))
-                        resolved.add(f'items[{position - 1}].{field}')
+                        converted = float(value)
+                        if not math.isfinite(converted) or converted <= 0 or Decimal(str(converted)) != value:
+                            continue
+                        setattr(target, field, converted)
+                        resolved.add(f'items[{index}].{field}')
+                        legacy_index = (target.source_position or index + 1) - 1
+                        resolved.add(f'items[{legacy_index}].{field}')
                 changed.missing_fields = [field for field in changed.missing_fields if field not in resolved]
                 changed.clarification_answers.append(text)
                 changed.pending_clarification = next_question(changed)
+                validate_request(changed)
                 remaining_questions = grouped_questions_for_missing_fields(changed, changed.missing_fields)
                 changed.pending_operation = None
                 if remaining_questions and changed.pending_clarification is None:
@@ -708,6 +721,8 @@ class TelegramService:
                 messages = self._response(changed, remaining_questions)
                 self._save(user_id, changed)
                 return messages
+            if re.search(r'ширин|высот|толщин|длин|диаметр|сторон', text, re.I):
+                return [pending.question]
         answers = pending.answers + [text]
         plan = self.ai.interpret_message(
             'Исходная команда: ' + pending.command + '\nУточняющий вопрос: ' + pending.question
@@ -772,6 +787,8 @@ class TelegramService:
         if pending.request_id != current.request_id:
             raise PipelineError('stale_clarification','Уточнение относится к другой заявке. Отправьте новую заявку.')
         bulk = parse_bulk_quantity(text, current)
+        if bulk == []:
+            return ['Массовое изменение конфликтует с уже заданными количествами или единицами. Ничего не изменено. Уточните позиции или задайте новое количество явно.']
         if bulk:
             changed = current.model_copy(deep=True)
             by_id = {item.item_id: item for item in changed.items}

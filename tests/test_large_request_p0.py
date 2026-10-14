@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from types import SimpleNamespace
 
-from clarifications import parse_bulk_quantity
+from clarifications import parse_bulk_quantity, parse_dimension_answers
 from schemas import PurchaseRequest, RequestItem
 from source_fidelity import PRODUCT_ROW, logical_source_rows, validate_source_coverage
 from telegram_service import ActiveItem, ActiveRequest, TelegramService, exact_source_attributes
@@ -12,6 +12,7 @@ from database import Database
 from repositories.telegram_repository import TelegramRepository
 from unittest.mock import Mock
 from request_operations import PendingOperation, RequestOperation, request_fingerprint
+from clarifications import PendingClarification
 from pathlib import Path
 import pytest
 
@@ -77,8 +78,31 @@ def test_bulk_quantity_refuses_incompatible_units_atomically():
         SimpleNamespace(source_text='Круг 8 Ст3', item_id='i1', source_position=1, unit='шт', quantity=None),
         SimpleNamespace(source_text='Круг 10 Ст3', item_id='i2', source_position=2, unit='т', quantity=Decimal('0.2')),
     ]
-    assert parse_bulk_quantity('все по 1 шт', type('Request', (), {'items': items})()) is None
+    assert parse_bulk_quantity('все по 1 шт', type('Request', (), {'items': items})()) == []
     assert items[0].quantity is None and items[1].quantity == Decimal('0.2')
+
+
+def test_bulk_quantity_requires_explicit_replacement_to_overwrite_and_supports_explicit_replace():
+    item = SimpleNamespace(item_id='item-1', source_position=1, unit='шт', quantity=Decimal('5'))
+    request = type('Request', (), {'items': [item]})()
+    assert parse_bulk_quantity('все по 1 шт', request) == []
+    assert parse_bulk_quantity('Замени количество у всех позиций на 1 шт.', request) == [
+        ('item-1', Decimal('1'), 'шт')]
+
+
+@pytest.mark.parametrize('value', ['0', '-2', '1e-400', 'abc'])
+def test_dimension_parser_rejects_zero_negative_exponent_and_invalid_values(value):
+    item = SimpleNamespace(source_position=3)
+    request = SimpleNamespace(items=[item], missing_fields=['items[0].width_mm'])
+    parsed = parse_dimension_answers(f'Поз. 3 ширина {value} мм', request)
+    assert parsed == {}
+
+
+def test_dimension_parser_keeps_decimal_comma_exact():
+    item = SimpleNamespace(source_position=3)
+    request = SimpleNamespace(items=[item], missing_fields=['items[0].width_mm'])
+    assert parse_dimension_answers('Поз. 3 ширина 2,5 мм', request) == {
+        3: {'width_mm': Decimal('2.5')}}
 
 
 def test_repeated_field_clarifications_are_grouped_by_position():
@@ -160,3 +184,80 @@ def test_grouped_dimension_answer_accepts_partial_followup_without_reasking_know
     assert completed.items[0].wall_thickness_mm == 4
     assert completed.missing_fields == [] and completed.is_valid
     assert completed.pending_operation is None
+
+
+def test_bulk_quantity_conflict_does_not_silently_overwrite_existing_values(tmp_path):
+    repo = TelegramRepository(Database(tmp_path / 'bulk_conflict.sqlite3'))
+    service = TelegramService(Mock(), repo)
+    first = RequestItem(product='\u041a\u0440\u0443\u0433', product_group='round_bar', size_designation='8',
+                        diameter_mm=8, quantity='5', unit='\u0448\u0442')
+    second = RequestItem(product='\u041a\u0440\u0443\u0433', product_group='round_bar', size_designation='10', diameter_mm=10)
+    items = [
+        ActiveItem(**first.model_dump(), item_id='item-1', original=first.model_copy(deep=True), source_position=1),
+        ActiveItem(**second.model_dump(), item_id='item-2', original=second.model_copy(deep=True), source_position=2),
+    ]
+    active = ActiveRequest(request_id='bulk-conflict', source_text='spec', items=items,
+                           pending_clarification=PendingClarification(request_id='bulk-conflict', item_id='item-2',
+                               field='quantity', kind='number', question='quantity?'))
+    repo.save(7, active)
+    service.process(7, '\u0432\u0441\u0435 \u043f\u043e\u0437\u0438\u0446\u0438\u0438 \u043f\u043e 1 \u0448\u0442')
+    saved = repo.load(7)
+    assert saved.items[0].quantity == Decimal('5')
+    assert saved.items[1].quantity is None
+    assert saved.pending_clarification is not None or saved.pending_operation is not None
+
+
+def test_dimension_answers_use_source_positions_not_array_indexes(tmp_path):
+    repo = TelegramRepository(Database(tmp_path / 'sparse_positions.sqlite3'))
+    service = TelegramService(Mock(), repo)
+    originals = [
+        RequestItem(product='\u0422\u0440\u0443\u0431\u0430 \u043f\u0440\u043e\u0444\u0438\u043b\u044c\u043d\u0430\u044f', product_group='profile_pipe',
+                    size_designation='80x80', quantity='1', unit='\u043c'),
+        RequestItem(product='\u041b\u0438\u0441\u0442', product_group='sheet', size_designation='6', thickness_mm=6,
+                    quantity='1', unit='\u0448\u0442'),
+    ]
+    items = [
+        ActiveItem(**originals[0].model_dump(), item_id='pipe-3', original=originals[0].model_copy(deep=True), source_position=3),
+        ActiveItem(**originals[1].model_dump(), item_id='sheet-7', original=originals[1].model_copy(deep=True), source_position=7),
+    ]
+    active = ActiveRequest(request_id='sparse', source_text='spec', items=items, is_valid=False,
+                           missing_fields=['items[0].width_mm', 'items[0].height_mm', 'items[0].wall_thickness_mm',
+                                           'items[1].width_mm', 'items[1].length_mm'])
+    active.pending_operation = PendingOperation(user_id=7, request_id=active.request_id,
+        request_fingerprint=request_fingerprint(active), operation=RequestOperation(kind='edit_fields'),
+        command='spec', question='details?', expected_answer='details')
+    repo.save(7, active)
+    service.process(7, '\u041f\u043e\u0437. 3 \u0448\u0438\u0440\u0438\u043d\u0430 80 \u043c\u043c, \u0432\u044b\u0441\u043e\u0442\u0430 80 \u043c\u043c\n'
+                   '\u041f\u043e\u0437. 7 \u0448\u0438\u0440\u0438\u043d\u0430 1500 \u043c\u043c')
+    partial = repo.load(7)
+    assert (partial.items[0].width_mm, partial.items[0].height_mm) == (80, 80)
+    assert partial.items[1].width_mm == 1500
+    assert partial.missing_fields == ['items[0].wall_thickness_mm', 'items[1].length_mm']
+    assert not partial.is_valid
+    service.process(7, '\u041f\u043e\u0437. 3 \u0442\u043e\u043b\u0449\u0438\u043d\u0430 \u0441\u0442\u0435\u043d\u043a\u0438 4 \u043c\u043c\n'
+                   '\u041f\u043e\u0437. 7 \u0434\u043b\u0438\u043d\u0430 6000 \u043c\u043c')
+    completed = repo.load(7)
+    assert completed.items[0].wall_thickness_mm == 4
+    assert completed.items[1].length_mm == 6000
+    assert completed.missing_fields == [] and completed.is_valid
+
+
+def test_dimension_answer_rejects_float_underflow_instead_of_marking_field_resolved(tmp_path):
+    repo = TelegramRepository(Database(tmp_path / 'tiny_dimension.sqlite3'))
+    service = TelegramService(Mock(), repo)
+    original = RequestItem(product='\u041b\u0438\u0441\u0442', product_group='sheet', quantity='1', unit='\u0448\u0442')
+    item = ActiveItem(**original.model_dump(), item_id='sheet-1', original=original.model_copy(deep=True), source_position=1)
+    active = ActiveRequest(request_id='tiny', source_text='sheet', items=[item], is_valid=False,
+                           missing_fields=['items[0].width_mm'])
+    active.pending_operation = PendingOperation(user_id=7, request_id=active.request_id,
+        request_fingerprint=request_fingerprint(active), operation=RequestOperation(kind='edit_fields'),
+        command='sheet', question='width?', expected_answer='details')
+    repo.save(7, active)
+    service.process(7, '\u0448\u0438\u0440\u0438\u043d\u0430 0.' + '0' * 400 + '1 \u043c\u043c')
+    saved = repo.load(7)
+    assert not saved.is_valid
+    assert 'items[0].width_mm' in saved.missing_fields
+    service.process(7, '\u0448\u0438\u0440\u0438\u043d\u0430 -2 \u043c\u043c')
+    rejected = repo.load(7)
+    assert rejected.items[0].width_mm is None
+    assert 'items[0].width_mm' in rejected.missing_fields and not rejected.is_valid

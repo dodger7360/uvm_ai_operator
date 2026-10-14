@@ -513,7 +513,11 @@ def grouped_questions_for_missing_fields(request, missing_fields):
         match = re.fullmatch(r'items\[(\d+)\]\.([a-z_]+)', entry)
         if not match:
             continue
-        position = int(match[1]) + 1
+        index = int(match[1])
+        item = request.items[index] if index < len(request.items) else next(
+            (candidate for candidate in request.items
+             if getattr(candidate, 'source_position', None) == index + 1), None)
+        position = (getattr(item, 'source_position', None) or index + 1) if item else index + 1
         field = match[2]
         if field in {'quantity', 'unit'}:
             continue

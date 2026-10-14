@@ -19,9 +19,10 @@ def parse_bulk_quantity(text, request):
     existing units. No dimensions or quantities are inferred from item text.
     """
     amount = rf'(?P<amount>{_BULK_NUMBER})\s*(?P<unit>{_BULK_UNIT})'
-    match = re.fullmatch(rf'\s*(?:(?P<all>все(?:\s+позиции)?|каждого|каждую|каждой)\s+|'
-                         rf'поз(?:иция|\.)?\s*(?P<start>\d+)\s*(?:[-–—]\s*(?P<end>\d+))?\s+)'
-                         rf'по\s+{amount}\s*[.!]?\s*', text, re.I)
+    match = re.fullmatch(rf'\s*(?:(?P<all>все(?:\s+позиции)?|каждого|каждую|каждой)\s+по\s+|'
+                         rf'(?P<replace>замени(?:те)?\s+количество\s+у\s+всех\s+позиций\s+на\s+)|'
+                         rf'поз(?:иция|\.)?\s*(?P<start>\d+)\s*(?:[-–—]\s*(?P<end>\d+))?\s+по\s+)'
+                         rf'{amount}\s*[.!]?\s*', text, re.I)
     if not match:
         return None
     words = {'один': '1', 'одна': '1', 'одну': '1', 'одной': '1', 'одно': '1'}
@@ -34,7 +35,7 @@ def parse_bulk_quantity(text, request):
     unit = find_unit(match['unit'])
     if not unit:
         return None
-    if match['all']:
+    if match['all'] or match['replace']:
         targets = list(request.items)
     else:
         first = int(match['start'])
@@ -45,8 +46,16 @@ def parse_bulk_quantity(text, request):
                    if (getattr(item, 'source_position', None) or index) in range(first, last + 1)]
         if len(targets) != last - first + 1:
             return None
-    if not targets or any(item.unit and item.unit != unit for item in targets):
+    if not targets:
         return None
+    if any(item.unit and item.unit != unit for item in targets):
+        return []
+    # Refuse a bulk answer that would silently replace an existing quantity.
+    if not match['replace'] and any(
+        item.quantity is not None and (item.quantity != quantity or not item.unit)
+        for item in targets
+    ):
+        return []
     return [(item.item_id if hasattr(item, 'item_id') else id(item), quantity, unit) for item in targets]
 
 
@@ -58,7 +67,13 @@ def parse_dimension_answers(text, request):
     for entry in request.missing_fields:
         match = re.fullmatch(r'items\[(\d+)\]\.([a-z_]+)', entry)
         if match:
-            missing.setdefault(int(match[1]) + 1, set()).add(match[2])
+            index = int(match[1])
+            item = request.items[index] if index < len(request.items) else next(
+                (candidate for candidate in request.items
+                 if getattr(candidate, 'source_position', None) == index + 1), None)
+            if item is not None:
+                position = getattr(item, 'source_position', None) or index + 1
+                missing.setdefault(position, set()).add(match[2])
     if not missing:
         return {}
     blocks = []
@@ -83,7 +98,7 @@ def parse_dimension_answers(text, request):
         if target is None or position not in missing:
             continue
         for field, label in field_patterns:
-            match = re.search(rf'(?<!\w){label}\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:мм)?', block, re.I)
+            match = re.search(rf'(?<![\w.+-]){label}\s*[:=]?\s*(\d+(?:[.,]\d+)?)(?![\w.+-])\s*(?:мм)?', block, re.I)
             if match and field in missing[position]:
                 value = Decimal(match[1].replace(',', '.'))
                 if value.is_finite() and value > 0:
