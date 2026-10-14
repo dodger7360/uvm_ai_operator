@@ -1,0 +1,775 @@
+[
+  {
+    "case": "angle_full",
+    "spec": {
+      "record_id": "angle_full",
+      "source": {
+        "source_id": "contract-fixtures",
+        "source_type": "contract_fixture",
+        "source_version": "v1"
+      },
+      "original_description": "Уголок 50х50х5 Ст3сп5 ГОСТ 8509-93",
+      "category": {
+        "state": "present",
+        "value": "angle",
+        "raw_value": "Уголок",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "angle_full",
+            "locator": "angle_full",
+            "fragment": "Уголок",
+            "method": "fixture"
+          }
+        ]
+      },
+      "product_type": {
+        "state": "present",
+        "value": "equal_leg_angle",
+        "raw_value": "50х50х5",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "angle_full",
+            "locator": "angle_full",
+            "fragment": "50х50х5",
+            "method": "fixture"
+          }
+        ]
+      },
+      "profile": {
+        "designation": {
+          "state": "present",
+          "value": "50х50х5",
+          "raw_value": "50х50х5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "50х50х5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "cross_section": {
+          "state": "present",
+          "value": "equal_leg",
+          "raw_value": "50х50х5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "50х50х5",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "geometry": {
+        "leg_a": {
+          "state": "present",
+          "value": {
+            "amount": "50",
+            "unit": null
+          },
+          "raw_value": "50х50х5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "50х50х5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "leg_b": {
+          "state": "present",
+          "value": {
+            "amount": "50",
+            "unit": null
+          },
+          "raw_value": "50х50х5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "50х50х5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "thickness": {
+          "state": "present",
+          "value": {
+            "amount": "5",
+            "unit": null
+          },
+          "raw_value": "50х50х5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "50х50х5",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "material": {
+        "designation": {
+          "state": "present",
+          "value": "Ст3сп5",
+          "raw_value": "Ст3сп5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "Ст3сп5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "steel_grade": {
+          "state": "present",
+          "value": "Ст3",
+          "raw_value": "Ст3сп5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "Ст3сп5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "deoxidation": {
+          "state": "present",
+          "value": "сп",
+          "raw_value": "Ст3сп5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "Ст3сп5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "category": {
+          "state": "present",
+          "value": "5",
+          "raw_value": "Ст3сп5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_full",
+              "locator": "angle_full",
+              "fragment": "Ст3сп5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "category_kind": {
+          "state": "unknown",
+          "reason": "Смысл индекса требует нормативного контекста"
+        }
+      },
+      "normative_documents": {
+        "state": "present",
+        "value": [
+          {
+            "raw_designation": "ГОСТ 8509-93",
+            "document_type": "ГОСТ",
+            "number": "8509",
+            "edition": {
+              "state": "present",
+              "value": "93",
+              "raw_value": "ГОСТ 8509-93",
+              "provenance": [
+                {
+                  "source_id": "contract-fixtures",
+                  "record_id": "angle_full",
+                  "locator": "angle_full",
+                  "fragment": "ГОСТ 8509-93",
+                  "method": "fixture"
+                }
+              ]
+            },
+            "role": {
+              "state": "unknown",
+              "reason": "Роль не указана в исходном тексте"
+            },
+            "provenance": [
+              {
+                "source_id": "contract-fixtures",
+                "record_id": "angle_full",
+                "locator": "angle_full",
+                "fragment": "ГОСТ 8509-93",
+                "method": "fixture"
+              }
+            ]
+          }
+        ],
+        "raw_value": "ГОСТ 8509-93",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "angle_full",
+            "locator": "angle_full",
+            "fragment": "ГОСТ 8509-93",
+            "method": "fixture"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "case": "angle_abbreviation",
+    "spec": {
+      "record_id": "angle_abbreviation",
+      "source": {
+        "source_id": "contract-fixtures",
+        "source_type": "contract_fixture",
+        "source_version": "v1"
+      },
+      "original_description": "Уг. равнопол. 50*5 ст3",
+      "category": {
+        "state": "present",
+        "value": "angle",
+        "raw_value": "Уг.",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "angle_abbreviation",
+            "locator": "angle_abbreviation",
+            "fragment": "Уг.",
+            "method": "fixture"
+          }
+        ]
+      },
+      "product_type": {
+        "state": "present",
+        "value": "equal_leg_angle",
+        "raw_value": "равнопол.",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "angle_abbreviation",
+            "locator": "angle_abbreviation",
+            "fragment": "равнопол.",
+            "method": "fixture"
+          }
+        ]
+      },
+      "profile": {
+        "designation": {
+          "state": "present",
+          "value": "50*5",
+          "raw_value": "50*5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_abbreviation",
+              "locator": "angle_abbreviation",
+              "fragment": "50*5",
+              "method": "fixture"
+            }
+          ],
+          "normalized_text": "50×5"
+        },
+        "cross_section": {
+          "state": "present",
+          "value": "equal_leg",
+          "raw_value": "равнопол.",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_abbreviation",
+              "locator": "angle_abbreviation",
+              "fragment": "равнопол.",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "geometry": {
+        "leg_a": {
+          "state": "present",
+          "value": {
+            "amount": "50",
+            "unit": null
+          },
+          "raw_value": "50*5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_abbreviation",
+              "locator": "angle_abbreviation",
+              "fragment": "50*5",
+              "method": "fixture"
+            }
+          ]
+        },
+        "thickness": {
+          "state": "present",
+          "value": {
+            "amount": "5",
+            "unit": null
+          },
+          "raw_value": "50*5",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_abbreviation",
+              "locator": "angle_abbreviation",
+              "fragment": "50*5",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "material": {
+        "designation": {
+          "state": "present",
+          "value": "ст3",
+          "raw_value": "ст3",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_abbreviation",
+              "locator": "angle_abbreviation",
+              "fragment": "ст3",
+              "method": "fixture"
+            }
+          ],
+          "normalized_text": "Ст3"
+        },
+        "steel_grade": {
+          "state": "present",
+          "value": "Ст3",
+          "raw_value": "ст3",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "angle_abbreviation",
+              "locator": "angle_abbreviation",
+              "fragment": "ст3",
+              "method": "fixture"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "case": "channel",
+    "spec": {
+      "record_id": "channel",
+      "source": {
+        "source_id": "contract-fixtures",
+        "source_type": "contract_fixture",
+        "source_version": "v1"
+      },
+      "original_description": "Швеллер 20У 09Г2С",
+      "category": {
+        "state": "present",
+        "value": "channel",
+        "raw_value": "Швеллер",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "channel",
+            "locator": "channel",
+            "fragment": "Швеллер",
+            "method": "fixture"
+          }
+        ]
+      },
+      "product_type": {
+        "state": "present",
+        "value": "channel",
+        "raw_value": "Швеллер",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "channel",
+            "locator": "channel",
+            "fragment": "Швеллер",
+            "method": "fixture"
+          }
+        ]
+      },
+      "profile": {
+        "designation": {
+          "state": "present",
+          "value": "20У",
+          "raw_value": "20У",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "channel",
+              "locator": "channel",
+              "fragment": "20У",
+              "method": "fixture"
+            }
+          ]
+        },
+        "series": {
+          "state": "present",
+          "value": "У",
+          "raw_value": "20У",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "channel",
+              "locator": "channel",
+              "fragment": "20У",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "material": {
+        "designation": {
+          "state": "present",
+          "value": "09Г2С",
+          "raw_value": "09Г2С",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "channel",
+              "locator": "channel",
+              "fragment": "09Г2С",
+              "method": "fixture"
+            }
+          ]
+        },
+        "steel_grade": {
+          "state": "present",
+          "value": "09Г2С",
+          "raw_value": "09Г2С",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "channel",
+              "locator": "channel",
+              "fragment": "09Г2С",
+              "method": "fixture"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "case": "profile_pipe",
+    "spec": {
+      "record_id": "profile_pipe",
+      "source": {
+        "source_id": "contract-fixtures",
+        "source_type": "contract_fixture",
+        "source_version": "v1"
+      },
+      "original_description": "Труба профильная 80х40х3",
+      "category": {
+        "state": "present",
+        "value": "profile_pipe",
+        "raw_value": "Труба профильная",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "profile_pipe",
+            "locator": "profile_pipe",
+            "fragment": "Труба профильная",
+            "method": "fixture"
+          }
+        ]
+      },
+      "product_type": {
+        "state": "present",
+        "value": "profile_pipe",
+        "raw_value": "Труба профильная",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "profile_pipe",
+            "locator": "profile_pipe",
+            "fragment": "Труба профильная",
+            "method": "fixture"
+          }
+        ]
+      },
+      "profile": {
+        "designation": {
+          "state": "present",
+          "value": "80х40х3",
+          "raw_value": "80х40х3",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "profile_pipe",
+              "locator": "profile_pipe",
+              "fragment": "80х40х3",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "geometry": {
+        "width": {
+          "state": "present",
+          "value": {
+            "amount": "80",
+            "unit": null
+          },
+          "raw_value": "80х40х3",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "profile_pipe",
+              "locator": "profile_pipe",
+              "fragment": "80х40х3",
+              "method": "fixture"
+            }
+          ]
+        },
+        "height": {
+          "state": "present",
+          "value": {
+            "amount": "40",
+            "unit": null
+          },
+          "raw_value": "80х40х3",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "profile_pipe",
+              "locator": "profile_pipe",
+              "fragment": "80х40х3",
+              "method": "fixture"
+            }
+          ]
+        },
+        "wall_thickness": {
+          "state": "present",
+          "value": {
+            "amount": "3",
+            "unit": null
+          },
+          "raw_value": "80х40х3",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "profile_pipe",
+              "locator": "profile_pipe",
+              "fragment": "80х40х3",
+              "method": "fixture"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "case": "sheet",
+    "spec": {
+      "record_id": "sheet",
+      "source": {
+        "source_id": "contract-fixtures",
+        "source_type": "contract_fixture",
+        "source_version": "v1"
+      },
+      "original_description": "Лист г/к 10 мм С345",
+      "category": {
+        "state": "present",
+        "value": "sheet",
+        "raw_value": "Лист",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "sheet",
+            "locator": "sheet",
+            "fragment": "Лист",
+            "method": "fixture"
+          }
+        ]
+      },
+      "product_type": {
+        "state": "present",
+        "value": "sheet",
+        "raw_value": "Лист",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "sheet",
+            "locator": "sheet",
+            "fragment": "Лист",
+            "method": "fixture"
+          }
+        ]
+      },
+      "geometry": {
+        "thickness": {
+          "state": "present",
+          "value": {
+            "amount": "10",
+            "unit": "mm"
+          },
+          "raw_value": "10 мм",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "sheet",
+              "locator": "sheet",
+              "fragment": "10 мм",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "material": {
+        "designation": {
+          "state": "present",
+          "value": "С345",
+          "raw_value": "С345",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "sheet",
+              "locator": "sheet",
+              "fragment": "С345",
+              "method": "fixture"
+            }
+          ]
+        },
+        "strength_class": {
+          "state": "present",
+          "value": "С345",
+          "raw_value": "С345",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "sheet",
+              "locator": "sheet",
+              "fragment": "С345",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "execution": {
+        "rolling_method": {
+          "state": "present",
+          "value": "hot_rolled",
+          "raw_value": "г/к",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "sheet",
+              "locator": "sheet",
+              "fragment": "г/к",
+              "method": "fixture"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "case": "rebar",
+    "spec": {
+      "record_id": "rebar",
+      "source": {
+        "source_id": "contract-fixtures",
+        "source_type": "contract_fixture",
+        "source_version": "v1"
+      },
+      "original_description": "Арматура А500С ф12",
+      "category": {
+        "state": "present",
+        "value": "rebar",
+        "raw_value": "Арматура",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "rebar",
+            "locator": "rebar",
+            "fragment": "Арматура",
+            "method": "fixture"
+          }
+        ]
+      },
+      "product_type": {
+        "state": "present",
+        "value": "rebar",
+        "raw_value": "Арматура",
+        "provenance": [
+          {
+            "source_id": "contract-fixtures",
+            "record_id": "rebar",
+            "locator": "rebar",
+            "fragment": "Арматура",
+            "method": "fixture"
+          }
+        ]
+      },
+      "geometry": {
+        "diameter": {
+          "state": "present",
+          "value": {
+            "amount": "12",
+            "unit": null
+          },
+          "raw_value": "ф12",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "rebar",
+              "locator": "rebar",
+              "fragment": "ф12",
+              "method": "fixture"
+            }
+          ]
+        }
+      },
+      "material": {
+        "designation": {
+          "state": "present",
+          "value": "А500С",
+          "raw_value": "А500С",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "rebar",
+              "locator": "rebar",
+              "fragment": "А500С",
+              "method": "fixture"
+            }
+          ]
+        },
+        "rebar_class": {
+          "state": "present",
+          "value": "А500С",
+          "raw_value": "А500С",
+          "provenance": [
+            {
+              "source_id": "contract-fixtures",
+              "record_id": "rebar",
+              "locator": "rebar",
+              "fragment": "А500С",
+              "method": "fixture"
+            }
+          ]
+        }
+      }
+    }
+  }
+]

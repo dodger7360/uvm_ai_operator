@@ -39,7 +39,7 @@ def format_dimensions(item: RequestItem) -> Optional[str]:
     return size
 
 
-def format_item(item: RequestItem, index: int, rebar_diameter_first=False) -> str:
+def format_item(item: RequestItem, index: int, rebar_diameter_first=False, *, mass_calculation=None) -> str:
     product = DISPLAY_PRODUCTS.get(item.product_group, item.product.capitalize() if item.product else "Позиция")
     parts = [product]
     if item.product_group == "rebar" and item.grade and not rebar_diameter_first:
@@ -58,7 +58,7 @@ def format_item(item: RequestItem, index: int, rebar_diameter_first=False) -> st
         if item.unit:
             description += f" {item.unit}"
     from quantity import calculate_theoretical_mass
-    mass = calculate_theoretical_mass(item)
+    mass = mass_calculation if mass_calculation is not None else calculate_theoretical_mass(item)
     if mass.status == 'estimate':
         if description.endswith(' шт'):
             description += '.'
@@ -99,19 +99,33 @@ def sort_items(items):
 
 
 
-def ordered_consolidation(items, originals=None, source_positions=None):
+def ordered_consolidation(items, originals=None, source_positions=None, *, commercial=False, decisions=(), request=None):
     """One display order for groups and their provenance in both interfaces."""
-    groups = consolidate_items(items, originals=originals, source_positions=source_positions)
+    groups = consolidate_items(items, originals=originals, source_positions=source_positions,
+                               commercial=commercial, decisions=decisions, request=request)
     groups.sort(key=lambda group: min(group.source_positions))
     by_item = {id(group.item): group for group in groups}
-    return [by_item[id(item)] for item in sort_items([group.item for group in groups])]
+    ordered = [by_item[id(item)] for item in sort_items([group.item for group in groups])]
+    if commercial:
+        # Stable size/series order within commercial material blocks.
+        ordered.sort(key=lambda group: (GROUP_ORDER.get(group.item.product_group, 99),
+                                       0 if group.item.grade == 'ст3' else 1))
+    return ordered
+
+
+def request_consolidation(request):
+    return ordered_consolidation(request.items, commercial=getattr(request, 'commercial_view', False),
+        decisions=getattr(request, 'commercial_decisions', ()), request=request)
 
 
 def format_normalized_request(request):
     lines = []
-    for group in ordered_consolidation(request.items):
+    commercial = getattr(request, 'commercial_view', False)
+    previous_block = None
+    for group in request_consolidation(request):
         item = group.item
-        line = format_item(item, 1, getattr(request, 'rebar_diameter_first', False)).removeprefix('1. ')
+        line = format_item(item, 1, getattr(request, 'rebar_diameter_first', False),
+                           mass_calculation=item.mass_calculation if commercial else None).removeprefix('1. ')
         standard = DISPLAY_PRODUCTS.get(item.product_group, '')
         name = (item.product or '').casefold()
         subtype = None
@@ -130,11 +144,23 @@ def format_normalized_request(request):
         if subtype:
             line = subtype + line[len(standard):]
         places = getattr(request, 'tonnage_decimals', None)
-        if places is not None and item.unit == 'т' and item.quantity is not None:
+        if not commercial and places is not None and item.unit == 'т' and item.quantity is not None:
             # Quantize only the rendered value; the stored Decimal stays exact.
             displayed = item.quantity.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
             prefix = line.rsplit(' — ', 1)[0]
             line = prefix + ' — ' + format(displayed, f'.{places}f').replace('.', ',') + 'т'
+        if commercial:
+            line = line.replace('×', 'х')
+            if item.unit == 'т' and item.quantity is not None:
+                decimals = places if places is not None else 3
+                with localcontext() as context:
+                    context.prec = max(28, len(item.quantity.as_tuple().digits) + max(0, item.quantity.adjusted()) + 5)
+                    displayed = item.quantity.quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+                line = line.rsplit(' — ', 1)[0] + ' — ' + format(displayed, f'.{decimals}f').replace('.', ',') + ' т'
+            block = (item.product_group, item.grade == 'ст3')
+            if previous_block is not None and block != previous_block:
+                lines.append('')
+            previous_block = block
         if item.unit == 'шт' and line.endswith(' шт'):
             line += '.'
         for requirement in (item.form, item.length_requirement, item.wall_thickness_requirement):

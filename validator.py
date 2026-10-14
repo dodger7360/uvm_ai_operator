@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 from normalizer import UNIT_ALIASES, explicit_equal_angle
 from rules import GRADE_ALIASES, PRODUCT_GROUPS, field_label, required_fields
 from schemas import PurchaseRequest, RequestItem, SharedAttributeEvidence
+from source_attributes import has_designation_evidence, has_standard_evidence
 
 
 def _add_unique(values: list[str], value: str) -> None:
@@ -77,6 +78,9 @@ def _has_compact_source_phrase(value: str, source_text: str) -> bool:
 
 
 def _has_grade_evidence(grade: str, source_text: str) -> bool:
+    complete_designation = has_designation_evidence(grade, source_text)
+    if complete_designation is not None:
+        return complete_designation
     if _has_compact_source_phrase(grade, source_text):
         return True
     normalized_grade = grade.strip().casefold()
@@ -326,7 +330,7 @@ def _discard_unsubstantiated_fields(
             item.grade = None
             _add_unique(warnings, f"{prefix} марка не подтверждается исходным фрагментом и исключена.")
 
-        if item.gost_tu and not _has_compact_source_phrase(item.gost_tu, source_text):
+        if item.gost_tu and not has_standard_evidence(item.gost_tu, source_text):
             item.gost_tu = None
             _add_unique(warnings, f"{prefix} ГОСТ/ТУ не подтверждается исходным фрагментом и исключён.")
 
