@@ -116,8 +116,8 @@ def _unmapped_source(item, original=None):
     Only the actual original amount is removed; arbitrary lengths/tolerances
     written with units remain protected. Unknown residue is conservative.
     """
-    from quantity import QUANTITY_RE, normalize_quantity
-    source = item.source_text or ''
+    from quantity import QUANTITY_RE, normalize_quantity, without_mass_annotation
+    source = without_mass_annotation(item.source_text or '')
     if not source:
         return True
     original = original or getattr(item, 'original', None) or item

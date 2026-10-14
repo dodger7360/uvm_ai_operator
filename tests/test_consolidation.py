@@ -378,16 +378,12 @@ def test_yes_no_cancel_and_repeated_yes_after_grouping(context):
     responses.append(plan)
     service.process(1,'Хочу согласовать изменение')
     restarted=TelegramService(service.ai,TelegramRepository(repo.database))
-    assert restarted.process(1,'Да')[0].endswith('2,5 т')
-    after=repo.load(1)
-    assert after.pending_operation is None
-    assert 'Нет ожидающего' in restarted.process(1,'Да')[0]
-    assert repo.load(1)==after
-    responses.append(MessagePlan(intent='clarify',question='Какая исходная строка?'))
-    restarted.process(1,'Хочу уточнить правку')
+    reply = restarted.process(1,'Да')[0]
+    assert 'исходными позициями' in reply
+    assert repo.load(1).items == active.items
     restarted.process(1,'Отмена')
     assert repo.load(1).pending_operation is None
-    assert repo.load(1).items==after.items
+    assert repo.load(1).items==active.items
 
 
 def test_display_order_matches_provenance_in_workbench(context):

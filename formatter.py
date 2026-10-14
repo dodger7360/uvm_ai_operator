@@ -39,13 +39,15 @@ def format_dimensions(item: RequestItem) -> Optional[str]:
     return size
 
 
-def format_item(item: RequestItem, index: int) -> str:
+def format_item(item: RequestItem, index: int, rebar_diameter_first=False) -> str:
     product = DISPLAY_PRODUCTS.get(item.product_group, item.product.capitalize() if item.product else "Позиция")
     parts = [product]
-    if item.product_group == "rebar" and item.grade:
+    if item.product_group == "rebar" and item.grade and not rebar_diameter_first:
         parts.append(item.grade)
     if dimensions := format_dimensions(item):
         parts.append(dimensions)
+    if item.product_group == 'rebar' and item.grade and rebar_diameter_first:
+        parts.append(item.grade)
     values = (item.gost_tu, item.processing) if item.product_group == "rebar" else (item.grade, item.gost_tu, item.processing)
     for value in values:
         if value and not (item.product_group == "strip" and value == item.grade and value in (item.size_designation or "")):
@@ -109,7 +111,7 @@ def format_normalized_request(request):
     lines = []
     for group in ordered_consolidation(request.items):
         item = group.item
-        line = format_item(item, 1).removeprefix('1. ')
+        line = format_item(item, 1, getattr(request, 'rebar_diameter_first', False)).removeprefix('1. ')
         standard = DISPLAY_PRODUCTS.get(item.product_group, '')
         name = (item.product or '').casefold()
         subtype = None

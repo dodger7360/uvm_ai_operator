@@ -18,7 +18,7 @@ class Edit(BaseModel):
 
 
 class RequestOperation(BaseModel):
-    kind: Literal['edit_fields', 'convert_units', 'calculate_mass', 'merge_items', 'cancel']
+    kind: Literal['edit_fields', 'convert_units', 'calculate_mass', 'merge_items', 'cancel', 'confirm_grade_alternatives']
     edits: list[Edit] = Field(default_factory=list)
     target_unit: Optional[str] = None
 
