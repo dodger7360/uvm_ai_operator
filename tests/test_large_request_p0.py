@@ -205,6 +205,11 @@ def test_bulk_quantity_conflict_does_not_silently_overwrite_existing_values(tmp_
     assert saved.items[0].quantity == Decimal('5')
     assert saved.items[1].quantity is None
     assert saved.pending_clarification is not None or saved.pending_operation is not None
+    service.process(7, '\u0417\u0430\u043c\u0435\u043d\u0438 \u043a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e \u0443 \u0432\u0441\u0435\u0445 \u043f\u043e\u0437\u0438\u0446\u0438\u0439 \u043d\u0430 1 \u0448\u0442')
+    replaced = repo.load(7)
+    assert [item.quantity for item in replaced.items] == [Decimal('1'), Decimal('1')]
+    assert replaced.items[0].original.quantity == Decimal('5')
+    assert replaced.clarification_answers[-1].startswith('\u0417\u0430\u043c\u0435\u043d\u0438')
 
 
 def test_dimension_answers_use_source_positions_not_array_indexes(tmp_path):

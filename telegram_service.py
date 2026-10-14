@@ -422,7 +422,8 @@ class TelegramService:
             formatting=re.search(r'тоннаж|тонн|количеств',text,re.I) and re.search(r'формат|виду|знак|отображ|округл',text,re.I)
             if current.pending_operation and not explicit_edit and not formatting:
                 return self._answer_operation(user_id, current, text)
-            if current.pending_clarification and not explicit_edit and not formatting:
+            if (current.pending_clarification and not formatting
+                    and (not explicit_edit or parse_bulk_quantity(text, current) is not None)):
                 return self._answer_clarification(user_id,current,text)
             if wording in {'да', 'нет', 'верно', 'подтверждаю', 'согласен', 'неверно', 'обеим', 'к обеим', 'для суммы', 'обоим', 'к обоим'} or re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*',text):
                 return ['Нет ожидающего уточнения. Отправьте новую заявку или укажите позицию и поле для изменения.']
