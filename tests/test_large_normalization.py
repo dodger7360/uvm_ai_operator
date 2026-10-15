@@ -200,7 +200,7 @@ def test_policy_same_view_in_telegram_and_workbench(store):
     items=[row(),row(grade='Ст3сп5')];text='\n'.join(i.source_text for i in items)
     ai=Mock();ai.parse_request.side_effect=lambda *a,**k: PurchaseRequest(items=[i.model_copy(deep=True) for i in items])
     repo=TelegramRepository(store.database)
-    output=TelegramService(ai,repo,store).process(1,text)
+    output=TelegramService(ai,repo,policy_repository=store).process(1,text)
     result=NormalizationWorkbench(ai,store).process(text)
     assert len(output[0].splitlines())==len(result.consolidated_groups)==1
     assert result.consolidated_groups[0].item.quantity==Decimal('2')
@@ -264,7 +264,7 @@ def test_conditional_grade_edit_only_approved_scope(store):
     items=[row(grade='Ст3сп5'),row(n=1,grade='Ст3сп5')]
     ai=Mock();ai.parse_request.return_value=PurchaseRequest(items=items)
     repo=TelegramRepository(store.database)
-    service=TelegramService(ai,repo,store)
+    service=TelegramService(ai,repo,policy_repository=store)
     service.process(1,'\n'.join(i.source_text for i in items))
     service.process(1,'Поменяй Ст3сп5 на Ст3 там, где это разрешено')
     current=repo.load(1)
@@ -277,7 +277,7 @@ def test_history_keeps_rule_snapshot_while_new_response_honors_revocation(store)
     store.propose(rule());store.decide('synthetic-angle',1,99,approve=True,regression_evidence='test')
     items=[row(),row(grade='Ст3сп5')]
     ai=Mock();ai.parse_request.return_value=PurchaseRequest(items=items)
-    repo=TelegramRepository(store.database);service=TelegramService(ai,repo,store)
+    repo=TelegramRepository(store.database);service=TelegramService(ai,repo,policy_repository=store)
     output=service.process(1,'\n'.join(i.source_text for i in items))
     historic=repo.load(1)
     assert historic.normalization_rules == [rule()]
@@ -292,3 +292,53 @@ def test_different_units_are_not_suggested_for_grade_only_merge():
     from normalization_policy import grade_merge_candidates
     items=normalized([row(),row(grade='Ст3сп5',unit='м')])
     assert grade_merge_candidates(items)==[]
+
+
+def test_grade_approval_does_not_prove_sheet_density(store):
+    from workbench import format_workbench_result
+    sheet=RequestItem(product='Лист',product_group='sheet',size_designation='6×1500×6000',
+        grade='Ст3сп5',quantity='2',unit='шт',source_text='Лист 6×1500×6000 Ст3сп5 2 шт')
+    allowed=rule(product_group='sheet',size_designation='6×1500×6000',length_mm=6000)
+    store.propose(allowed);store.decide(allowed.rule_id,allowed.version,99,approve=True,regression_evidence='test')
+    ai=Mock();ai.parse_request.side_effect=lambda *a,**k:PurchaseRequest(items=[sheet.model_copy(deep=True)])
+    repo=TelegramRepository(store.database)
+    output=TelegramService(ai,repo,policy_repository=store).process(1,sheet.source_text)
+    assert '=' not in output[0]
+    result=NormalizationWorkbench(ai,store).process(sheet.source_text)
+    assert '=' not in format_workbench_result(result)
+    assert result.consolidated_groups[0].item.mass_calculation.status=='unavailable'
+
+
+def test_existing_commercial_mode_keeps_source_snapshots_and_rule_versions():
+    items=normalized([row(grade='Ст3сп5'),row()])
+    groups=consolidate_items(items,commercial=True,approved_rules=(rule(),))
+    assert len(groups)==1 and groups[0].item.quantity==2
+    assert [i.grade for i in groups[0].source_items]==['Ст3сп5','Ст3']
+    assert groups[0].applied_rules==('synthetic-angle@1',)
+
+
+def test_conditional_edit_can_select_subset_of_commercial_group(store):
+    store.propose(rule());store.decide('synthetic-angle',1,99,approve=True,regression_evidence='test')
+    items=[row(grade='Ст3сп5'),row()]
+    ai=Mock();ai.parse_request.return_value=PurchaseRequest(items=items)
+    repo=TelegramRepository(store.database)
+    service=TelegramService(ai,repo,commercial_view=True,policy_repository=store)
+    service.process(1,'\n'.join(i.source_text for i in items))
+    service.process(1,'Поменяй Ст3сп5 на Ст3 там где разрешено')
+    assert [i.grade for i in repo.load(1).items]==['Ст3','Ст3']
+    assert repo.load(1).pending_operation is None
+    ai.interpret_message.assert_not_called()
+
+
+def test_display_edit_uses_previously_shown_policy_snapshot(store):
+    # A newly approved rule must not renumber the user's last displayed rows.
+    items=[row(),row(grade='Ст3сп5'),row(n=1)]
+    ai=Mock();ai.parse_request.return_value=PurchaseRequest(items=items)
+    repo=TelegramRepository(store.database)
+    service=TelegramService(ai,repo,policy_repository=store)
+    service.process(1,'\n'.join(i.source_text for i in items))
+    store.propose(rule());store.decide('synthetic-angle',1,99,approve=True,regression_evidence='test')
+    service.process(1,'В позиции 2 измени количество на 7 т')
+    current=repo.load(1)
+    assert next(i for i in current.items if i.source_position==2).quantity==Decimal(7)
+    assert next(i for i in current.items if i.source_position==3).quantity==Decimal(1)

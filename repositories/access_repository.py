@@ -215,3 +215,44 @@ class AuthorizedRequestRepository:
         if not self.access.allowed(user_id):
             raise PermissionError('Access is blocked.')
         self.requests.save(user_id, request)
+
+
+    @staticmethod
+    def _state_epoch(access):
+        # First approval is revision 2 (admin bootstrap is 1). Later grants must
+        # not reuse a floor that stayed unchanged with no procurement history.
+        floor, revision = int(access['context_floor']), int(access.get('revision', 0))
+        return f'{floor}:r{revision}' if revision > 2 else floor
+
+    def load_dialog(self, user_id, request_id=None):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved':
+            raise PermissionError('Access is blocked.')
+        return self.requests.load_dialog(user_id, request_id, epoch=self._state_epoch(access))
+
+    def save_dialog(self, user_id, question, answer, request_id=None):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved':
+            raise PermissionError('Access is blocked.')
+        self.requests.save_dialog(user_id, question, answer, request_id, epoch=self._state_epoch(access))
+
+
+    def load_calculation(self, user_id):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved': raise PermissionError('Access is blocked.')
+        return self.requests.load_calculation(user_id, epoch=self._state_epoch(access))
+
+    def save_calculation(self, user_id, calculation):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved': raise PermissionError('Access is blocked.')
+        self.requests.save_calculation(user_id, calculation, epoch=self._state_epoch(access))
+
+    def load_routing(self, user_id):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved': raise PermissionError('Access is blocked.')
+        return self.requests.load_routing(user_id, epoch=self._state_epoch(access))
+
+    def save_routing(self, user_id, state):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved': raise PermissionError('Access is blocked.')
+        self.requests.save_routing(user_id, state, epoch=self._state_epoch(access))

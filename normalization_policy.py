@@ -36,7 +36,7 @@ class GradeRule(BaseModel):
 def project_item(item, rules=(), original=None):
     """Only caller-supplied approved rules; no implicit steel equivalences/chains."""
     projected = item.model_copy(deep=True)
-    if not rules or consolidation_key(item, original=original) is None:
+    if not rules or getattr(item, 'source_conditions', ()) or consolidation_key(item, original=original) is None:
         return projected, ()
     matches = [rule for rule in rules if rule.matches(item)]
     if len({rule.to_grade for rule in matches}) > 1:

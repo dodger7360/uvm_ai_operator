@@ -12,13 +12,13 @@ from pydantic import BaseModel, Field
 
 class Edit(BaseModel):
     item_id: str
-    field: Literal['grade', 'quantity', 'unit']
+    field: Literal['grade', 'quantity', 'unit', 'gost_tu']
     value: Optional[str] = None
     restore: bool = False
 
 
 class RequestOperation(BaseModel):
-    kind: Literal['edit_fields', 'convert_units', 'calculate_mass', 'merge_items', 'cancel']
+    kind: Literal['edit_fields', 'convert_units', 'calculate_mass', 'merge_items', 'cancel', 'confirm_grade_alternatives']
     edits: list[Edit] = Field(default_factory=list)
     target_unit: Optional[str] = None
 

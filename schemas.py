@@ -16,12 +16,21 @@ class MassCalculation(BaseModel):
     input_quantity: Optional[Decimal] = None
     input_unit: Optional[str] = None
     source_unit: Optional[str] = None
+    per_metre_kg: Optional[Decimal] = None
     per_piece_kg: Optional[Decimal] = None
     reference_kg_per_unit: Optional[Decimal] = None
     reference_unit: Optional[str] = None
     reliability: Optional[Literal["verified_reference", "supplier_actual"]] = None
     total_kg: Optional[Decimal] = None
     total_t: Optional[Decimal] = None
+
+
+class SourceCondition(BaseModel):
+    kind: Literal['wall_selection', 'substitution', 'related_pipe']
+    source_text: str
+    bounds_unspecified: bool = False
+    origin: Literal['source','context'] = 'source'
+    related_source_position: Optional[int] = None
 
 
 class RequestItem(BaseModel):
@@ -56,6 +65,7 @@ class RequestItem(BaseModel):
 
     # Stored in request JSON, omitted from the AI structured-output schema.
     mass_calculation: SkipJsonSchema[Optional[MassCalculation]] = None
+    source_conditions: SkipJsonSchema[List[SourceCondition]] = Field(default_factory=list)
 
 
 class SharedAttributeEvidence(BaseModel):

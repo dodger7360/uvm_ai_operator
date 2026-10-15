@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 from normalizer import UNIT_ALIASES, explicit_equal_angle
 from rules import GRADE_ALIASES, PRODUCT_GROUPS, field_label, required_fields
 from schemas import PurchaseRequest, RequestItem, SharedAttributeEvidence
+from source_attributes import has_designation_evidence, has_standard_evidence
 
 
 def _add_unique(values: list[str], value: str) -> None:
@@ -22,7 +23,7 @@ def _missing(
 
 
 _WORD_RE = re.compile(r"[^\W_]+", re.UNICODE)
-_NUMBER_RE = re.compile(r"(?<![\w.])(?:[Øø⌀]\s*)?(\d+(?:[.,]\d+)?)(?![\w.])")
+_NUMBER_RE = re.compile(r"(?<![\w.])(?:[фФØø⌀]\s*)?(\d+(?:[.,]\d+)?)(?![\w.])")
 
 
 _DIMENSION_FIELDS = {
@@ -77,6 +78,9 @@ def _has_compact_source_phrase(value: str, source_text: str) -> bool:
 
 
 def _has_grade_evidence(grade: str, source_text: str) -> bool:
+    complete_designation = has_designation_evidence(grade, source_text)
+    if complete_designation is not None:
+        return complete_designation
     if _has_compact_source_phrase(grade, source_text):
         return True
     normalized_grade = grade.strip().casefold()
@@ -196,7 +200,9 @@ def _validate_new_characteristics(
             if not _literal_requirement(value, source) or not _positive_phrase(pattern, source):
                 reject(field, label)
 
-    if item.wall_thickness_requirement is not None and not _confirmed_minimum_wall(item):
+    selection=any(c.kind=='wall_selection' and c.source_text==item.wall_thickness_requirement
+                  and _literal_requirement(c.source_text,source) for c in item.source_conditions)
+    if item.wall_thickness_requirement is not None and not (_confirmed_minimum_wall(item) or selection):
         reject("wall_thickness_requirement", "требование к толщине стенки")
 
     if item.length_type is not None:
@@ -224,6 +230,9 @@ def _validate_new_characteristics(
                 and _positive_phrase(re.escape(match[0]), source)
                 and Decimal(str(item.length_mm)) == expected
             )
+        from quantity import length_mass_columns
+        columns=length_mass_columns(source,item.product_group)
+        if columns and Decimal(str(item.length_mm))==columns['length_mm']: confirmed=True
         if not confirmed:
             reject("length_mm", "длину изделия и её единицу измерения")
     elif (
@@ -326,7 +335,7 @@ def _discard_unsubstantiated_fields(
             item.grade = None
             _add_unique(warnings, f"{prefix} марка не подтверждается исходным фрагментом и исключена.")
 
-        if item.gost_tu and not _has_compact_source_phrase(item.gost_tu, source_text):
+        if item.gost_tu and not has_standard_evidence(item.gost_tu, source_text):
             item.gost_tu = None
             _add_unique(warnings, f"{prefix} ГОСТ/ТУ не подтверждается исходным фрагментом и исключён.")
 
@@ -364,6 +373,7 @@ def _discard_unsubstantiated_fields(
 def validate_request(
     request: PurchaseRequest,
     raw_request: str | None = None,
+    source_positions: list[int] | None = None,
 ) -> PurchaseRequest:
     """Adds questions only for data needed to understand a supplier position."""
 
@@ -461,10 +471,78 @@ def validate_request(
                 )
 
     request.missing_fields = missing_fields
-    request.clarification_questions = clarification_questions
+    request.clarification_questions = _group_clarification_questions(
+        request, clarification_questions, source_positions
+    )
     request.warnings = warnings
     request.is_valid = not missing_fields and not missing_source_evidence
 
     from quantity import refresh_mass_calculations
     refresh_mass_calculations(request.items)
     return request
+
+
+def _group_clarification_questions(request, questions, source_positions=None):
+    """Collapse repeated per-field questions into one prompt per source row."""
+    grouped = {}
+    untouched = []
+    pattern = re.compile(r'^Позиция\s+(\d+)\s*:\s*уточните\s+(.+?)\.?$', re.I)
+    for question in questions:
+        match = pattern.match(question.strip())
+        if not match:
+            untouched.append(question)
+            continue
+        index = int(match[1])
+        label = match[2].rstrip('. ')
+        grouped.setdefault(index, [])
+        if label not in grouped[index]:
+            grouped[index].append(label)
+    if not grouped:
+        return questions
+    if not untouched and len(grouped) == 1 and len(next(iter(grouped.values()))) == 1:
+        return questions
+    source_positions = source_positions or list(range(1, len(request.items) + 1))
+    lines = ['Требуются уточнения:']
+    for index, labels in grouped.items():
+        if index < 1 or index > len(request.items):
+            continue
+        item = request.items[index - 1]
+        position = source_positions[index - 1] if index <= len(source_positions) else index
+        product = (item.product or 'позиция').strip().rstrip(':')
+        fields = labels[0] if len(labels) == 1 else ', '.join(labels[:-1]) + ' и ' + labels[-1]
+        lines.append(f'Поз. {position} — {product}: {fields}.')
+    lines.extend(untouched)
+    return lines
+
+
+def grouped_questions_for_missing_fields(request, missing_fields):
+    """Rebuild a grouped prompt after a partial structured clarification answer."""
+    grouped = {}
+    for entry in missing_fields:
+        match = re.fullmatch(r'items\[(\d+)\]\.([a-z_]+)', entry)
+        if not match:
+            continue
+        index = int(match[1])
+        item = request.items[index] if index < len(request.items) else next(
+            (candidate for candidate in request.items
+             if getattr(candidate, 'source_position', None) == index + 1), None)
+        position = (getattr(item, 'source_position', None) or index + 1) if item else index + 1
+        field = match[2]
+        if field in {'quantity', 'unit'}:
+            continue
+        label = {'product': 'товар', 'product_group': 'тип товара'}.get(field, field_label(field))
+        grouped.setdefault(position, [])
+        if label not in grouped[position]:
+            grouped[position].append(label)
+    if not grouped:
+        return []
+    lines = ['Требуются уточнения:']
+    for position, labels in grouped.items():
+        item = next((item for item in request.items
+                     if (getattr(item, 'source_position', None) or 0) == position), None)
+        if item is None and position <= len(request.items):
+            item = request.items[position - 1]
+        product = (item.product if item and item.product else 'позиция').strip()
+        fields = labels[0] if len(labels) == 1 else ', '.join(labels[:-1]) + ' и ' + labels[-1]
+        lines.append(f'Поз. {position} — {product}: {fields}.')
+    return lines

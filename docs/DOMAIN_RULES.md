@@ -246,3 +246,62 @@ Telegram и Workbench. Нормализация и проверка обновл
 Для остальных категорий поле отсутствует/равно null; калькулятор возвращает
 unavailable. Перевод кг → т остаётся прежним и не смешивается с оценкой шт. → масса.
 Настройка отображения тоннажа не меняет правило трёх знаков для расчётной массы.
+# Telegram dialogue context (review branch)
+
+- Display row numbers refer to `ordered_consolidation`, not extraction order.
+  A grade edit of an entire consolidated row applies equally to every source
+  contributing to that row. Distinct/conflicting specifications remain distinct
+  groups. A quantity edit requires a selected source; Python never distributes
+  a new group total across source rows.
+- Explicit edit verbs, including «допиши», «поменяй», «пропиши», take priority
+  over a new-request heuristic. Model edits are checked against the named row.
+  A technical grade proposed without a literal value in the command requires
+  confirmation; `А500С` is never silently shortened to `А500`.
+- `show` renders the active request without replacing it. `display` changes
+  only a typed presentation preference (`rebar_diameter_first`); all source
+  fields, original snapshots, IDs, quantities and units are retained.
+- The explicit suffix `4 шт. = 1,696 т` denotes a derived displayed mass, not
+  another source amount. Literal pieces are recovered before mass calculation;
+  the raw input remains stored. Only this marked annotation is ignored by
+  coverage/consolidation matching; other attributes and missing rows remain
+  protected. The established Ст3 sheet formula and assumptions are unchanged.
+- Multiple literal grades not already separated by «или» are saved as an
+  unresolved typed `confirm_grade_alternatives` proposal in `PendingOperation`.
+  The request and every source row are retained before asking. «Да» confirms
+  only the exact alternative set extracted from those source rows; «нет» or
+  «отмена» cancels the proposal and does not choose a steel grade.
+- Pending operations retain user/request binding, source fingerprint, command,
+  question and accumulated replies across SQLite/service restarts. «Для суммы»
+  and «К обеим» can confirm a concrete grade proposal for the entire group,
+  but cannot authorize allocating a new quantity. Without pending context,
+  short acknowledgements never cause parsing or a data mutation.
+- The display preference defaults to false for old JSON. SQL schemas and the
+  existing request fingerprint format remain unchanged. Decision replies use
+  the existing `clarification_answers` field and immutable history snapshots.
+- Quoted spreadsheet rows may wrap across physical lines. Source coverage
+  counts the quoted logical row once while preserving every literal fragment;
+  unquoted rows and duplicate positions remain separate, and uncovered or
+  invented positions continue to fail closed.
+- An explicit «все позиции по N единиц» instruction or a numbered position
+  range applies one exact Decimal quantity to that stated scope. The update is
+  atomic and rejects mixed incompatible units; absent an explicit scope,
+  quantities already stated on positions are not inferred or redistributed.
+- Repeated missing-field prompts are grouped by source position for display.
+  Grouping does not fill missing facts: answers must still identify the
+  requested fields and pass the existing validation before the request is
+  treated as complete.
+- Known sheet execution `БТ-ПН-О` is recovered from its literal source row and
+  rendered with the item's existing form field. No other execution or grade
+  is inferred from it.
+- «Отмени последнее изменение» remains a separate future feature: Telegram
+  has snapshot history but no supported undo command. Return an explicit
+  unsupported response; do not confuse this with cancellation of a pending
+  proposal or restoration of an explicitly named original field.
+
+
+## Дополнение №114.1.4
+
+Точное количество, экспорт длина/кг/масса, условия труб/фитингов и независимый
+расчёт А240 Ø12 описаны в [REAL_TELEGRAM_114_1_4.md](REAL_TELEGRAM_114_1_4.md).
+Коэффициент 0,888 кг/м имеет ссылку на первичный текст стандарта; его применимость
+к конкретной поставке не подразумевается. Новых SQL-таблиц и второго справочника нет.

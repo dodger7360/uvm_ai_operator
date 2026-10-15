@@ -92,8 +92,8 @@ def format_workbench_result(result: WorkbenchResult) -> str:
     lines = ["Нормализованная заявка:"]
     if result.current_request.items:
         lines.extend(
-            format_item(item, index)
-            for index, item in enumerate([group.item for group in result.consolidated_groups], start=1)
+            format_item(group.item, index, mass_calculation=group.item.mass_calculation if group.applied_rules else None)
+            for index, group in enumerate(result.consolidated_groups, start=1)
         )
     else:
         lines.append("Товарные позиции не найдены.")

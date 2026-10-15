@@ -238,11 +238,11 @@ def test_legacy_sqlite_load_is_read_only_and_pending_hash_stable(context):
 def test_real_21_position_request_output_remains_unchanged(context):
     from telegram_service import prepare_sheet_heading
     fixtures = Path(__file__).parent / 'fixtures'
-    source = (fixtures / 'mixed_21_20261013_2109.txt').read_text().strip()
-    draft = PurchaseRequest.model_validate_json((fixtures / 'mixed_21_extraction.json').read_text())
+    source = (fixtures / 'mixed_21_20261013_2109.txt').read_text(encoding='utf-8').strip()
+    draft = PurchaseRequest.model_validate_json((fixtures / 'mixed_21_extraction.json').read_text(encoding='utf-8'))
     service, ai, repo = context
     ai.parse_request.side_effect = lambda *args, **kwargs: draft.model_copy(deep=True)
-    assert '\n'.join(service.process(1, source)) == (fixtures / 'mixed_21_expected.txt').read_text().strip()
+    assert '\n'.join(service.process(1, source)) == (fixtures / 'mixed_21_expected.txt').read_text(encoding='utf-8').strip()
     assert len(repo.load(1).items) == 21
     assert not any(i.mass_calculation and i.mass_calculation.status == 'estimate' for i in repo.load(1).items)
 
