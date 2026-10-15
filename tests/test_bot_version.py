@@ -4,7 +4,7 @@ import pytest
 from telegram_bot import handle_update
 
 
-@pytest.mark.parametrize('configured,expected', [(None,'1.01'), ('','1.01'), ('  ','1.01'), ('1.02','1.02')])
+@pytest.mark.parametrize('configured,expected', [(None,'1.10'), ('','1.10'), ('  ','1.10'), ('1.10','1.10'), ('1.11','1.11')])
 @pytest.mark.parametrize('command', ['/version', '/version@UVM_SteelBot'])
 def test_version_is_local_and_does_not_process_request(monkeypatch, configured, expected, command):
     if configured is None:

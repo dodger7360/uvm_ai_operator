@@ -27,6 +27,10 @@ from diagnostics import PipelineError, safe_code, operation, phase, emit, record
 LOG = logging.getLogger('telegram_operator')
 
 
+def app_version():
+    return os.getenv('APP_VERSION', '1.10').strip() or '1.10'
+
+
 def network_failure(error):
     """Classify without retaining exception text, URLs, headers or credentials."""
     reason = getattr(error, 'reason', error)
@@ -143,8 +147,7 @@ def _handle_update(update, service, api, access=None):
         return
     command = text.split()[0].split('@')[0]
     if command == '/version':
-        version = os.getenv('APP_VERSION', '1.01').strip() or '1.01'
-        messages = [f'UVM_Steel — версия {version}']
+        messages = [f'UVM_Steel — версия {app_version()}']
     elif command in {'/start', '/help'}:
         messages = ['Отправьте заявку на металлопрокат обычным сообщением. После ответа можно написать: «Везде С255 замени на Ст3» или «В пятой позиции измени количество на 2,5 т». Версия бота: /version.']
     else:
@@ -251,7 +254,7 @@ def run_bot(root, token):
                                   assistant=WorkAssistantService(ai.assistant_transport, budget=budget))
         offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')
-        LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
+        LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s app_version=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'), app_version())
         failures, connected = 0, False
         while not maintenance_requested(root):
             try:
