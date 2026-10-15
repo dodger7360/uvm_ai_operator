@@ -283,6 +283,9 @@ def process_operator(service, user_id, text, *, commercial_decisions=None):
     except PermissionError:
         raise
     except Exception as error:
+        from ai_budget import BudgetLimit
+        if isinstance(error, BudgetLimit):
+            raise
         # Includes an unavailable repository before routing. Do not claim that
         # anything was saved or infer which existing context should be replaced.
         emit('operator_unavailable', reason=safe_code(error))
@@ -336,6 +339,9 @@ def _process_operator(service, user_id, text, *, commercial_decisions=None):
     except PermissionError:
         raise
     except Exception as error:
+        from ai_budget import BudgetLimit
+        if isinstance(error, BudgetLimit):
+            raise
         emit('operator_recovery', reason=safe_code(error), new_request=new)
         if new:
             return _recover(service, user_id, text)
