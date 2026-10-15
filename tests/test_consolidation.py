@@ -459,14 +459,14 @@ def test_product_abbreviations_share_complete_profile_identity():
     assert consolidate_items(request.items)[0].item.quantity==Decimal('4')
 
 
-def test_equal_sort_keys_keep_actual_source_order_when_ai_shuffles(context):
+def test_equal_sizes_sort_by_grade_when_ai_shuffles(context):
     service,_,responses,_=context
     lines=['Арматура 12 А500С 1 т', 'Арматура 12 А400 1 т']
     items=[RequestItem(product='Арматура',product_group='rebar',size_designation='12',grade=grade,
         quantity=1,unit='т',source_text=line) for grade,line in zip(['А500С','А400'],lines)]
     responses.append(PurchaseRequestExtraction(items=list(reversed(items))))
     output=service.process(1,'\n'.join(lines))[0].splitlines()
-    assert 'А500С' in output[0] and 'А400' in output[1]
+    assert 'А400' in output[0] and 'А500С' in output[1]
 
 
 def test_confirmed_equal_lengths_and_length_types_can_merge():

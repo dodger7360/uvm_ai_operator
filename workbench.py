@@ -18,13 +18,14 @@ class WorkbenchResult:
     current_request: PurchaseRequest
     original_items: tuple = ()
     source_positions: tuple = ()
+    approved_rules: tuple = ()
 
     @property
     def consolidated_groups(self):
         """Recompute after source edits; never cache a sum as a source quantity."""
         from quantity import refresh_mass_calculations
         refresh_mass_calculations(self.current_request.items)
-        return ordered_consolidation(self.current_request.items, originals=self.original_items or None, source_positions=self.source_positions or None)
+        return ordered_consolidation(self.current_request.items, originals=self.original_items or None, source_positions=self.source_positions or None, approved_rules=self.approved_rules)
 
     @property
     def questions(self) -> tuple[str, ...]:
@@ -40,19 +41,18 @@ class WorkbenchResult:
 class NormalizationWorkbench:
     """Run extraction, deterministic normalization, and validation for a request."""
 
-    def __init__(self, ai_service: AIService | None = None) -> None:
+    def __init__(self, ai_service: AIService | None = None, policy_repository=None) -> None:
         self._ai_service = ai_service or AIService()
+        self.policy_repository = policy_repository
 
     def process(self, raw_request: str) -> WorkbenchResult:
         """Return the complete current request state and its clarification questions."""
         current_request = self._ai_service.parse_request(raw_request)
         source_positions = validate_source_coverage(current_request, raw_request, allow_heading_rows=True)
-        # Use the existing literal-attribute recovery for sheet mass inputs,
-        # rather than calculating from an AI quantity that contradicts the row.
+        # Recover literal attributes for every category, as Telegram does.
         from telegram_service import exact_source_attributes
         for item in current_request.items:
-            if item.product_group == 'sheet':
-                exact_source_attributes(item)
+            exact_source_attributes(item)
         normalize_request(current_request)
         confirmed = confirm_shared_attributes(raw_request, current_request)
         current_request.confirmed_shared_attributes = confirmed
@@ -79,6 +79,7 @@ class NormalizationWorkbench:
                     current_request.missing_fields.append("shared_attributes")
                 current_request.is_valid = False
         return WorkbenchResult(
+            approved_rules=self.policy_repository.active_rules() if self.policy_repository else (),
             raw_request=raw_request,
             current_request=current_request,
             original_items=tuple(item.model_copy(deep=True) for item in current_request.items),

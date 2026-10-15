@@ -87,27 +87,29 @@ GROUP_ORDER = {name: n for n, name in enumerate([
     "angle", "channel", "rebar", "round_bar", "flat_bar", "rod", "wire", "strip", "mesh", "fitting"])}
 
 
-def sort_items(items):
+def sort_items(items, *, by_grade=False):
     def key(item):
         numbers = tuple(Decimal(s.replace(',', '.')) for s in re.findall(r'\d+(?:[.,]\d+)?', item.size_designation or ''))
         if item.product_group == 'sheet' and item.thickness_mm is not None:
             numbers = (Decimal(str(item.thickness_mm)),) + numbers
-        return GROUP_ORDER.get(item.product_group, 99), numbers
+        return GROUP_ORDER.get(item.product_group, 99), numbers, (item.grade or "").casefold() if by_grade else ""
     return sorted(items, key=key)
 
 
 
-def ordered_consolidation(items, originals=None, source_positions=None):
+def ordered_consolidation(items, originals=None, source_positions=None, approved_rules=()):
     """One display order for groups and their provenance in both interfaces."""
-    groups = consolidate_items(items, originals=originals, source_positions=source_positions)
+    groups = consolidate_items(items, originals=originals, source_positions=source_positions, approved_rules=approved_rules)
     groups.sort(key=lambda group: min(group.source_positions))
     by_item = {id(group.item): group for group in groups}
-    return [by_item[id(item)] for item in sort_items([group.item for group in groups])]
+    return [by_item[id(item)] for item in sort_items([group.item for group in groups], by_grade=True)]
 
 
-def format_normalized_request(request):
+def format_normalized_request(request, approved_rules=None):
+    if approved_rules is None:
+        approved_rules = getattr(request, "normalization_rules", ())
     lines = []
-    for group in ordered_consolidation(request.items):
+    for group in ordered_consolidation(request.items, approved_rules=approved_rules):
         item = group.item
         line = format_item(item, 1).removeprefix('1. ')
         standard = DISPLAY_PRODUCTS.get(item.product_group, '')

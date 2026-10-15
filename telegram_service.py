@@ -10,6 +10,7 @@ from request_operations import (Edit, RequestOperation, PendingOperation, reques
                                 unsupported_operation, UNSUPPORTED_MESSAGE)
 from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
+from normalization_policy import GradeRule
 from normalizer import normalize_request, UNIT_ALIASES
 from validator import validate_request, confirm_shared_attributes
 from formatter import format_normalized_request, sort_items, ordered_consolidation
@@ -41,6 +42,7 @@ class ActiveRequest(PurchaseRequest):
     clarification_answers: list[str] = Field(default_factory=list)
     initial_extraction: Optional[PurchaseRequest] = None
     source_text: str
+    normalization_rules: list[GradeRule] = Field(default_factory=list)
     items: list[ActiveItem] = Field(default_factory=list)
 
 
@@ -177,7 +179,7 @@ def prepare_sheet_heading(text):
     return ('\n'.join(prepared), records) if records else (text, [])
 
 
-def local_edit_plan(text, current):
+def local_edit_plan(text, current, approved_rules=()):
     """Explicit source edits; a multi-source display row is never a quantity target."""
     from normalizer import _normalize_grade
     ordinals = {'первой': 1, 'второй': 2, 'третьей': 3, 'четвёртой': 4, 'четвертой': 4,
@@ -193,7 +195,7 @@ def local_edit_plan(text, current):
             candidates = [item for index, item in enumerate(current.items, 1)
                           if (item.source_position or index) == number]
         else:
-            groups = ordered_consolidation(current.items)
+            groups = ordered_consolidation(current.items, approved_rules=approved_rules)
             if not 1 <= number <= len(groups):
                 return MessagePlan(intent='clarify', question='Укажите существующую исходную позицию.')
             group = groups[number - 1]
@@ -217,6 +219,28 @@ def local_edit_plan(text, current):
             if unit:
                 return MessagePlan(intent='edit', edits=[Edit(item_id=item_id,field='quantity',value=quantity[1]), Edit(item_id=item_id,field='unit',value=unit)])
         return None
+    approved_grade = re.fullmatch(r'\s*(?:замени|поменяй)\s+(.+?)\s+на\s+(.+?)\s+там,?\s+где\s+(?:это\s+)?разрешено\s*', text, re.I)
+    if approved_grade and all(GRADE_RE.fullmatch(approved_grade[n]) for n in (1, 2)):
+        from normalization_policy import project_item
+        before, after = (_normalize_grade(approved_grade[n]) for n in (1, 2))
+        edits = []
+        for item in current.items:
+            projected, applied = project_item(item, approved_rules, original=item.original)
+            if item.grade == before and projected.grade == after and applied:
+                edits.append(Edit(item_id=item.item_id, field='grade', value=after))
+        if edits:
+            return MessagePlan(intent='edit', edits=edits)
+        return MessagePlan(intent='clarify', question='Нет применимого утверждённого правила для этой замены. Уточните допустимые исходные позиции.')
+    scoped_grade = re.fullmatch(r'\s*во?\s+всех\s+(уголках|трубах|листах|швеллерах|балках)\s+(?:замени|поменяй)\s+(.+?)\s+на\s+(.+?)\s*', text, re.I)
+    if scoped_grade and all(GRADE_RE.fullmatch(scoped_grade[n]) for n in (2, 3)):
+        groups = {'уголках': {'angle'}, 'трубах': {'round_pipe', 'profile_pipe'},
+                  'листах': {'sheet'}, 'швеллерах': {'channel'}, 'балках': {'beam', 'i_beam'}}
+        before, after = (_normalize_grade(scoped_grade[n]) for n in (2, 3))
+        edits = [Edit(item_id=item.item_id, field='grade', value=after) for item in current.items
+                 if item.product_group in groups[scoped_grade[1].casefold()] and _normalize_grade(item.grade) == before]
+        if edits:
+            return MessagePlan(intent='edit', edits=edits)
+        return MessagePlan(intent='clarify', question='Нет позиций указанного вида и марки. Уточните область изменения.')
     global_grade = re.fullmatch(r'\s*везде\s+(.+?)\s+(?:замени|заменить)\s+на\s+(.+?)\s*', text, re.I)
     if global_grade and all(GRADE_RE.fullmatch(global_grade[n]) for n in (1, 2)):
         original, replacement = (_normalize_grade(global_grade[n]) for n in (1, 2))
@@ -238,8 +262,12 @@ def is_new_request(text):
 
 
 class TelegramService:
-    def __init__(self, ai, repository):
+    def __init__(self, ai, repository, policy_repository=None):
         self.ai, self.repository = ai, repository
+        self.policy_repository = policy_repository
+
+    def _approved_rules(self):
+        return self.policy_repository.active_rules() if self.policy_repository else ()
 
     def process(self, user_id, text):
         if CURRENT.get() is not None:
@@ -277,7 +305,7 @@ class TelegramService:
                 if re.search(r'перевед|перевест|пересчит', text, re.I) and any(
                         group.item.unit != 'т' for group in ordered_consolidation(current.items)):
                     return [UNSUPPORTED_MESSAGE]
-                return self._response(current, [])
+                return self._merge_response(current)
             if operation_kind:
                 return [UNSUPPORTED_MESSAGE]
         if current is not None and not candidate:
@@ -328,7 +356,7 @@ class TelegramService:
                     messages = self._response(changed, [])
                     self._save(user_id, changed)
                     return messages
-            plan = local_edit_plan(text, current)
+            plan = local_edit_plan(text, current, approved_rules=self._approved_rules())
             if plan is not None:
                 emit('local_edit', stage='routing', edit_count=len(plan.edits))
                 if plan.intent == 'clarify':
@@ -465,7 +493,7 @@ class TelegramService:
         if operation.kind == 'cancel':
             return self._cancel_operation(user_id, current)
         if operation.kind == 'merge_items':
-            return self._response(current, [])
+            return self._merge_response(current)
         if operation.kind != 'edit_fields':
             return [UNSUPPORTED_MESSAGE]
         return self._edit(user_id, current, MessagePlan(intent='edit', edits=operation.edits))
@@ -574,8 +602,20 @@ class TelegramService:
         self._save(user_id,changed)
         return messages
 
-    @staticmethod
-    def _response(request, questions):
+    def _merge_response(self, request):
+        from normalization_policy import grade_merge_candidates
+        messages = self._response(request, [])
+        candidates = grade_merge_candidates(request.items, request.normalization_rules)
+        if candidates:
+            suggestions = ['Разные марки автоматически не объединены. Возможные группы для согласования:']
+            for rows in candidates:
+                suggestions.append('Группа:')
+                suggestions.extend(f'исходная позиция {position}: {grade}' for position, grade in rows)
+            suggestions.append('Уточните допустимую марку и исходные позиции. Это не создаст глобальное правило.')
+            messages += split_positions('\n'.join(suggestions))
+        return messages
+
+    def _response(self, request, questions):
         phase('formatting')
         from quantity import refresh_mass_calculations
         refresh_mass_calculations(request.items)
@@ -583,7 +623,9 @@ class TelegramService:
             questions=[request.pending_operation.question]
         elif request.pending_clarification:
             questions=[request.pending_clarification.question]
-        messages = split_positions(format_normalized_request(request))
+        rules = self._approved_rules()
+        messages = split_positions(format_normalized_request(request, approved_rules=rules))
+        request.normalization_rules = list(rules)
         if questions:
             messages += split_positions('\n'.join(questions))
         return messages

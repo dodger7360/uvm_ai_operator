@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from ai import AIService
 from database import Database
 from repositories.telegram_repository import TelegramRepository
+from repositories.normalization_policy_repository import NormalizationPolicyRepository
 from telegram_service import TelegramService
 from repositories.access_repository import AccessRepository, AuthorizedRequestRepository
 from telegram_access import TelegramAccess
@@ -212,7 +213,8 @@ def run_bot(root, token):
         access = TelegramAccess(access_repository)
         if access_repository.admin_id() is None:
             LOG.warning('administrator_not_bound_access_closed')
-        service = TelegramService(AIService(), AuthorizedRequestRepository(repository, access_repository))
+        policy = NormalizationPolicyRepository(repository.database, access_repository)
+        service = TelegramService(AIService(), AuthorizedRequestRepository(repository, access_repository), policy_repository=policy)
         offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')
         LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
