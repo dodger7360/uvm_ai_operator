@@ -19,6 +19,7 @@ from repositories.normalization_policy_repository import NormalizationPolicyRepo
 from telegram_service import TelegramService
 from telegram_operator import ClarificationMessage, safe_chunks
 from work_assistant import WorkAssistantService
+from ai_budget import BetaBudget, budget_actor
 from repositories.access_repository import AccessRepository, AuthorizedRequestRepository
 from telegram_access import TelegramAccess
 from diagnostics import PipelineError, safe_code, operation, phase, emit, record_error
@@ -144,7 +145,7 @@ def _handle_update(update, service, api, access=None):
         messages = ['Отправьте заявку на металлопрокат обычным сообщением. После ответа можно написать: «Везде С255 замени на Ст3» или «В пятой позиции измени количество на 2,5 т».']
     else:
         try:
-            with TypingIndicator(api,chat_id):
+            with budget_actor(user_id), TypingIndicator(api,chat_id):
                 messages = service.process(user_id, text)
         except PipelineError as exc:
             record_error(exc)
@@ -238,10 +239,12 @@ def run_bot(root, token):
         if access_repository.admin_id() is None:
             LOG.warning('administrator_not_bound_access_closed')
         policy = NormalizationPolicyRepository(repository.database, access_repository)
+        budget = BetaBudget(Path(os.getenv('OPERATOR_DB', str(root / 'operator.sqlite3'))).with_name('ai-budget.sqlite3'))
         ai = AIService()
+        ai.budget = budget
         service = TelegramService(ai, AuthorizedRequestRepository(repository, access_repository),
                                   commercial_view=True, reliable=True, policy_repository=policy,
-                                  assistant=WorkAssistantService(ai.assistant_transport))
+                                  assistant=WorkAssistantService(ai.assistant_transport, budget=budget))
         offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')
         LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))

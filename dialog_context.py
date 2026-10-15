@@ -394,6 +394,9 @@ def route_dialog(service, user_id, text, current):
                 return answer_dialog(service,user_id,text,current,decision.intent=='request_question')
         except PermissionError:
             raise
-        except Exception:
+        except Exception as error:
+            from ai_budget import BudgetLimit
+            if isinstance(error, BudgetLimit):
+                raise
             pass  # Fail closed: an untrusted classification never edits request state.
     return [specific_question(current)] if current else ['Уточните, пожалуйста, вопрос или пришлите заявку.']

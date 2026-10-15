@@ -134,13 +134,14 @@ class AIService:
     """Sends user text to the AI and returns its structured draft."""
 
     def __init__(self) -> None:
+        self.budget = None
         load_dotenv()
         from openai import DefaultHttpxClient
         transport = {"event_hooks": {"request": [http_attempt]}}
         if proxy := os.getenv("OPENAI_PROXY"):
             transport['proxy'] = proxy
-            transport['timeout'] = 120
-        options = {"api_key": os.getenv("OPENAI_API_KEY"), "http_client": DefaultHttpxClient(**transport)}
+            transport['timeout'] = 180
+        options = {"max_retries": 0, "timeout": 180, "api_key": os.getenv("OPENAI_API_KEY"), "http_client": DefaultHttpxClient(**transport)}
         self._client = OpenAI(**options)
 
     @property
@@ -151,6 +152,12 @@ class AIService:
     def _invoke(self, stage, response_format, messages, reasoning_effort=None):
         effort = reasoning_effort or os.getenv('OPENAI_REASONING_EFFORT','low')
         model = os.getenv('OPENAI_MODEL','gpt-6-luna')
+        options = {}
+        if getattr(self, 'budget', None) is not None:
+            from ai_budget import MAX_OUTPUT
+            self.budget.reserve(stage=stage, model=model, payload={
+                'messages': messages, 'schema': response_format.model_json_schema()})
+            options = {'max_completion_tokens': MAX_OUTPUT, 'service_tier': 'default'}
         phase(stage)
         trace = CURRENT.get()
         if trace:
@@ -164,7 +171,7 @@ class AIService:
         failure=None
         try:
             response=self._client.beta.chat.completions.parse(
-                model=model,reasoning_effort=effort,response_format=response_format,messages=messages)
+                model=model,reasoning_effort=effort,response_format=response_format,messages=messages, **options)
             return response
         except Exception as error:
             failure=safe_code(error)

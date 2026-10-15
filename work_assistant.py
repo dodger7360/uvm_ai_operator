@@ -65,11 +65,12 @@ class AssistantAnswer:
 class WorkAssistantService:
     """One paid call per question, no SDK retries; injectable client for tests.
 
-    Rate limits are process-local safeguards, not an account-wide spend cap.
-    Restarting the process resets the window; account caps belong in OpenAI.
+    Local rate windows supplement the shared persistent beta allowance supplied
+    by the Telegram runtime. Neither allowance measures the API wallet balance.
     """
     def __init__(self, client, *, hourly_limit=100, user_hourly_limit=20,
-                 search_hourly_limit=30, clock=time.monotonic, today=date.today):
+                 search_hourly_limit=30, clock=time.monotonic, today=date.today, budget=None):
+        self.budget = budget
         self.today = today
         self.client = client.with_options(timeout=60, max_retries=0)
         self.hourly_limit, self.user_hourly_limit = hourly_limit, user_hourly_limit
@@ -124,6 +125,13 @@ class WorkAssistantService:
         if search:
             payload.update(tools=[{'type': 'web_search', 'search_context_size': 'low'}],
                            tool_choice='required', max_tool_calls=1)
+        if self.budget is not None:
+            from ai_budget import BudgetLimit
+            try:
+                self.budget.reserve(stage='work_assistant', model=MODEL, payload=payload)
+            except BudgetLimit as error:
+                return AssistantAnswer(error.public_message)
+            payload['service_tier'] = 'default'
         phase('work_assistant')
         trace = CURRENT.get()
         if trace:

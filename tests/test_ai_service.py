@@ -35,6 +35,8 @@ class AIServiceTests(unittest.TestCase):
         self.assertIsInstance(result, PurchaseRequest)
         load_dotenv.assert_called_once_with()
         openai.assert_called_once()
+        self.assertEqual(openai.call_args.kwargs['max_retries'], 0)
+        self.assertEqual(openai.call_args.kwargs['timeout'], 180)
         client.beta.chat.completions.parse.assert_called_once_with(
             model="gpt-6-luna",
             reasoning_effort="low",
