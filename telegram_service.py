@@ -118,7 +118,7 @@ def exact_source_attributes(item, defer_grade_question=False):
         elif re.search(r'г/?к|горячекатан', name):
             item.product = 'Лист Г/К'
     elif item.product_group == 'round_pipe':
-        if re.search(r'э/?с|электросвар', name):
+        if re.search(r'э[\\/]?с|электросвар', name):
             item.product = 'Труба э/с'
         elif 'вгп' in name or 'водогаз' in name:
             item.product = 'Труба ВГП'
@@ -126,8 +126,14 @@ def exact_source_attributes(item, defer_grade_question=False):
             item.product = 'Труба бесшовная'
         elif re.search(r'ГОСТ\s*10704(?:-91)?', source, re.I):
             item.product = 'Труба э/с'
+    from quantity import length_mass_columns, LITERAL_QUANTITY_RE, literal_decimal
+    columns = length_mass_columns(source,item.product_group)
+    if columns:
+        item.length_mm=float(columns['length_mm'])
+        item.quantity,item.unit,item.source_unit=columns['quantity'],'кг','кг'
+        return
     quantity_source = without_mass_annotation(source)
-    quantities = [m for m in QUANTITY_RE.finditer(quantity_source)
+    quantities = [m for m in LITERAL_QUANTITY_RE.finditer(quantity_source)
                   if not re.search(r'[×хx*]\s*$',quantity_source[max(0,m.start()-20):m.start()],re.I)
                   and not re.search(r'(?:длина|раскрой)\s*[:=]?\s*$', quantity_source[max(0,m.start()-20):m.start()], re.I)]
     reverse_quantity = re.search(r'(?<=[|;\t])\s*(пог\.?\s*м\.?|м[²2]|тн|кг|шт\.?|м|т)\s*[|;\t]\s*\d+(?:[.,]\d+)?(?![\w.,])', source, re.I)
@@ -145,7 +151,7 @@ def exact_source_attributes(item, defer_grade_question=False):
             item.quantity = None
     if quantities:
         last = quantities[-1]
-        item.quantity = Decimal(last[1].replace(',', '.'))
+        item.quantity = literal_decimal(last[1])
         raw_unit = last[2].lower().replace(' ', '')
         if raw_unit.startswith('пог'):
             item.unit = 'пог. м'
@@ -156,7 +162,7 @@ def exact_source_attributes(item, defer_grade_question=False):
         elif raw_unit.startswith('т'):
             item.unit = 'т'
         else:
-            item.unit = raw_unit.rstrip('.')
+            item.unit = UNIT_ALIASES.get(raw_unit,raw_unit.rstrip('.'))
         item.source_unit = last[2]
     if item.quantity is not None and (not item.quantity.is_finite() or item.quantity <= 0):
         raise PipelineError('invalid_quantity','Количество должно быть конечным положительным числом.')
@@ -533,6 +539,9 @@ class TelegramService:
         from ai import _source_fragment_occurrences
         source_count = len(source_product_rows(parse_text))
         phase('extraction',source_count=source_count)
+        if draft is None and self.reliable and effort is None:
+            from telegram_operator import local_request_draft
+            draft = local_request_draft(parse_text)
         if draft is None:
             draft = self.ai.parse_request(parse_text) if effort is None else self.ai.parse_request(parse_text,reasoning_effort=effort)
             if self.reliable:
@@ -551,6 +560,9 @@ class TelegramService:
             raise SemanticExtractionError('city_mismatch','Город не подтверждается исходной заявкой. Повторите заявку.')
         source_positions = validate_source_coverage(draft, parse_text)
         for item in draft.items:
+            if self.reliable:
+                from telegram_operator import restore_local_source_attributes
+                restore_local_source_attributes(item)
             exact_source_attributes(item, defer_grade_question=True)
         phase('normalization')
         normalize_request(draft)
@@ -595,6 +607,9 @@ class TelegramService:
         active.missing_fields = [re.sub(r'items\[(\d+)\]',
             lambda m: f'items[{sorted_indices[before_sort[int(m[1])].item_id]}]', field)
             for field in active.missing_fields]
+        if self.reliable:
+            from telegram_operator import bind_pipe_relations
+            bind_pipe_relations(active.items)
         active.pending_clarification=next_question(active)
         return active
 

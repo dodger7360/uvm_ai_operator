@@ -25,27 +25,27 @@ from reference_lookup import ReferenceCandidates, ReferenceLookupContext, Refere
 
 
 RULE_VERSION = 'local-recognition.v1'
-_SUPPORTED = {'angle', 'channel', 'rebar', 'sheet', 'profile_pipe'}
+_SUPPORTED = {'angle', 'channel', 'rebar', 'sheet', 'profile_pipe', 'round_pipe', 'fitting'}
 _N = r'\d+(?:[.,]\d+)?'
 _DIM_UNIT = r'мм|mm|см|cm|м|m'
 _CROSS = re.compile(
     rf'(?<![\w.,+\-−])(?P<size>{_N}(?:\s*[xхХX×*]\s*{_N}){{1,2}})'
     rf'(?:\s*(?P<unit>{_DIM_UNIT})(?!\w))?(?![\w.,]|\s*[xхХX×*])', re.I)
 _DIAMETER = re.compile(
-    rf'(?<!\w)(?:[фФØø⌀]|d\s*=?|диаметр\s*[:=]?|диам\.?)\s*(?P<number>{_N})'
+    rf'(?<!\w)(?:[фФØø⌀]|д\s*|d\s*=?|диаметр(?:ом)?\s*[:=]?|диам\.?)\s*(?P<number>{_N})'
     rf'(?:\s*(?P<unit>{_DIM_UNIT})(?!\w))?(?![\w.,])', re.I)
 _CHANNEL = re.compile(rf'(?<!\w)(?P<number>{_N})\s*(?P<series>[УПЭЛСUP])(?!\w)', re.I)
 _PRODUCT = re.compile(
     r'(?<!\w)(?P<name>труб\w*(?:\s+(?:профильн\w*|проф\.?))?|'
     r'(?:профильн\w*|проф\.)\s+труб\w*|уголок\w*|уг\.|'
-    r'швеллер\w*|швел\.|шв\.|арматур\w*|арм\.|лист\w*)(?!\w)', re.I)
+    r'швеллер\w*|швел\.|шв\.|арматур\w*|арм\.|лист\w*|отвод\w*|фланец\w*)(?!\w)', re.I)
 _EQUAL = re.compile(r'(?<!\w)(?:равнополоч\w*|равнопол\.)(?!\w)', re.I)
 _UNEQUAL = re.compile(r'(?<!\w)(?:неравнополоч\w*|неравнопол\.)(?!\w)', re.I)
 _REBAR_CLASS = re.compile(r'(?<!\w)[АA]\s*\d{3}(?:[СC])?(?!\w)', re.I)
 _MATERIAL_LABEL = re.compile(r'(?<!\w)(?:сталь|марка|материал)\s*[:=]?\s*(?P<label>[\w.-]+)', re.I)
 _GRADE_SPELLING = re.compile(r'(?<!\w)\d{2}[ГG]\d[СC](?:-\d+)?(?!\w)', re.I)
 _ROLLING = re.compile(r'(?<!\w)(?:г\s*/?\s*к|х\s*/?\s*к|горячекатан\w*|холоднокатан\w*)(?!\w)', re.I)
-_MANUFACTURING = re.compile(r'(?<!\w)(?:бесшовн\w*|электросварн\w*|э/с|б/ш)(?!\w)', re.I)
+_MANUFACTURING = re.compile(r'(?<!\w)(?:бесшовн\w*|электросварн\w*|э[\\/]с|б/ш)(?!\w)', re.I)
 _COATING = re.compile(r'(?<!\w)(?:без\s+покрытия|оцинкован\w*)(?!\w)', re.I)
 _DIM_UNITS = {'мм': 'mm', 'mm': 'mm', 'см': 'cm', 'cm': 'cm', 'м': 'm', 'm': 'm'}
 _UNIT_SPELLINGS = dict(UNIT_ALIASES, **{'шт.': 'шт'})
@@ -87,7 +87,8 @@ class RecognitionBatch(ContractModel):
 
 
 def _decimal(token):
-    return Decimal(token.replace(',', '.'))
+    from quantity import literal_decimal
+    return literal_decimal(token)
 
 
 def _spelling_view(text):
@@ -212,7 +213,7 @@ class RecognitionService:
         if not record.original_description.strip():
             return RecognitionResult(record=record, status='empty', issues=['empty_description'])
         b = _Builder(record, context, policy)
-        products = list(_PRODUCT.finditer(b.text))
+        products = [m for m in _PRODUCT.finditer(b.text) if not re.search(r'к\s+этой\s*$',b.text[:m.start()],re.I)]
         # Existing logical row grammar is reused only for coverage. It does not
         # call AI source matching or turn a record into several output records.
         if len(source_product_rows(b.text)) > 1 or len(products) > 1:
@@ -224,7 +225,7 @@ class RecognitionService:
             name = product['name'].casefold()
             group = _detect_product_group(name) or (
                 'angle' if name == 'уг.' else 'channel' if name in {'шв.', 'швел.'} else
-                'rebar' if name == 'арм.' else None)
+                'rebar' if name == 'арм.' else 'fitting' if name.startswith(('отвод','фланец')) else None)
             if group == 'pipe':
                 group = 'profile_pipe' if re.search(r'проф', name) or any(
                     len(re.findall(_N, m['size'])) == 3 for m in _CROSS.finditer(b.view)) else 'round_pipe'
@@ -242,12 +243,22 @@ class RecognitionService:
             return b.finish('unsupported')
         b.data['category'] = b.claim(group, product.span(), rule='existing-product-group-grammar')
         b.data['product_type'] = b.claim(group, product.span(), rule='existing-product-group-grammar')
+        if group == 'fitting':
+            b.data['product_type'] = b.claim(product[0].capitalize(),product.span())
         self._standards(b)
         self._material(b)
         self._execution(b)
         self._geometry(b, group, product.end())
         self._length(b)
         self._quantity(b)
+        from quantity import length_mass_columns
+        columns=length_mass_columns(b.text,group)
+        if columns:
+            from nomenclature import Measurement
+            b.data['geometry']['length']=b.claim(Measurement(amount=columns['length_mm'],unit='mm'),columns['span'],rule='length-unit-amount-export-v1')
+            b.data['quantity']=b.claim(Measurement(amount=columns['quantity'],unit='кг'),columns['span'],rule='length-unit-amount-export-v1')
+            b.consume(columns['span'])
+            b.issues=[issue for issue in b.issues if issue not in {'invalid_quantity','ambiguous_quantity'}]
         return b.finish()
 
     @staticmethod
@@ -326,7 +337,15 @@ class RecognitionService:
 
     @staticmethod
     def _execution(b):
-        for field, pattern in [('rolling_method', _ROLLING), ('manufacturing_method', _MANUFACTURING),
+        for key, pattern in [
+            ('wall_selection',r'\bстенк\w*\s+(?:самая\s+ходовая(?:\s*\([^)]*\))?|любая)'),
+            ('substitution',r'\bможно\s+замену\b'),
+            ('related_pipe',r'\bк\s+этой\s+трубе\b')]:
+            for match in re.finditer(pattern,b.masked(),re.I):
+                if re.search(r'\b(?:не|без)\s*$',b.text[:match.start()],re.I): continue
+                b.data['extensions'][key]=b.claim(match[0],match.span(),rule='explicit-procurement-condition-v1')
+                b.consume(match.span())
+        for field, pattern in [('rolling_method' , _ROLLING), ('manufacturing_method', _MANUFACTURING),
                                ('coating', _COATING)]:
             candidates = []
             for match in pattern.finditer(b.masked()):
@@ -410,13 +429,13 @@ class RecognitionService:
             b.data['profile']['cross_section'] = cross_section
             if group == 'angle' and cross_section.is_resolved and cross_section.value == 'equal_leg':
                 b.data['product_type'] = b.claim('equal_leg_angle', geometries[0][0].span(), rule='cross-section-geometry')
-        if group == 'rebar':
+        if group in {'rebar','round_pipe','fitting'}:
             matches = list(_DIAMETER.finditer(b.masked()))
             if not matches:
                 # A leading bare diameter is permitted only immediately after
                 # the product name and when it is not a quantity/steel class.
                 match = re.match(rf'\s+(?P<number>{_N})(?:\s*(?P<unit>{_DIM_UNIT})(?!\w))?(?![\w.,])',
-                                 b.view[product_end:], re.I)
+                                 b.masked()[product_end:], re.I)
                 if match and not _LONG_QUANTITY.match(b.view, product_end + match.start('number')):
                     span = (product_end + match.start('number'), product_end + match.end())
                     b.data['geometry']['diameter'] = b.claim(*b.measure(match['number'], match['unit'], span))
@@ -424,6 +443,11 @@ class RecognitionService:
             if matches:
                 b.data['geometry']['diameter'] = b.choose([
                     b.measure(m['number'], m['unit'], m.span()) for m in matches], Measurement, 'ambiguous_geometry')
+        if group == 'round_pipe':
+            walls=[b.measure(m['number'],'мм',m.span()) for m in re.finditer(
+                r'\bстенк\w*\s*(?P<number>'+_N+r')\s*(?:мм)?(?![\w.,])',b.masked(),re.I)]
+            if walls:
+                b.data['geometry']['wall_thickness']=b.choose(walls,Measurement,'ambiguous_geometry')
         if group == 'sheet' and not crosses:
             # Only a leading thickness, after an explicit rolling-method token.
             match = re.match(rf'\s*(?P<number>{_N})(?:\s*(?P<unit>{_DIM_UNIT})(?!\w))?(?![\w.,])',
@@ -470,6 +494,7 @@ class RecognitionService:
     @staticmethod
     def _quantity(b):
         remaining = b.masked()
+        from quantity import LITERAL_QUANTITY_RE
         # Existing pieces = theoretical tonnes annotation is not a second input
         # amount. Use its existing grammar without changing original offsets.
         annotation_free = without_mass_annotation(remaining)
@@ -479,7 +504,7 @@ class RecognitionService:
                     remaining = remaining[:m.start()] + ' ' * (m.end() - m.start()) + remaining[m.end():]
                     b.consume(m.span())
         by_start = {}
-        for pattern in (QUANTITY_RE, _LONG_QUANTITY):
+        for pattern in (LITERAL_QUANTITY_RE,):
             for m in pattern.finditer(remaining):
                 if m.start() not in by_start or m.end() > by_start[m.start()].end():
                     by_start[m.start()] = m

@@ -236,7 +236,7 @@ def test_source_quantity_edit_recalculates_commercial_sum_without_changing_origi
     service = TelegramService(ai, repo, commercial_view=True)
     service.process(1, text)
     messages = service.process(1, 'В исходной позиции 2 измени количество на 4 т')
-    assert ' — 6,000 т' in messages[0]
+    assert ' — 6 т' in messages[0]  # Ordinary display no longer pads zeroes.
     saved = repo.load(1)
     second = next(item for item in saved.items if item.source_position == 2)
     assert second.grade == 'Ст3сп5' and second.quantity == Decimal('4')

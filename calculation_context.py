@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Literal
 import re
 from pydantic import BaseModel, Field
-from schemas import RequestItem
+from schemas import RequestItem, MassCalculation
 
 
 class CalculationQuestion(BaseModel):
@@ -25,6 +25,7 @@ class CalculationState(BaseModel):
     pending: CalculationQuestion | None = None
     answers: list[str] = Field(default_factory=list)
     suspended: bool = False
+    result: MassCalculation | None = None
 
 
 def fingerprint(calculation):
@@ -48,27 +49,52 @@ def next_question(calculation):
 
 def answer(service,user_id,calculation):
     from telegram_operator import safe_chunks
-    if service.assistant is None: return ['AI-помощник не настроен; исходные данные расчёта сохранены.']
-    question = 'Продолжи расчёт: '+calculation.source_text+'\nУточнения: '+ '; '.join(calculation.answers)+'. Укажи коэффициент и источник или допущение. Не подменяй оценку фактическим взвешиванием.'
-    try:
-        result = service.assistant.answer(question,user_id=user_id,current=calculation.model_copy(deep=True),history=[])
-    except Exception:
-        return ['AI-помощник недоступен. Исходные данные расчёта и рабочая заявка сохранены.']
-    service.repository.save_dialog(user_id,question,result.text,'calculation:'+calculation.calculation_id)
-    return safe_chunks(result.text)
+    from quantity import calculate_rebar_mass
+    if len(calculation.items)==1:
+        result=calculate_rebar_mass(calculation.items[0])
+        if result.status=='estimate':
+            from formatter import format_number
+            from decimal import ROUND_HALF_UP, localcontext
+            calculation.result=result
+            service.repository.save_calculation(user_id,calculation)
+            with localcontext() as ctx:
+                ctx.prec=max(28,len(result.total_t.as_tuple().digits)+max(0,result.total_t.adjusted())+5)
+                shown=result.total_t.quantize(Decimal('0.001'),rounding=ROUND_HALF_UP)
+            return safe_chunks('Теоретическая масса ≈ '+format_number(shown)+' т. '
+                'Без округления: '+format_number(result.total_t)+' т. '
+                'Коэффициент '+format_number(result.per_metre_kg)+' кг/м. '+result.basis+
+                '\nЭто расчётная оценка, а не фактическая масса партии.')
+    return ['Коэффициент массы 1 м для этих характеристик не подтверждён; расчёт не выполнен. '
+            'Исходные данные сохранены. Можно явно попросить найти источник в интернете.']
+
 
 
 def start(service,user_id,text):
     previous = service.repository.load_calculation(user_id)
-    if previous:
-        previous.suspended = True
-        service.repository.save_calculation(user_id,previous)
+    if previous and not previous.suspended and previous.source_text.strip().casefold()==text.strip().casefold():
+        return [previous.pending.question] if previous.pending else answer(service,user_id,previous)
     try:
-        # Reuse the strict extraction/validation pipeline as an unsaved snapshot.
-        draft = service._build_active(text,text,[])
-    except Exception:
+        from telegram_operator import local_request_draft
+        from telegram_service import exact_source_attributes
+        from normalizer import normalize_request
+        from validator import validate_request
+        description=re.sub(r'^\s*(?:сколько\s+весит|рассчитай\s+(?:вес|массу))\s*','',text,flags=re.I).rstrip('?')
+        draft=local_request_draft(description,calculation=True)
+        if draft is None:
+            draft=service._build_active(text,text,[])
+        else:
+            for item in draft.items: exact_source_attributes(item)
+            normalize_request(draft)
+            checked=validate_request(draft,raw_request=description)
+            if checked.warnings: raise ValueError('Unconfirmed calculation attributes')
+    except Exception as error:
+        from diagnostics import emit, safe_code
+        emit('calculation_extraction_failure',reason=safe_code(error),exception=type(error).__name__)
         from telegram_operator import safe_chunks
         return ['Не удалось проверить исходные данные расчёта. Рабочая заявка не изменена:']+safe_chunks(text)
+    if previous:
+        previous.suspended=True
+        service.repository.save_calculation(user_id,previous)
     items = [RequestItem(**item.model_dump()) for item in draft.items]
     calculation = CalculationState(source_text=text,items=items,original_items=[i.model_copy(deep=True) for i in items])
     calculation.pending = next_question(calculation)
@@ -126,3 +152,27 @@ def resume(service,user_id,text,calculation):
     calculation.pending = next_question(calculation)
     service.repository.save_calculation(user_id,calculation)
     return [calculation.pending.question] if calculation.pending else answer(service,user_id,calculation)
+
+
+
+def followup(service,user_id,text,calculation):
+    """Contextual calculation remarks never become procurement edits."""
+    if calculation is None or calculation.suspended: return None
+    search=bool(re.search(r'интернет|поищи|найди',text,re.I) and re.search(
+        r'коэффициент|\b(?:масс|вес)\w*|нормативн\w*\s+источник(?:\s+(?:в\s+интернете|для\s+(?:этого\s+)?расч[её]та))?\s*[.?!]*$|источник\w*\s+(?:коэффициент|расч[её]т)|^\s*возьми\s+(?:инф\w*|данные)',text,re.I))
+    remark=bool(re.search(r'ты\s+у\s+меня\s+спрашиваешь|(?:так\s+)?дай\s+вес|почему.*длин|зачем.*длин',text,re.I))
+    if not (search or remark): return None
+    explanation=('Для количества в штуках нужна длина одного прутка; её нельзя определить по диаметру '
+                 'или найти вместо фактической длины в справочнике. '+calculation.pending.question
+                 if calculation.pending and calculation.pending.field=='length_mm' else
+                 calculation.pending.question if calculation.pending else 'Исходные данные расчёта сохранены.')
+    if search:
+        if service.assistant is None: return [explanation+' Интернет-поиск сейчас недоступен; коэффициент без источника не принимается.']
+        try:
+            result=service.assistant.answer(text,user_id=user_id,current=calculation.model_copy(deep=True),history=[])
+        except Exception:
+            return [explanation+' Интернет-поиск недоступен; расчёт и заявка сохранены.']
+        service.repository.save_dialog(user_id,text,result.text,'calculation:'+calculation.calculation_id)
+        return [result.text+'\nНайденная информация не изменяет исходные характеристики или коэффициент автоматически.',explanation]
+    if calculation.pending: return [explanation]
+    return answer(service,user_id,calculation)
