@@ -35,6 +35,65 @@ class DialogClassification(BaseModel):
     question: str | None = None
 
 
+class ContextChoice(BaseModel):
+    text: str
+    request_version: str
+    calculation_version: str
+
+
+class RoutingState(BaseModel):
+    # Attention is independent of both technical states; no SQL migration.
+    request_focus: str | None = None
+    choice: ContextChoice | None = None
+
+
+def state_version(state):
+    from hashlib import sha256
+    return sha256(state.model_dump_json().encode()).hexdigest() if state else ''
+
+
+def working_reply_matches(text, current):
+    """Use the existing bound parsers, without changing the request or history."""
+    if current is None or current.clarification_cancelled: return False
+    if pending := pending_detail(current):
+        return (geometry_value(text, pending) is not None if pending.field in GEOMETRY
+                else reply_values(text, pending, current) is not None)
+    pending = current.pending_clarification
+    if (pending and pending.request_id == current.request_id
+            and (not pending.fingerprint or pending.fingerprint == request_fingerprint(current))
+            and any(i.item_id == pending.item_id for i in current.items)):
+        from clarifications import answer_values
+        values, question = answer_values(pending, text)
+        return bool(values)
+    return False
+
+
+def apply_working_reply(service, user_id, current, text):
+    if pending := pending_detail(current):
+        if pending.field in GEOMETRY:
+            value = geometry_value(text, pending)
+            return (answer_detail(service, user_id, current, text, pending, value)
+                    if value is not None else [pending.question])
+        return answer_bound_value(service, user_id, current, text, pending)
+    # Typed quantity/unit answers retain their existing guards and history.
+    return service._answer_clarification(user_id, current, text)
+
+
+CHOICE_QUESTION = 'Этот ответ относится к расчёту или к текущей заявке? Напишите «к расчёту» или «к заявке».'
+
+
+def choice_target(wording):
+    if wording in {'к расчёту', 'к расчету', 'расчёт', 'расчет'}: return 'calculation'
+    if wording in {'к заявке', 'к текущей заявке', 'заявка'}: return 'request'
+    return None
+
+
+def working_reference(wording):
+    return (wording in {'уточнение', 'уточнение текущей', 'уточнение текущей заявки'}
+            or bool(re.fullmatch(r'верн[её]мся\s+к\s+(?:текущей\s+)?заявке', wording))
+            or bool(re.fullmatch(r'что\s+у\s+нас\s+в\s+заявке', wording)))
+
+
 def mass_request(text):
     from source_fidelity import source_product_rows
     return bool(re.search(r'сколько\s+весит|рассчитай\s+(?:вес|массу)', text, re.I)
@@ -47,7 +106,7 @@ def request_reference(text):
     target = rf'(?:{PRODUCT_ROW.pattern}|сталь\w*|марк\w*|гост\w*|стандарт\w*|позиц\w*|заявк\w*)'
     return bool(re.search(r'текущ\w*\s+заяв|(?:мо[яею]|наша|по)\s+заяв|'
                           rf'\b(?:эт\w*|так\w*|указанн\w*)\s+(?:\w+\s+){{0,2}}{target}|'
-                          r'\bэто\s+весит', text, re.I))
+                          r'\bэто\s+весит|что\s+у\s+нас\s+в\s+заявке', text, re.I))
 
 
 def pending_detail(current):
@@ -231,21 +290,73 @@ def route_dialog(service, user_id, text, current):
     wording = text.strip().casefold().strip('.!?')
     if current and current.pending_operation and current.pending_operation.user_id != user_id:
         return ['Уточнение относится к другому пользователю. Повторите вопрос.']
+    from calculation_context import reply_values as calculation_reply_values, resume
+    from telegram_service import EDIT_WORDS
+    routing = service.repository.load_routing(user_id)
+    calculation = service.repository.load_calculation(user_id)
+    work_command = bool(re.search(EDIT_WORDS+r'|\bисправь\b|\bдополни\b',text,re.I))
+    new_request = _new_request(text)
+    reference = working_reference(wording)
+    target = choice_target(wording)
     if mass_request(text):
         from calculation_context import start
+        service.repository.save_routing(user_id, RoutingState())
         return start(service,user_id,text)
+    if new_request or work_command or reference:
+        # Explicit intent supersedes any buffered reply; no technical state is edited.
+        routing = RoutingState(request_focus=current.request_id if current else None)
+        service.repository.save_routing(user_id, routing)
+    if reference:
+        if not current: return ['Активной заявки нет. Пришлите спецификацию.']
+        if _is_question(text): return answer_dialog(service,user_id,text,current,True)
+        return [specific_question(current)]
     if _is_question(text) or wording in {'привет','здравствуйте','добрый день','как дела','спасибо','благодарю'}:
         return answer_dialog(service,user_id,text,current,request_reference(text))
-    calculation = service.repository.load_calculation(user_id)
-    from telegram_service import EDIT_WORDS
-    work_command = bool(re.search(EDIT_WORDS+r'|\bисправь\b|\bдополни\b',text,re.I))
-    if _new_request(text) or work_command or wording in {'уточнение текущей','уточнение текущей заявки'}:
-        if calculation and not calculation.suspended:
-            calculation.suspended = True
-            service.repository.save_calculation(user_id,calculation)
-    elif calculation:
-        from calculation_context import resume
-        if (result := resume(service,user_id,text,calculation)) is not None: return result
+    if routing.choice and target:
+        saved = routing.choice
+        routing.choice = None
+        # Consume before applying: repeating the selection cannot reapply the value.
+        service.repository.save_routing(user_id, routing)
+        if (saved.request_version != state_version(current)
+                or saved.calculation_version != state_version(calculation)):
+            return ['Выбор адресата устарел: данные изменились. Повторите ответ с указанием параметра.']
+        if target == 'request':
+            routing.request_focus = current.request_id
+            service.repository.save_routing(user_id, routing)
+            return apply_working_reply(service,user_id,current,saved.text)
+        routing.request_focus = None
+        service.repository.save_routing(user_id, routing)
+        return resume(service,user_id,saved.text,calculation)
+    if target:
+        # Repeated selection never repeats an already consumed answer or API call.
+        return ([specific_question(current)] if target=='request' and current else
+                [calculation.pending.question] if target=='calculation' and calculation and calculation.pending else
+                ['Нет ожидающего уточнения для выбранного контекста.'])
+    if not new_request and not work_command:
+        work_matches = working_reply_matches(text,current)
+        calc_matches = calculation is not None and calculation_reply_values(text,calculation) is not None
+        focused = current is not None and routing.request_focus == current.request_id
+        if work_matches and focused:
+            routing.choice = None
+            service.repository.save_routing(user_id,routing)
+            return apply_working_reply(service,user_id,current,text)
+        if work_matches and calc_matches:
+            routing.choice = ContextChoice(text=text,request_version=state_version(current),
+                                           calculation_version=state_version(calculation))
+            service.repository.save_routing(user_id,routing)
+            return [CHOICE_QUESTION]
+        if routing.choice:
+            # A fresh, unambiguous field answer supersedes the old ambiguous one.
+            if work_matches or calc_matches:
+                routing.choice = None
+                service.repository.save_routing(user_id,routing)
+            else: return [CHOICE_QUESTION]
+        if calculation:
+            if (result := resume(service,user_id,text,calculation)) is not None: return result
+    elif new_request and calculation and not calculation.suspended:
+        # Retain the existing new-specification policy, distinct from returning to work.
+        calculation.suspended = True
+        service.repository.save_calculation(user_id,calculation)
     if current:
         if (match := APPEND.match(text)) and source_product_rows(text[match.end():]):
             return append_request(service,user_id,current,text,text[match.end():])

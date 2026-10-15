@@ -28,6 +28,11 @@ def test_calculation_preserves_working_request_and_history(tmp_path,source,resta
         service = TelegramService(ai,TelegramRepository(Database(tmp_path/'dialog.sqlite3')),reliable=True,assistant=assistant)
     assistant.answer.return_value = AssistantAnswer('405 × 11,7 × 0,888 / 1000 = 4,207788 т')
     messages = service.process(1,'11.7м')
+    if source == PIPE:
+        # Both length and wall accept the bare value: select before applying.
+        assert working_snapshot(repo,1) == before
+        assert repo.load_calculation(1).items[0].length_mm is None
+        messages = service.process(1,'к расчёту')
     assert any('4,207788' in m for m in messages)
     assert working_snapshot(repo,1) == before
     calculation = assistant.answer.call_args.kwargs['current']

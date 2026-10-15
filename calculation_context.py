@@ -84,31 +84,44 @@ def unmatched_reply(text,pending):
         return [pending.question+' Для уточнения рабочей заявки напишите «Уточнение текущей».']
     return None
 
-def resume(service,user_id,text,calculation):
+def reply_values(text, calculation):
+    """Pure candidate check; choosing a recipient must happen before any write."""
     from dialog_context import geometry_value
     from quantity import QUANTITY_RE
     from clarifications import find_unit
+    pending = calculation.pending
+    if (not pending or calculation.suspended
+            or pending.calculation_id != calculation.calculation_id
+            or pending.fingerprint != fingerprint(calculation)
+            or pending.item_index >= len(calculation.items)):
+        return None
+    if pending.field == 'quantity':
+        match = QUANTITY_RE.fullmatch(text.strip())
+        if match:
+            quantity = Decimal(match[1].replace(',', '.'))
+            if quantity > 0: return {'quantity': quantity, 'unit': find_unit(match[2])}
+    elif (value := geometry_value(text, pending)) is not None:
+        return {pending.field: float(value)}
+    return None
+
+
+def resume(service,user_id,text,calculation):
+    from dialog_context import GEOMETRY, geometry_value
+    from quantity import QUANTITY_RE
     pending = calculation.pending
     if not pending or calculation.suspended: return None
     if pending.calculation_id != calculation.calculation_id or pending.fingerprint != fingerprint(calculation):
         return ['Уточнение расчёта устарело. Повторите расчётный вопрос.']
     if pending.item_index >= len(calculation.items): return ['Укажите позицию расчёта.']
+    values = reply_values(text, calculation)
+    if values is None:
+        if (QUANTITY_RE.fullmatch(text.strip())
+                or (pending.field == 'quantity' and any(
+                    geometry_value(text, SimpleNamespace(field=field)) is not None for field in GEOMETRY))):
+            return [pending.question]
+        return unmatched_reply(text,pending)
     target = calculation.items[pending.item_index]
-    if pending.field == 'quantity':
-        match = QUANTITY_RE.fullmatch(text.strip())
-        if not match:
-            from dialog_context import GEOMETRY
-            if any(geometry_value(text,SimpleNamespace(field=field)) is not None for field in GEOMETRY): return [pending.question]
-            return unmatched_reply(text,pending)
-        quantity = Decimal(match[1].replace(',','.'))
-        if quantity <= 0: return [pending.question]
-        target.quantity, target.unit = quantity, find_unit(match[2])
-    else:
-        value = geometry_value(text,pending)
-        if value is None:
-            if QUANTITY_RE.fullmatch(text.strip()): return [pending.question]
-            return unmatched_reply(text,pending)
-        setattr(target,pending.field,float(value))
+    for field, value in values.items(): setattr(target, field, value)
     calculation.answers.append(text)
     calculation.pending = next_question(calculation)
     service.repository.save_calculation(user_id,calculation)
