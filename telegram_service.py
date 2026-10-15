@@ -14,6 +14,7 @@ from request_operations import (Edit, RequestOperation, PendingOperation, reques
 from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
 from nomenclature import NomenclatureSpec
+from dialog_context import DetailQuestion, DetailAnswer
 from normalizer import normalize_request, UNIT_ALIASES
 from validator import validate_request, confirm_shared_attributes, grouped_questions_for_missing_fields
 from formatter import format_normalized_request, sort_items, request_consolidation
@@ -58,6 +59,14 @@ class ActiveRequest(PurchaseRequest):
     fallback_status: Optional[Literal['partial', 'original']] = None
     unprocessed_source: list[str] = Field(default_factory=list)
     recovery_specs: list[NomenclatureSpec] = Field(default_factory=list)
+    pending_detail: Optional[DetailQuestion] = None
+    detail_answers: list[DetailAnswer] = Field(default_factory=list)
+    append_commands: list[str] = Field(default_factory=list)
+
+    @property
+    def user_status(self):
+        return 'В работе' if (not self.is_valid or self.missing_fields or self.pending_detail or self.pending_clarification
+                             or self.pending_operation or self.fallback_status) else 'Готова'
 
 
 def alternative_grade_value(source):
@@ -513,6 +522,9 @@ class TelegramService:
                 request_fingerprint=request_fingerprint(active),
                 operation=RequestOperation(kind='edit_fields'), command=text,
                 question='\n'.join(active.clarification_questions), expected_answer='details')
+        if self.reliable:
+            from dialog_context import pending_detail
+            active.pending_detail = pending_detail(active)
         messages=self._response(active,active.clarification_questions)
         self._save(user_id,active)
         return messages
@@ -577,7 +589,12 @@ class TelegramService:
             if unused:
                 raise SemanticExtractionError('header_positions_missing','Не все позиции под общей шапкой распознаны.')
         phase('sorting')
+        before_sort = list(active.items)
         active.items = sort_items(active.items)
+        sorted_indices = {item.item_id:index for index,item in enumerate(active.items)}
+        active.missing_fields = [re.sub(r'items\[(\d+)\]',
+            lambda m: f'items[{sorted_indices[before_sort[int(m[1])].item_id]}]', field)
+            for field in active.missing_fields]
         active.pending_clarification=next_question(active)
         return active
 
@@ -623,6 +640,7 @@ class TelegramService:
         changed = current.model_copy(deep=True)
         changed.pending_operation = None
         changed.pending_clarification = None
+        changed.pending_detail = None
         changed.clarification_cancelled = True
         changed.dialog_state = 'active'
         self._save(user_id, changed)
@@ -640,6 +658,7 @@ class TelegramService:
         concrete = bool(operation.edits) or operation.kind == 'cancel'
         changed.pending_clarification = None if concrete else question_state(question, changed)
         changed.pending_operation = None
+        changed.pending_detail = None
         changed.clarification_cancelled = False
         if changed.pending_clarification is None:
             changed.pending_operation = PendingOperation(
@@ -648,6 +667,9 @@ class TelegramService:
                 operation=operation,
                 command=command, question=question,
                 expected_answer='confirmation' if concrete else 'details', answers=answers or [])
+        if self.reliable:
+            from dialog_context import pending_detail
+            changed.pending_detail = pending_detail(changed)
         if re.search(r'нов\w*', question, re.I) and re.search(r'измен|прав', question, re.I):
             changed.dialog_state = 'choose_request'
         self._save(user_id, changed)
@@ -757,9 +779,20 @@ class TelegramService:
             return self._execute_operation(user_id, current, plan.operation, command=pending.command + '\n' + '\n'.join(answers))
         return [pending.question]
 
-    def _edit(self, user_id, current, plan, command='', confirmed=False):
+    def _edit(self, user_id, current, plan, command='', confirmed=False, clarification=None):
         phase('correction')
-        plan = scoped_plan(command, current, plan, confirmed=confirmed)
+        if clarification is not None:
+            from dialog_context import pending_detail, reply_values
+            expected = pending_detail(current)
+            values = reply_values(command,clarification,current)
+            if (expected != clarification or not values
+                    or (current.pending_operation and current.pending_operation.user_id != user_id)
+                    or any(edit.item_id != clarification.item_id or edit.restore for edit in plan.edits)
+                    or {edit.field:edit.value for edit in plan.edits} != values):
+                raise PipelineError('stale_clarification','Уточнение устарело или не соответствует позиции. Повторите вопрос.')
+            # The exact typed question binds one source item; no AI/display-row selection.
+        else:
+            plan = scoped_plan(command, current, plan, confirmed=confirmed)
         if plan.intent == 'clarify':
             return self._begin_clarification(user_id, current, command, plan)
         if not plan.edits:
@@ -785,6 +818,10 @@ class TelegramService:
                 raise PipelineError('invalid_unit','Укажите единицу: т, кг, шт., м, пог. м или м².')
             elif edit.field == 'grade' and not edit.restore and (not value or '\n' in value or len(value) > 100):
                 raise PipelineError('invalid_grade','Укажите полную марку стали.')
+            if edit.field == 'gost_tu':
+                from source_attributes import has_standard_evidence
+                if clarification is None or clarification.field != 'gost_tu' or not has_standard_evidence(value,command):
+                    raise PipelineError('invalid_standard','ГОСТ можно уточнить только явным ответом на связанный вопрос.')
             if edit.field == 'grade':
                 from normalizer import _normalize_grade
                 value = _normalize_grade(value)
@@ -794,10 +831,22 @@ class TelegramService:
                 item.size_designation = item.size_designation.replace(item.grade, value, 1)
             setattr(item, edit.field, value)
         changed.pending_operation = None
+        changed.pending_detail = None
         changed.clarification_cancelled = False
         changed.pending_clarification=next_question(changed)
         changed.is_valid = not changed.missing_fields and changed.pending_clarification is None
         questions=[]
+        if clarification is not None:
+            changed.detail_answers.append(DetailAnswer(request_id=changed.request_id,item_id=clarification.item_id,
+                field=clarification.field,question=clarification.question,answer=command,value=values.get(clarification.field,plan.edits[0].value)))
+            changed.clarification_answers.append(command)
+            index = next(n for n,item in enumerate(changed.items) if item.item_id==clarification.item_id)
+            resolved = {f'items[{index}].{edit.field}' for edit in plan.edits}
+            changed.missing_fields = [f for f in changed.missing_fields if f not in resolved]
+            self._queue_remaining_field_questions(user_id,changed,clarification.question,[command])
+            from dialog_context import pending_detail
+            changed.pending_detail = pending_detail(changed)
+            changed.is_valid = not changed.missing_fields and not changed.pending_clarification
         messages = self._response(changed, questions)
         changed.dialog_state = 'active'
         self._save(user_id, changed)
@@ -806,7 +855,8 @@ class TelegramService:
     def _answer_clarification(self,user_id,current,text):
         phase('clarification')
         pending=current.pending_clarification
-        if pending.request_id != current.request_id:
+        if (pending.request_id != current.request_id
+                or (pending.fingerprint and pending.fingerprint != request_fingerprint(current))):
             raise PipelineError('stale_clarification','Уточнение относится к другой заявке. Отправьте новую заявку.')
         bulk = parse_bulk_quantity(text, current)
         if bulk == []:
@@ -835,13 +885,16 @@ class TelegramService:
         if item is None:
             raise PipelineError('stale_clarification','Позиция для уточнения не найдена.')
         values,question=answer_values(pending,text)
+        if (pending.field == 'unit' and values and 'quantity' in values and item.quantity is not None
+                and Decimal(values['quantity']) != item.quantity):
+            return [pending.question+' Количество уже указано; его изменение задайте отдельной командой.']
         if values is None:
             self._save(user_id, current)
             return [question]
         changed=current.model_copy(deep=True)
         if question:
             changed.pending_clarification=PendingClarification(request_id=changed.request_id,item_id=pending.item_id,
-                field='quantity',kind='number',question=question)
+                field='quantity',kind='number',question=question,fingerprint=request_fingerprint(changed))
             self._save(user_id,changed)
             return [question]
         target=next(i for i in changed.items if i.item_id==pending.item_id)

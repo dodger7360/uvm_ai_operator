@@ -212,16 +212,10 @@ def process_operator(service, user_id, text, *, commercial_decisions=None):
 
 def _process_operator(service, user_id, text, *, commercial_decisions=None):
     current = service.repository.load(user_id)
-    if _is_question(text):
-        if service.assistant is None:
-            return ['Рабочий AI-помощник не настроен. Текущая заявка сохранена.']
-        try:
-            answer = service.assistant.answer(text, user_id=user_id,
-                                              current=current.model_copy(deep=True) if current else None)
-            return safe_chunks(answer.text)
-        except Exception as error:
-            emit('assistant_failure', reason=safe_code(error))
-            return ['Рабочий AI-помощник недоступен. Текущая заявка сохранена.']
+    from dialog_context import route_dialog
+    handled = route_dialog(service, user_id, text, current)
+    if handled is not None:
+        return _questions(handled, current)
     from telegram_service import EDIT_WORDS, DISPLAY_WORDS
     from request_operations import unsupported_operation
     from clarifications import parse_bulk_quantity
