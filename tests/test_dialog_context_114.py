@@ -47,9 +47,11 @@ def test_mass_length_reply_resumes_bound_calculation(tmp_path):
     assert calculation.items[0].quantity == Decimal('405')
     assert calculation.source_text == MASS and repo.load(1) is None
     assert any('4,207788' in m for m in messages)
-    current = assistant.answer.call_args.kwargs['current']
+    current = repo.load_calculation(1)
     assert current.items[0].diameter_mm == 12 and current.items[0].length_mm == 11700
-    assert ai.parse_request.call_count == 1
+    assert current.result.total_t == Decimal('4.207788')
+    assistant.answer.assert_not_called()
+    ai.parse_request.assert_not_called()
 
 
 

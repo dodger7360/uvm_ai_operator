@@ -310,6 +310,9 @@ def route_dialog(service, user_id, text, current):
         if not current: return ['Активной заявки нет. Пришлите спецификацию.']
         if _is_question(text): return answer_dialog(service,user_id,text,current,True)
         return [specific_question(current)]
+    if not (new_request or work_command) and not (current and (routing.request_focus==current.request_id or request_reference(text))):
+        from calculation_context import followup
+        if (result:=followup(service,user_id,text,calculation)) is not None: return result
     if _is_question(text) or wording in {'привет','здравствуйте','добрый день','как дела','спасибо','благодарю'}:
         return answer_dialog(service,user_id,text,current,request_reference(text))
     if routing.choice and target:

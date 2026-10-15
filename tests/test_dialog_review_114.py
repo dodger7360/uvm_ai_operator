@@ -35,7 +35,9 @@ def test_calculation_preserves_working_request_and_history(tmp_path,source,resta
         messages = service.process(1,'к расчёту')
     assert any('4,207788' in m for m in messages)
     assert working_snapshot(repo,1) == before
-    calculation = assistant.answer.call_args.kwargs['current']
+    calculation = repo.load_calculation(1)
+    assert calculation.result.total_t == Decimal('4.207788')
+    assistant.answer.assert_not_called()
     assert calculation.items[0].quantity == Decimal('405')
     assert calculation.items[0].diameter_mm == 12
     assert calculation.items[0].length_mm == 11700

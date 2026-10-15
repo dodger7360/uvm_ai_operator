@@ -80,7 +80,8 @@ def _without_quantities(source):
 
 
 def source_grade_matches(source):
-    return list(GRADE_RE.finditer(_without_quantities(source)))
+    masked = re.sub(r'э[\\/]с(?=\s*\d)', lambda m: '\0'*len(m[0]), _without_quantities(source), flags=re.I)
+    return list(GRADE_RE.finditer(masked))
 
 
 _STANDARD_RE = re.compile(

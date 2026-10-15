@@ -101,11 +101,16 @@ def _local_item(result):
         return None
     # Unknown execution/comments must remain visible in the original, not be
     # silently represented as checked attributes by the legacy RequestItem.
-    if spec.unparsed_features:
+    def uncertain(value):
+        if isinstance(value,dict):
+            return value.get('state') in {'ambiguous','conflict'} or any(uncertain(v) for v in value.values())
+        if isinstance(value,list): return any(uncertain(v) for v in value)
+        return False
+    if spec.unparsed_features or uncertain(spec.model_dump()):
         return None
     group = spec.category.value
     from formatter import DISPLAY_PRODUCTS
-    item = RequestItem(product=DISPLAY_PRODUCTS[group], product_group=group,
+    item = RequestItem(product=(spec.product_type.value if group=='fitting' else 'Труба э/с' if group=='round_pipe' and spec.execution.manufacturing_method.value=='electric_welded' else DISPLAY_PRODUCTS[group]), product_group=group,
                        source_text=spec.original_description)
     if spec.profile.designation.is_resolved:
         item.size_designation = spec.profile.designation.normalized_text or spec.profile.designation.value
@@ -121,7 +126,58 @@ def _local_item(result):
             # Legacy RequestItem geometry is float; the exact Decimal and all
             # evidence remain separately in recovery_specs (NomenclatureSpec).
             setattr(item, mapping[name], float(attr.value.amount))
+    if spec.execution.coating.is_resolved:
+        item.processing=spec.execution.coating.raw_value
+    if group=='round_pipe' and spec.execution.manufacturing_method.value=='seamless':
+        item.product='Труба бесшовная'
+    elif group!='round_pipe' and spec.execution.manufacturing_method.is_resolved:
+        item.processing=' '.join(filter(None,[item.processing,spec.execution.manufacturing_method.raw_value]))
+    from schemas import SourceCondition
+    for name in ('wall_selection','substitution','related_pipe'):
+        attr=spec.extensions.get(name)
+        if attr and attr.is_resolved:
+            item.source_conditions.append(SourceCondition(kind=name,source_text=attr.raw_value or attr.value,
+                bounds_unspecified=name in {'wall_selection','substitution'}))
+            if name=='wall_selection': item.wall_thickness_requirement=attr.raw_value or attr.value
     return item
+
+
+def local_request_draft(text, *, calculation=False):
+    """Use the shared recognizer only when every row has a faithful projection."""
+    rows=source_product_rows(text)
+    if not rows: return None
+    from quantity import length_mass_columns
+    if not calculation and not any(length_mass_columns(row, 'angle') or length_mass_columns(row,'channel')
+                                  or re.search(r'э[\\/]с|электросвар|\b(?:отвод|фланец)\b',row,re.I) for row in rows):
+        return None
+    items=[]
+    for position,row in enumerate(rows,1):
+        result=RecognitionService().recognize_record(RecognitionRecord(record_id=str(position),
+            source=SourceRef(source_id='local-input',source_type='telegram'),original_description=row))
+        item=_local_item(result)
+        if item is None: return None
+        items.append(item)
+    bind_pipe_relations(items)
+    return PurchaseRequest(items=items)
+
+
+def bind_pipe_relations(items):
+    """Request-scoped provenance links, never a claim of fitting compatibility."""
+    from schemas import SourceCondition
+    for index,item in enumerate(items,1):
+        if item.product_group!='fitting' or item.diameter_mm is None: continue
+        position=getattr(item,'source_position',None) or index
+        targets=[getattr(prior,'source_position',None) or n for n,prior in enumerate(items,1)
+                 if (getattr(prior,'source_position',None) or n)<position
+                 and prior.product_group=='round_pipe' and prior.diameter_mm==item.diameter_mm]
+        links=[c for c in item.source_conditions if c.kind=='related_pipe']
+        if links:
+            for link in links: link.related_source_position=targets[0] if len(targets)==1 else None
+        elif len(targets)==1:
+            item.source_conditions.append(SourceCondition(kind='related_pipe',origin='context',
+                source_text=item.source_text or '',related_source_position=targets[0]))
+        if hasattr(item,'original'):
+            item.original.source_conditions=[c.model_copy(deep=True) for c in item.source_conditions]
 
 
 def _recover(service, user_id, text):
@@ -173,6 +229,7 @@ def _recover(service, user_id, text):
             except Exception as error:
                 emit('local_recovery_row', reason=safe_code(error))
                 recovered.unprocessed_source.append(row)
+        bind_pipe_relations(recovered.items)
         recovered.fallback_status = 'partial' if recovered.items else 'original'
     except Exception as error:
         emit('local_recovery', reason=safe_code(error))

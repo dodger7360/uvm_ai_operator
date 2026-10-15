@@ -185,6 +185,8 @@ def consolidation_key(item, original=None):
             value = _canonical_number(value)
             if Decimal(value) <= 0:
                 return None
+        elif field == 'source_conditions':
+            value = tuple(c.model_dump_json() for c in value)
         elif isinstance(value, str):
             value = re.sub(r'\s+', ' ', value.strip()).casefold()
         values.append((field, value))
@@ -223,6 +225,8 @@ def commercial_shape_key(item):
             value = _canonical_number(value)
             if Decimal(value) <= 0:
                 return None
+        elif field == 'source_conditions':
+            value = tuple(c.model_dump_json() for c in value)
         elif isinstance(value, str):
             value = re.sub(r'\s+', ' ', value.strip()).casefold()
         values.append((field, value))

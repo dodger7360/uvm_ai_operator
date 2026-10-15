@@ -23,7 +23,7 @@ def _missing(
 
 
 _WORD_RE = re.compile(r"[^\W_]+", re.UNICODE)
-_NUMBER_RE = re.compile(r"(?<![\w.])(?:[Øø⌀]\s*)?(\d+(?:[.,]\d+)?)(?![\w.])")
+_NUMBER_RE = re.compile(r"(?<![\w.])(?:[фФØø⌀]\s*)?(\d+(?:[.,]\d+)?)(?![\w.])")
 
 
 _DIMENSION_FIELDS = {
@@ -200,7 +200,9 @@ def _validate_new_characteristics(
             if not _literal_requirement(value, source) or not _positive_phrase(pattern, source):
                 reject(field, label)
 
-    if item.wall_thickness_requirement is not None and not _confirmed_minimum_wall(item):
+    selection=any(c.kind=='wall_selection' and c.source_text==item.wall_thickness_requirement
+                  and _literal_requirement(c.source_text,source) for c in item.source_conditions)
+    if item.wall_thickness_requirement is not None and not (_confirmed_minimum_wall(item) or selection):
         reject("wall_thickness_requirement", "требование к толщине стенки")
 
     if item.length_type is not None:
@@ -228,6 +230,9 @@ def _validate_new_characteristics(
                 and _positive_phrase(re.escape(match[0]), source)
                 and Decimal(str(item.length_mm)) == expected
             )
+        from quantity import length_mass_columns
+        columns=length_mass_columns(source,item.product_group)
+        if columns and Decimal(str(item.length_mm))==columns['length_mm']: confirmed=True
         if not confirmed:
             reject("length_mm", "длину изделия и её единицу измерения")
     elif (

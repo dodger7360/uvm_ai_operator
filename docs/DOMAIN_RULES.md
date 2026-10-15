@@ -297,3 +297,11 @@ unavailable. Перевод кг → т остаётся прежним и не 
   has snapshot history but no supported undo command. Return an explicit
   unsupported response; do not confuse this with cancellation of a pending
   proposal or restoration of an explicitly named original field.
+
+
+## Дополнение №114.1.4
+
+Точное количество, экспорт длина/кг/масса, условия труб/фитингов и независимый
+расчёт А240 Ø12 описаны в [REAL_TELEGRAM_114_1_4.md](REAL_TELEGRAM_114_1_4.md).
+Коэффициент 0,888 кг/м имеет ссылку на первичный текст стандарта; его применимость
+к конкретной поставке не подразумевается. Новых SQL-таблиц и второго справочника нет.

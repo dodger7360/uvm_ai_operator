@@ -175,3 +175,62 @@ def refresh_mass_calculations(items):
     """Overwrite stale or AI-supplied derived data from current source facts."""
     for item in items:
         item.mass_calculation = calculate_theoretical_mass(item) if item.product_group == 'sheet' else None
+
+
+# Shared literal quantity grammar for prose and grouped spreadsheet numbers.
+_LITERAL_NUMBER = r'(?:[0-9]{1,3}(?:[ \u00a0\u202f][0-9]{3})+|[0-9]+)(?:[.,][0-9]+)?'
+_LITERAL_UNITS = '|'.join(re.escape(u).replace(r'\ ', r'\s+') for u in sorted(set(UNIT_ALIASES)|{'шт.'},key=len,reverse=True))
+LITERAL_QUANTITY_RE = re.compile(r'(?<![\w.,xхХX×*])('+_LITERAL_NUMBER+r')\s*('+_LITERAL_UNITS+r'|шт\.)(?!\w)',re.I)
+
+
+def literal_decimal(value):
+    return Decimal(re.sub(r'[ \u00a0\u202f]', '', value).replace(',', '.'))
+
+
+def length_mass_columns(source, group):
+    """Confirmed angle/channel export: profile + grade/docs + length, kg, amount.
+
+    A trailing amount AFTER kg is required. Ordinary `6000 kg` never matches.
+    This is a source-format convention, not a guess at a physical dimension.
+    """
+    if group not in {'angle','channel'}: return None
+    from source_attributes import source_standards, source_grade_matches
+    if len(source_standards(source)) < 2 or len(source_grade_matches(source)) != 1: return None
+    profile = (r'\bуголок\s+\d+(?:[.,]\d+)?\s*[хx×*]\s*\d+(?:[.,]\d+)?\s*[хx×*]\s*\d+(?:[.,]\d+)?'
+               if group=='angle' else r'\bшвеллер\s+\d+(?:[.,]\d+)?\s*[УПЭЛС](?!\w)')
+    if not re.search(profile,source,re.I): return None
+    match = re.search(r'(?<![\w.,-])(?P<length>'+_LITERAL_NUMBER+r')\s+(?P<unit>кг)\s+(?P<amount>'+_LITERAL_NUMBER+r')\s*$',source,re.I)
+    if not match: return None
+    length,amount=literal_decimal(match['length']),literal_decimal(match['amount'])
+    if length<=0 or length!=length.to_integral_value() or amount<=0: return None
+    return {'length_mm':length,'quantity':amount,'unit':'кг','span':match.span()}
+
+
+
+def calculate_rebar_mass(item):
+    """Exact arithmetic on a narrowly reviewed coefficient; never a batch weight."""
+    from schemas import MassCalculation
+    from metal_reference.mass_policy import REBAR_A240_12_KG_M, REBAR_A240_12_BASIS
+    result=MassCalculation(status='unavailable',input_quantity=item.quantity,input_unit=item.unit)
+    if item.product_group!='rebar' or item.grade!='А240' or item.diameter_mm!=12:
+        return result.model_copy(update={'reason':'unknown_coefficient'})
+    if item.gost_tu and item.gost_tu!='ГОСТ 5781-82':
+        return result.model_copy(update={'reason':'unconfirmed_standard_coefficient'})
+    if item.processing or item.form:
+        return result.model_copy(update={'reason':'unsupported_execution'})
+    if item.unit not in {'шт','м'} or item.quantity is None or not item.quantity.is_finite() or item.quantity<=0:
+        return result.model_copy(update={'reason':'missing_quantity'})
+    if item.unit=='шт' and (item.quantity!=item.quantity.to_integral_value() or not item.length_mm):
+        return result.model_copy(update={'reason':'missing_length_or_integer_count'})
+    length=Decimal(str(item.length_mm)) if item.unit=='шт' else Decimal('1000')
+    if not length.is_finite() or length<=0:
+        return result.model_copy(update={'reason':'invalid_length'})
+    with localcontext() as context:
+        context.prec=len(item.quantity.as_tuple().digits)+len(length.as_tuple().digits)+20
+        per_piece_kg=length*REBAR_A240_12_KG_M/Decimal('1000')
+        total_kg=item.quantity*per_piece_kg
+        total_t=total_kg/Decimal('1000')
+    return result.model_copy(update={'status':'estimate','reason':None,'method':'nominal_rebar_length_v1',
+        'basis':REBAR_A240_12_BASIS,'assumption_id':'reference_applicability_not_confirmed',
+        'per_metre_kg':REBAR_A240_12_KG_M,'per_piece_kg':per_piece_kg,'total_kg':total_kg,'total_t':total_t,
+        'dimensions_mm':{'diameter_mm':Decimal('12'),'length_mm':length}})

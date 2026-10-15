@@ -17,7 +17,9 @@ def format_number(value: Optional[float]) -> Optional[str]:
 
 def _fallback_size(item: RequestItem) -> Optional[str]:
     group = item.product_group
-    if group in {"round_pipe", "rebar", "round_bar"} and item.diameter_mm is not None:
+    if group in {"round_pipe", "rebar", "round_bar", "fitting"} and item.diameter_mm is not None:
+        if group=="round_pipe" and item.wall_thickness_mm is not None:
+            return "Ø"+format_number(item.diameter_mm)+"×"+format_number(item.wall_thickness_mm)
         return f"Ø{format_number(item.diameter_mm)}"
     if group == "profile_pipe" and None not in (item.width_mm, item.height_mm, item.wall_thickness_mm):
         return "×".join(format_number(value) for value in (item.width_mm, item.height_mm, item.wall_thickness_mm))
@@ -34,7 +36,7 @@ def format_dimensions(item: RequestItem) -> Optional[str]:
     size = item.size_designation or _fallback_size(item)
     if not size:
         return None
-    if item.product_group in {"round_pipe", "rebar", "round_bar"} and not size.startswith("Ø"):
+    if item.product_group in {"round_pipe", "rebar", "round_bar", "fitting"} and not size.startswith("Ø"):
         return f"Ø{size}"
     return size
 
@@ -152,11 +154,15 @@ def format_normalized_request(request):
         if commercial:
             line = line.replace('×', 'х')
             if item.unit == 'т' and item.quantity is not None:
-                decimals = places if places is not None else 3
-                with localcontext() as context:
-                    context.prec = max(28, len(item.quantity.as_tuple().digits) + max(0, item.quantity.adjusted()) + 5)
-                    displayed = item.quantity.quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
-                line = line.rsplit(' — ', 1)[0] + ' — ' + format(displayed, f'.{decimals}f').replace('.', ',') + ' т'
+                # Explicitly approved commercial operations keep their agreed style.
+                # Ordinary quantities are exact; no three-place rounding by default.
+                decimals = places if places is not None else 3 if getattr(request,'commercial_decisions',()) else None
+                if decimals is not None:
+                    displayed=item.quantity.quantize(Decimal(1).scaleb(-decimals),rounding=ROUND_HALF_UP)
+                    if displayed != item.quantity:
+                        rendered=format_number(item.quantity)
+                    else: rendered=format(displayed,f'.{decimals}f').replace('.',',')
+                    line=line.rsplit(' — ',1)[0]+' — '+rendered+' т'
             block = (item.product_group, item.grade == 'ст3')
             if previous_block is not None and block != previous_block:
                 lines.append('')
@@ -168,5 +174,8 @@ def format_normalized_request(request):
                 parts = line.split(' — ', 1)
                 parts[0] += ' ' + requirement
                 line = ' — '.join(parts)
+        for condition in item.source_conditions:
+            if condition.kind=='substitution' and condition.source_text not in line:
+                line += ' ('+condition.source_text+'; границы замены не уточнены)'
         lines.append(line)
     return '\n'.join(lines)

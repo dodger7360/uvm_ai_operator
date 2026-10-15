@@ -50,7 +50,7 @@ def test_release_boot_with_isolated_sqlite_preserves_schema(tmp_path, monkeypatc
     api.call.side_effect = call
     monkeypatch.setattr(bot, 'TelegramAPI', lambda _: api)
     assert bot.run_bot(tmp_path, 'offline-placeholder') == 0
-    assert replies == ['Уголок 50х50х5 ст3 ГОСТ 8509-93 — 2,000 т']
+    assert replies == ['Уголок 50х50х5 ст3 ГОСТ 8509-93 — 2 т']
     assert repository.load(1).source_text == source
     assert repository.get_offset() == 2
     assert access.admin_id() == 1
