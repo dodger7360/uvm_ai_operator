@@ -560,6 +560,9 @@ class TelegramService:
             raise SemanticExtractionError('city_mismatch','Город не подтверждается исходной заявкой. Повторите заявку.')
         source_positions = validate_source_coverage(draft, parse_text)
         for item in draft.items:
+            if self.reliable:
+                from telegram_operator import restore_local_source_attributes
+                restore_local_source_attributes(item)
             exact_source_attributes(item, defer_grade_question=True)
         phase('normalization')
         normalize_request(draft)
@@ -604,6 +607,9 @@ class TelegramService:
         active.missing_fields = [re.sub(r'items\[(\d+)\]',
             lambda m: f'items[{sorted_indices[before_sort[int(m[1])].item_id]}]', field)
             for field in active.missing_fields]
+        if self.reliable:
+            from telegram_operator import bind_pipe_relations
+            bind_pipe_relations(active.items)
         active.pending_clarification=next_question(active)
         return active
 

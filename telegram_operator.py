@@ -142,13 +142,38 @@ def _local_item(result):
     return item
 
 
+def _needs_local_projection(row):
+    from quantity import length_mass_columns
+    return bool(length_mass_columns(row, 'angle') or length_mass_columns(row, 'channel')
+                or re.search(r'э[\\/]с|электросвар|\b(?:отвод|фланец)\b', row, re.I))
+
+
+def restore_local_source_attributes(item):
+    """Use the same faithful projection on AI and recovery paths, per source row.
+
+    Unknown/conflicting execution must remain visible in partial recovery, rather
+    than making an incomplete AI extraction appear fully checked.
+    """
+    if not _needs_local_projection(item.source_text or ''):
+        return
+    draft = local_request_draft(item.source_text)
+    if draft is None or len(draft.items) != 1:
+        from diagnostics import SemanticExtractionError
+        raise SemanticExtractionError('source_projection_incomplete',
+                                      'Не все характеристики строки подтверждены; исходная строка сохранена.')
+    literal = draft.items[0]
+    for field in ('product', 'product_group', 'size_designation', 'diameter_mm',
+                  'thickness_mm', 'width_mm', 'height_mm', 'length_mm', 'side_a_mm',
+                  'side_b_mm', 'wall_thickness_mm', 'processing',
+                  'wall_thickness_requirement', 'source_conditions'):
+        setattr(item, field, getattr(literal, field))
+
+
 def local_request_draft(text, *, calculation=False):
     """Use the shared recognizer only when every row has a faithful projection."""
     rows=source_product_rows(text)
     if not rows: return None
-    from quantity import length_mass_columns
-    if not calculation and not any(length_mass_columns(row, 'angle') or length_mass_columns(row,'channel')
-                                  or re.search(r'э[\\/]с|электросвар|\b(?:отвод|фланец)\b',row,re.I) for row in rows):
+    if not calculation and not any(_needs_local_projection(row) for row in rows):
         return None
     items=[]
     for position,row in enumerate(rows,1):

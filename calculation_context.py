@@ -159,7 +159,7 @@ def followup(service,user_id,text,calculation):
     """Contextual calculation remarks never become procurement edits."""
     if calculation is None or calculation.suspended: return None
     search=bool(re.search(r'интернет|поищи|найди',text,re.I) and re.search(
-        r'коэффициент|\b(?:масс|вес)\w*|^\s*возьми\s+(?:инф\w*|данные)',text,re.I))
+        r'коэффициент|\b(?:масс|вес)\w*|нормативн\w*\s+источник(?:\s+(?:в\s+интернете|для\s+(?:этого\s+)?расч[её]та))?\s*[.?!]*$|источник\w*\s+(?:коэффициент|расч[её]т)|^\s*возьми\s+(?:инф\w*|данные)',text,re.I))
     remark=bool(re.search(r'ты\s+у\s+меня\s+спрашиваешь|(?:так\s+)?дай\s+вес|почему.*длин|зачем.*длин',text,re.I))
     if not (search or remark): return None
     explanation=('Для количества в штуках нужна длина одного прутка; её нельзя определить по диаметру '
