@@ -141,8 +141,12 @@ def _handle_update(update, service, api, access=None):
     if not text or not text.strip():
         api.call('sendMessage', chat_id=chat_id, text='Пришлите заявку текстом. Вложения пока не поддерживаются.')
         return
-    if text.split()[0].split('@')[0] in {'/start', '/help'}:
-        messages = ['Отправьте заявку на металлопрокат обычным сообщением. После ответа можно написать: «Везде С255 замени на Ст3» или «В пятой позиции измени количество на 2,5 т».']
+    command = text.split()[0].split('@')[0]
+    if command == '/version':
+        version = os.getenv('APP_VERSION', '1.01').strip() or '1.01'
+        messages = [f'UVM_Steel — версия {version}']
+    elif command in {'/start', '/help'}:
+        messages = ['Отправьте заявку на металлопрокат обычным сообщением. После ответа можно написать: «Везде С255 замени на Ст3» или «В пятой позиции измени количество на 2,5 т». Версия бота: /version.']
     else:
         try:
             with budget_actor(user_id), TypingIndicator(api,chat_id):
