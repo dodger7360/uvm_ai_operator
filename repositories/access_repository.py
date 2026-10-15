@@ -215,3 +215,16 @@ class AuthorizedRequestRepository:
         if not self.access.allowed(user_id):
             raise PermissionError('Access is blocked.')
         self.requests.save(user_id, request)
+
+
+    def load_dialog(self, user_id, request_id=None):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved':
+            raise PermissionError('Access is blocked.')
+        return self.requests.load_dialog(user_id, request_id, epoch=access['context_floor'])
+
+    def save_dialog(self, user_id, question, answer, request_id=None):
+        access = self.access.get(user_id)
+        if not access or access['status'] != 'approved':
+            raise PermissionError('Access is blocked.')
+        self.requests.save_dialog(user_id, question, answer, request_id, epoch=access['context_floor'])

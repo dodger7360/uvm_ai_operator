@@ -36,3 +36,34 @@ class TelegramRepository:
     def set_offset(self, offset):
         with self.database.connection() as c:
             c.execute("INSERT INTO telegram_state VALUES('offset',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(offset),))
+
+
+    def save_dialog(self, user_id, question, answer, request_id=None, *, epoch=0):
+        """Append-only free dialog in the existing state table, not request history."""
+        import json
+        prefix = f'dialog:{int(user_id)}:{int(epoch)}:'
+        with self.database.connection() as c:
+            c.execute('BEGIN IMMEDIATE')
+            row = c.execute('SELECT value FROM telegram_state WHERE key=?',(prefix+'sequence',)).fetchone()
+            number = int(row[0])+1 if row else 1
+            value = json.dumps({'request_id':request_id,'question':question,'answer':answer},ensure_ascii=False)
+            c.execute('INSERT INTO telegram_state(key,value) VALUES(?,?)',(prefix+f'{number:012d}',value))
+            c.execute('INSERT INTO telegram_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                      (prefix+'sequence',str(number)))
+
+    def load_dialog(self, user_id, request_id=None, *, epoch=0):
+        """Last ten relevant exchanges (20 messages); archived requests are excluded."""
+        import json
+        prefix = f'dialog:{int(user_id)}:{int(epoch)}:'
+        # Filter in SQL before limiting, without loading the entire history.
+        with self.database.connection() as c:
+            rows = c.execute("SELECT value FROM telegram_state WHERE key LIKE ? AND key<>? "
+                             "AND (json_extract(value,'$.request_id') IS NULL OR json_extract(value,'$.request_id')=?) "
+                             "ORDER BY key DESC LIMIT 10", (prefix+'%',prefix+'sequence',request_id)).fetchall()
+        messages = []
+        for row in reversed(rows):
+            entry = json.loads(row[0])
+            if len(entry['question'])+len(entry['answer']) > 8000: continue
+            messages.extend([{'role':'user','content':entry['question']},
+                             {'role':'assistant','content':entry['answer']}])
+        return messages

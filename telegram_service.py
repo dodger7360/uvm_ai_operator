@@ -14,6 +14,7 @@ from request_operations import (Edit, RequestOperation, PendingOperation, reques
 from pydantic import BaseModel, Field
 from schemas import PurchaseRequest, RequestItem
 from nomenclature import NomenclatureSpec
+from dialog_context import DetailQuestion, DetailAnswer
 from normalizer import normalize_request, UNIT_ALIASES
 from validator import validate_request, confirm_shared_attributes, grouped_questions_for_missing_fields
 from formatter import format_normalized_request, sort_items, request_consolidation
@@ -58,6 +59,14 @@ class ActiveRequest(PurchaseRequest):
     fallback_status: Optional[Literal['partial', 'original']] = None
     unprocessed_source: list[str] = Field(default_factory=list)
     recovery_specs: list[NomenclatureSpec] = Field(default_factory=list)
+    pending_detail: Optional[DetailQuestion] = None
+    detail_answers: list[DetailAnswer] = Field(default_factory=list)
+    append_commands: list[str] = Field(default_factory=list)
+
+    @property
+    def user_status(self):
+        return 'В работе' if (not self.is_valid or self.missing_fields or self.pending_detail or self.pending_clarification
+                             or self.pending_operation or self.fallback_status) else 'Готова'
 
 
 def alternative_grade_value(source):
@@ -513,6 +522,9 @@ class TelegramService:
                 request_fingerprint=request_fingerprint(active),
                 operation=RequestOperation(kind='edit_fields'), command=text,
                 question='\n'.join(active.clarification_questions), expected_answer='details')
+        if self.reliable:
+            from dialog_context import pending_detail
+            active.pending_detail = pending_detail(active)
         messages=self._response(active,active.clarification_questions)
         self._save(user_id,active)
         return messages
@@ -623,6 +635,7 @@ class TelegramService:
         changed = current.model_copy(deep=True)
         changed.pending_operation = None
         changed.pending_clarification = None
+        changed.pending_detail = None
         changed.clarification_cancelled = True
         changed.dialog_state = 'active'
         self._save(user_id, changed)
@@ -794,6 +807,7 @@ class TelegramService:
                 item.size_designation = item.size_designation.replace(item.grade, value, 1)
             setattr(item, edit.field, value)
         changed.pending_operation = None
+        changed.pending_detail = None
         changed.clarification_cancelled = False
         changed.pending_clarification=next_question(changed)
         changed.is_valid = not changed.missing_fields and changed.pending_clarification is None

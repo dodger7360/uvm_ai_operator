@@ -159,7 +159,7 @@ def test_work_question_preserves_pending_and_history(setup):
     assert repo.load(1).model_dump_json() == before
     with repo.database.connection() as c:
         assert c.execute('SELECT COUNT(*) FROM telegram_history').fetchone()[0] == count
-    assert assistant.answer.call_args.kwargs['current'].source_text == SOURCE
+    assert assistant.answer.call_args.kwargs['current'] is None  # General comparison is independent of the request.
 
 
 def test_question_while_waiting_quantity_then_answer(setup):
