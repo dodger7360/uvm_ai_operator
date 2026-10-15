@@ -218,7 +218,7 @@ def test_model_payload_separates_free_history_and_request(tmp_path):
     assert payload['current_technical_items'] is None
     assert payload['dialog_history'] == [{'role':'user','content':'Покер'}]
     assert client.responses.create.call_args.kwargs['model'] == 'gpt-6-luna'
-    assert client.responses.create.call_args.kwargs['reasoning'] == {'effort':'low'}
+    assert client.responses.create.call_args.kwargs['reasoning'] == {'effort':'high'}
 
 
 

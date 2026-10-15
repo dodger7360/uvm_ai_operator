@@ -219,6 +219,10 @@ def run_bot(root, token):
     if maintenance_requested(root):
         LOG.info('maintenance_stop no_polling=true')
         return 0
+    if os.getenv('OPENAI_MODEL', 'gpt-6-luna') == 'gpt-6-luna':
+        # Pin this deployment's primary/retry effort without rewriting .env.
+        os.environ['OPENAI_REASONING_EFFORT'] = 'high'
+        os.environ['OPENAI_FALLBACK_REASONING_EFFORT'] = 'high'
     api = TelegramAPI(token)
     try:
         me = api.call('getMe')

@@ -222,7 +222,7 @@ def test_assistant_plain_api_parameters_and_transport():
     client.with_options.assert_called_once_with(timeout=60, max_retries=0)
     args = client.responses.create.call_args.kwargs
     assert args['model'] == 'gpt-6-luna'
-    assert args['reasoning'] == {'effort': 'low'}
+    assert args['reasoning'] == {'effort': 'high'}
     assert args['max_output_tokens'] == 2500 and args['store'] is False
     assert 'tools' not in args and 'temperature' not in args
 
