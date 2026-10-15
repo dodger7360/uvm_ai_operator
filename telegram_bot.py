@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from ai import AIService
 from database import Database
 from repositories.telegram_repository import TelegramRepository
+from repositories.normalization_policy_repository import NormalizationPolicyRepository
 from telegram_service import TelegramService
 from telegram_operator import ClarificationMessage, safe_chunks
 from work_assistant import WorkAssistantService
@@ -236,9 +237,10 @@ def run_bot(root, token):
         access = TelegramAccess(access_repository)
         if access_repository.admin_id() is None:
             LOG.warning('administrator_not_bound_access_closed')
+        policy = NormalizationPolicyRepository(repository.database, access_repository)
         ai = AIService()
         service = TelegramService(ai, AuthorizedRequestRepository(repository, access_repository),
-                                  commercial_view=True, reliable=True,
+                                  commercial_view=True, reliable=True, policy_repository=policy,
                                   assistant=WorkAssistantService(ai.assistant_transport))
         offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')

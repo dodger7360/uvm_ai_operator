@@ -18,6 +18,9 @@ class MassCalculation(BaseModel):
     source_unit: Optional[str] = None
     per_metre_kg: Optional[Decimal] = None
     per_piece_kg: Optional[Decimal] = None
+    reference_kg_per_unit: Optional[Decimal] = None
+    reference_unit: Optional[str] = None
+    reliability: Optional[Literal["verified_reference", "supplier_actual"]] = None
     total_kg: Optional[Decimal] = None
     total_t: Optional[Decimal] = None
 

@@ -139,7 +139,7 @@ class TelegramTests(unittest.TestCase):
         original = self.repo.load(1)
         target = original.items[0]
         self.ai.interpret_message.return_value = MessagePlan(intent='edit', edits=[Edit(item_id=target.item_id, field='grade', value='09Г2С')])
-        output = self.service.process(1, 'В первой позиции замени С345-6 на 09Г2С')[0]
+        output = self.service.process(1, 'В первой исходной позиции замени С345-6 на 09Г2С')[0]
         self.assertEqual(len(output.splitlines()), 2)
         self.assertIn('09Г2С', output)
         self.assertIn('С255-4', output)

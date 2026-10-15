@@ -58,6 +58,9 @@ def test_release_boot_with_isolated_sqlite_preserves_schema(tmp_path, monkeypatc
     client.responses.create.assert_not_called()
     ai.parse_request.assert_called_once_with(source)
     with database.connection() as connection:
-        assert [tuple(row) for row in connection.execute(
-            'SELECT type,name,sql FROM sqlite_master ORDER BY type,name')] == schema
+        current_schema = [tuple(row) for row in connection.execute(
+            'SELECT type,name,sql FROM sqlite_master ORDER BY type,name')]
+        additions = {'normalization_rule', 'normalization_rule_event', 'sqlite_autoindex_normalization_rule_1'}
+        assert [row for row in current_schema if row[1] not in additions] == schema
+        assert {row[1] for row in current_schema} - {row[1] for row in schema} == additions
         assert connection.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'

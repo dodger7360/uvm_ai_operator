@@ -193,6 +193,7 @@ def wire_service(monkeypatch, api):
     monkeypatch.setattr(bot,'TelegramAPI',lambda token:api)
     monkeypatch.setattr(bot,'Database',Mock())
     monkeypatch.setattr(bot,'TelegramRepository',lambda db:repository)
+    monkeypatch.setattr(bot,'NormalizationPolicyRepository',Mock())
     monkeypatch.setattr(bot,'AccessRepository',lambda db:access_repository)
     monkeypatch.setattr(bot,'AIService',Mock())
     monkeypatch.setattr(bot,'TelegramAccess',Mock())

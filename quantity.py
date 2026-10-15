@@ -177,6 +177,40 @@ def refresh_mass_calculations(items):
         item.mass_calculation = calculate_theoretical_mass(item) if item.product_group == 'sheet' else None
 
 
+def calculate_reference_mass(item, *, kg_per_unit, reference_unit, basis,
+                             expected_identity, supplier_actual=False):
+    """Explicit trusted reference input; never inferred from an LLM or source prose.
+
+    The full product identity scopes the supplied rate to one exact variant.
+    Supplier actual values are reported separately, never written into demand.
+    """
+    from product_identity import consolidation_key
+    from schemas import MassCalculation
+    result = MassCalculation(status='unavailable', input_quantity=item.quantity,
+                             input_unit=item.unit, source_unit=item.source_unit)
+    try:
+        identity = consolidation_key(item)
+        amount, unit = normalize_quantity(item.quantity, item.unit)
+        rate = Decimal(str(kg_per_unit))
+    except (ValueError, InvalidOperation):
+        return result.model_copy(update={'reason': 'missing_reference_inputs'})
+    if (identity is None or identity != expected_identity or not basis or not basis.strip()
+            or unit not in {'м', 'шт'} or reference_unit != unit
+            or not rate.is_finite() or rate <= 0
+            or (unit == 'шт' and amount != amount.to_integral_value())):
+        return result.model_copy(update={'reason': 'inapplicable_reference'})
+    with localcontext() as context:
+        context.prec = len(amount.as_tuple().digits) + len(rate.as_tuple().digits) + 2
+        total = amount * rate
+    sign, digits, exponent = total.as_tuple()
+    return result.model_copy(update={
+        'status': 'estimate', 'method': 'supplier_specification' if supplier_actual else 'reference_unit_mass',
+        'basis': basis, 'reference_kg_per_unit': rate, 'reference_unit': unit,
+        'total_kg': total, 'total_t': Decimal((sign, digits, exponent - 3)),
+        'reliability': 'supplier_actual' if supplier_actual else 'verified_reference',
+    })
+
+
 # Shared literal quantity grammar for prose and grouped spreadsheet numbers.
 _LITERAL_NUMBER = r'(?:[0-9]{1,3}(?:[ \u00a0\u202f][0-9]{3})+|[0-9]+)(?:[.,][0-9]+)?'
 _LITERAL_UNITS = '|'.join(re.escape(u).replace(r'\ ', r'\s+') for u in sorted(set(UNIT_ALIASES)|{'шт.'},key=len,reverse=True))
