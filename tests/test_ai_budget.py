@@ -179,3 +179,25 @@ def test_explicit_acceptance_extension_keeps_same_persistent_history(tmp_path):
     assert count(path)==(8,40)
     # Production still uses the default six/hour; no automatic quota renewal.
     with pytest.raises(BudgetLimit):reserve(BetaBudget(path))
+
+
+def test_100_row_timeout_fallback_keeps_every_source_and_exact_groups(tmp_path):
+    from consolidation import consolidate_items
+    from decimal import Decimal
+    source='\n'.join(f'Уголок {50+i%15}х{50+i%15}х5 Ст3 — '
+                     + ('1000 кг' if i%2 else '1 т') for i in range(100))
+    repo=TelegramRepository(Database(tmp_path/'requests.sqlite3'))
+    ai=Mock();ai.parse_request.side_effect=TimeoutError()
+    service=TelegramService(ai,repo,reliable=True,commercial_view=True)
+    messages=service.process(1,source)
+    current=repo.load(1)
+    assert current.fallback_status=='partial'  # Never call an API failure a verified extraction.
+    assert current.source_text==source
+    assert len(current.items)==100 and not current.unprocessed_source
+    assert not current.is_valid
+    groups=consolidate_items(current.items)
+    assert len(groups)==15
+    assert sorted(i for g in groups for i in g.source_indices)==list(range(1,101))
+    assert sum(g.item.quantity for g in groups)==Decimal(100)
+    assert messages
+    ai.parse_request.assert_called_once()
