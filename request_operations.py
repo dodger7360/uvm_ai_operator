@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 class Edit(BaseModel):
     item_id: str
-    field: Literal['grade', 'quantity', 'unit']
+    field: Literal['grade', 'quantity', 'unit', 'gost_tu']
     value: Optional[str] = None
     restore: bool = False
 

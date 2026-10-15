@@ -14,7 +14,7 @@ APPEND = re.compile(r'^\s*(?:добавь|дополни)(?:\s+(?:ещ[её]|к|
 class DetailQuestion(BaseModel):
     request_id: str
     item_id: str
-    field: Literal['length_mm', 'wall_thickness_mm', 'thickness_mm', 'width_mm', 'height_mm', 'diameter_mm', 'side_a_mm', 'side_b_mm']
+    field: Literal['length_mm', 'wall_thickness_mm', 'thickness_mm', 'width_mm', 'height_mm', 'diameter_mm', 'side_a_mm', 'side_b_mm', 'grade', 'gost_tu', 'quantity', 'unit']
     question: str
     fingerprint: str
     purpose: Literal['request', 'mass'] = 'request'
@@ -26,7 +26,8 @@ class DetailAnswer(BaseModel):
     field: str
     question: str
     answer: str
-    value_mm: Decimal
+    value_mm: Decimal | None = None
+    value: str | None = None
 
 
 class DialogClassification(BaseModel):
@@ -36,9 +37,8 @@ class DialogClassification(BaseModel):
 
 def mass_request(text):
     from source_fidelity import source_product_rows
-    from quantity import QUANTITY_RE
     return bool(re.search(r'сколько\s+весит|рассчитай\s+(?:вес|массу)', text, re.I)
-                and source_product_rows(text) and QUANTITY_RE.search(text))
+                and source_product_rows(text))
 
 
 def request_reference(text):
@@ -53,26 +53,90 @@ def request_reference(text):
 def pending_detail(current):
     if current is None or current.clarification_cancelled:
         return None
+    operation = current.pending_operation
+    if operation and (operation.request_id != current.request_id or operation.request_fingerprint != request_fingerprint(current)):
+        return None
     pending = current.pending_detail
     if pending:
         return pending if (pending.request_id == current.request_id and pending.fingerprint == request_fingerprint(current)) else None
-    # Compatible with requests saved before this release. No mass migration.
+    if current.pending_clarification:
+        return None  # Existing typed quantity/unit answers own their question.
+    operation = current.pending_operation
+    if operation and (operation.request_id != current.request_id
+                      or operation.request_fingerprint != request_fingerprint(current)):
+        return None
+    if operation and operation.operation.edits:
+        return None  # An existing confirmation must remain a confirmation.
+    question = operation.question if operation else '\n'.join(current.clarification_questions)
+    fields = question_fields(question)
     candidates = []
     for entry in current.missing_fields:
         m = re.fullmatch(r'items\[(\d+)\]\.([a-z_]+)', entry)
-        if m and m[2] in GEOMETRY and int(m[1]) < len(current.items):
-            candidates.append((current.items[int(m[1])], m[2]))
-    if not candidates and current.pending_operation and not current.pending_operation.operation.edits:
-        question = current.pending_operation.question
-        if len(current.items) == 1 and re.search(r'стенк',question,re.I):
-            candidates = [(current.items[0], 'wall_thickness_mm')]
-        elif len(current.items) == 1 and re.search(r'длин',question,re.I):
-            candidates = [(current.items[0], 'length_mm')]
-    if len(candidates) == 1:
-        item, field = candidates[0]
-        return DetailQuestion(request_id=current.request_id, item_id=item.item_id, field=field,
-            fingerprint=request_fingerprint(current), question=(current.pending_operation.question if current.pending_operation else f'Уточните {GEOMETRY[field]} исходной позиции {item.source_position or 1} (мм или м).'))
+        if (m and m[2] in set(GEOMETRY)|{'grade','gost_tu','quantity','unit'}
+                and int(m[1]) < len(current.items) and (not fields or m[2] in fields)):
+            candidates.append((current.items[int(m[1])],m[2]))
+    if not candidates and len(fields) == 1:
+        selected = re.search(r'исходн\w*\s+позиц\w*\s+(\d+)',question,re.I)
+        targets = ([item for n,item in enumerate(current.items,1) if (item.source_position or n)==int(selected[1])]
+                   if selected else current.items if len(current.items)==1 else [])
+        candidates = [(item,next(iter(fields))) for item in targets]
+    if len(candidates) != 1: return None
+    item,field = candidates[0]
+    return DetailQuestion(request_id=current.request_id,item_id=item.item_id,field=field,
+        fingerprint=request_fingerprint(current),question=question or f'Уточните параметр исходной позиции {item.source_position or 1}.')
+
+
+def question_fields(question):
+    fields = set()
+    for field,pattern in [('grade',r'марк\w*'),('gost_tu',r'гост|стандарт|\bту\b|\bсто\b'),
+                          ('quantity',r'количеств|сколько|тоннаж'),('unit',r'единиц'),
+                          ('length_mm',r'длин\w*'),('width_mm',r'ширин\w*'),('height_mm',r'высот\w*'),
+                          ('diameter_mm',r'диаметр\w*')]:
+        if re.search(pattern,question,re.I): fields.add(field)
+    if re.search(r'стенк',question,re.I): fields.add('wall_thickness_mm')
+    elif re.search(r'толщин',question,re.I): fields.add('thickness_mm')
+    return fields
+
+
+def reply_values(text,pending,current):
+    from normalizer import _normalize_grade
+    from source_attributes import GRADE_RE, source_standards, has_standard_evidence
+    from quantity import QUANTITY_RE
+    from clarifications import find_unit
+    value = text.strip()
+    if pending.field == 'grade':
+        item = next((i for i in current.items if i.item_id==pending.item_id),None)
+        if item is None: return None
+        replacement = re.fullmatch(r'(.+?)\s+вместо\s+(.+)',value,re.I)
+        alternative = re.fullmatch(r'допускается\s+(.+)',value,re.I)
+        if replacement:
+            if (not all(GRADE_RE.fullmatch(replacement[n]) for n in (1,2))
+                    or _normalize_grade(item.grade) != _normalize_grade(replacement[2])): return None
+            value = replacement[1]
+        elif alternative:
+            if not item.grade or not GRADE_RE.fullmatch(alternative[1]): return None
+            return {'grade':item.grade+' (или '+_normalize_grade(alternative[1])+')'}
+        if GRADE_RE.fullmatch(value): return {'grade':_normalize_grade(value)}
+    elif pending.field == 'gost_tu':
+        standards = source_standards(value)
+        if standards and has_standard_evidence(', '.join(standards),value):
+            # Do not hide commentary or an extra command inside a standard reply.
+            compact = lambda s: re.sub(r'[\s.,;]', '', s).casefold()
+            if compact(', '.join(standards)) == compact(value): return {'gost_tu':', '.join(standards)}
+    elif pending.field in {'quantity','unit'}:
+        if match := QUANTITY_RE.fullmatch(value):
+            amount = Decimal(match[1].replace(',','.'))
+            if amount > 0: return {'quantity':str(amount),'unit':find_unit(match[2])}
     return None
+
+
+def answer_bound_value(service,user_id,current,text,pending):
+    from telegram_service import MessagePlan
+    from request_operations import Edit
+    values = reply_values(text,pending,current)
+    if not values: return [pending.question]
+    plan = MessagePlan(intent='edit',edits=[Edit(item_id=pending.item_id,field=name,value=value) for name,value in values.items()])
+    return service._edit(user_id,current,plan,command=text,clarification=pending)
 
 
 def specific_question(current):
@@ -136,10 +200,6 @@ def answer_detail(service, user_id, current, text, pending, value):
     changed.is_valid = not changed.missing_fields and changed.pending_clarification is None
     service._save(user_id, changed)
     messages = service._response(changed, changed.clarification_questions)
-    if pending.purpose == 'mass':
-        messages += answer_dialog(service, user_id,
-            'Продолжи расчёт массы из исходного вопроса. Длина прутка подтверждена: '+text+
-            '. Сохрани исходное количество штук. Укажи использованный коэффициент, источник или допущение; не выдавай оценку за взвешенную массу.', changed, True)
     return messages
 
 
@@ -169,26 +229,23 @@ def route_dialog(service, user_id, text, current):
     from telegram_operator import _is_question, _new_request
     from source_fidelity import source_product_rows
     wording = text.strip().casefold().strip('.!?')
+    if current and current.pending_operation and current.pending_operation.user_id != user_id:
+        return ['Уточнение относится к другому пользователю. Повторите вопрос.']
     if mass_request(text):
-        try:
-            active = service._build_active(text,text,[])
-        except Exception:
-            from telegram_operator import _recover
-            return _recover(service,user_id,text)
-        candidates = [i for i in active.items if i.product_group == 'rebar' and i.unit == 'шт' and i.length_mm is None]
-        if len(candidates) == 1:
-            item = candidates[0]
-            active.pending_operation = None
-            active.pending_detail = DetailQuestion(request_id=active.request_id,item_id=item.item_id,field='length_mm',
-                question='Уточните длину одного прутка арматуры (м или мм).',fingerprint=request_fingerprint(active),purpose='mass')
-            active.missing_fields.append(f'items[{active.items.index(item)}].length_mm')
-            active.is_valid = False
-            service._save(user_id,active)
-            return service._response(active,[active.pending_detail.question])
-        service._save(user_id,active)
-        return answer_dialog(service,user_id,text,active,True)
+        from calculation_context import start
+        return start(service,user_id,text)
     if _is_question(text) or wording in {'привет','здравствуйте','добрый день','как дела','спасибо','благодарю'}:
         return answer_dialog(service,user_id,text,current,request_reference(text))
+    calculation = service.repository.load_calculation(user_id)
+    from telegram_service import EDIT_WORDS
+    work_command = bool(re.search(EDIT_WORDS+r'|\bисправь\b|\bдополни\b',text,re.I))
+    if _new_request(text) or work_command or wording in {'уточнение текущей','уточнение текущей заявки'}:
+        if calculation and not calculation.suspended:
+            calculation.suspended = True
+            service.repository.save_calculation(user_id,calculation)
+    elif calculation:
+        from calculation_context import resume
+        if (result := resume(service,user_id,text,calculation)) is not None: return result
     if current:
         if (match := APPEND.match(text)) and source_product_rows(text[match.end():]):
             return append_request(service,user_id,current,text,text[match.end():])
@@ -196,6 +253,8 @@ def route_dialog(service, user_id, text, current):
         if wording in {'уточнение','уточнение текущей','уточнение текущей заявки'}:
             return [specific_question(current)]
         if pending := pending_detail(current):
+            if pending.field not in GEOMETRY:
+                return answer_bound_value(service,user_id,current,text,pending)
             if (value := geometry_value(text,pending)) is not None:
                 return answer_detail(service,user_id,current,text,pending,value)
             if re.fullmatch(r'[\d.,\s]+|ну|это|так',wording): return [pending.question]

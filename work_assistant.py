@@ -90,14 +90,8 @@ class WorkAssistantService:
 
     @staticmethod
     def _history(history):
-        # Budget by complete messages; never silently truncate technical text.
-        messages, size = [], 0
-        for message in reversed((history or [])[-20:]):
-            if message.get('role') not in {'user','assistant'} or not isinstance(message.get('content'),str): continue
-            if size+len(message['content']) > 12000: break
-            size += len(message['content'])
-            messages.append({'role':message['role'],'content':message['content']})
-        return list(reversed(messages))
+        from dialog_history import bounded_history
+        return bounded_history(history or [])
 
     def answer(self, question, *, user_id, current=None, history=None):
         search = needs_search(question)

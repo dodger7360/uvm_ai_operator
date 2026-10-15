@@ -36,19 +36,21 @@ def test_mass_length_reply_resumes_bound_calculation(tmp_path):
     service, ai, repo, assistant = context(tmp_path)
     messages = service.process(1, MASS)
     assert any('длин' in m.casefold() for m in messages)
-    original = repo.load(1)
+    original = repo.load_calculation(1)
+    assert repo.load(1) is None
     assert original.items[0].quantity == Decimal('405')
     assistant.answer.return_value = AssistantAnswer('При 0,888 кг/м: 405 × 11,7 × 0,888 / 1000 = 4,207788 т.')
     messages = service.process(1, '11.7м')
-    active = repo.load(1)
-    assert active.request_id == original.request_id
-    assert active.items[0].length_mm == 11700
-    assert active.items[0].quantity == Decimal('405')
-    assert active.source_text == MASS
+    calculation = repo.load_calculation(1)
+    assert calculation.calculation_id == original.calculation_id
+    assert calculation.items[0].length_mm == 11700
+    assert calculation.items[0].quantity == Decimal('405')
+    assert calculation.source_text == MASS and repo.load(1) is None
     assert any('4,207788' in m for m in messages)
     current = assistant.answer.call_args.kwargs['current']
     assert current.items[0].diameter_mm == 12 and current.items[0].length_mm == 11700
     assert ai.parse_request.call_count == 1
+
 
 
 @pytest.mark.parametrize('reply', ['40 мм', 'Стенка 40 мм'])

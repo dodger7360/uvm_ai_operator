@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Literal
 import re
 from pydantic import BaseModel, Field
+from request_operations import request_fingerprint
 
 
 UNITS={'т':'т','тн':'т','тоннах':'т','тонны':'т','кг':'кг','шт':'шт','шт.':'шт','штуках':'шт','штуке':'шт','штуку':'шт','штук':'шт','штуки':'шт',
@@ -114,6 +115,7 @@ class ClarificationOption(BaseModel):
 class PendingClarification(BaseModel):
     request_id: str
     item_id: str
+    fingerprint: str | None = None
     field: Literal['quantity','unit']
     kind: Literal['number','unit','confirmation','choice']
     question: str
@@ -135,10 +137,10 @@ def next_question(request):
         source_position = getattr(item, 'source_position', None) or index
         if not item.unit:
             choices=[ClarificationOption(label=unit,values={'unit':unit}) for unit in ['т','кг','шт','м','пог. м','м²']]
-            return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='unit',kind='choice',
+            return PendingClarification(request_id=request.request_id,fingerprint=request_fingerprint(request),item_id=item.item_id,field='unit',kind='choice',
                 question=f'Укажите единицу исходной позиции {source_position}: 1 — т; 2 — кг; 3 — шт.; 4 — м; 5 — пог. м; 6 — м². Можно написать единицу словами.',options=choices)
         if item.quantity is None:
-            return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='quantity',kind='number',
+            return PendingClarification(request_id=request.request_id,fingerprint=request_fingerprint(request),item_id=item.item_id,field='quantity',kind='number',
                 question=f'Укажите количество исходной позиции {source_position} в {item.unit}.')
     return None
 
@@ -163,7 +165,7 @@ def question_state(question, request):
     item=request.items[index]
     number=re.search(r'(?<![\w.,])(\d+(?:[.,]\d+)?)\s*(шт\.?|тн|т|кг|м²|пог\.\s*м|м)(?!\w)',question,re.I)
     if re.search(r'верно|подтверд',question,re.I) and number:
-        return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='quantity',kind='confirmation',
+        return PendingClarification(request_id=request.request_id,fingerprint=request_fingerprint(request),item_id=item.item_id,field='quantity',kind='confirmation',
             question=question,candidate={'quantity':number[1].replace(',','.'),'unit':find_unit(number[2])})
     choices=[]
     for line in question.splitlines():
@@ -179,12 +181,12 @@ def question_state(question, request):
             if values:
                 choices.append(ClarificationOption(label=option[1],values=values))
     if len(choices)>=2:
-        return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='quantity' if 'quantity' in choices[0].values else 'unit',
+        return PendingClarification(request_id=request.request_id,fingerprint=request_fingerprint(request),item_id=item.item_id,field='quantity' if 'quantity' in choices[0].values else 'unit',
             kind='choice',question=question,options=choices)
     if re.search(r'количеств|сколько|тоннаж',question,re.I):
-        return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='quantity',kind='number',question=question)
+        return PendingClarification(request_id=request.request_id,fingerprint=request_fingerprint(request),item_id=item.item_id,field='quantity',kind='number',question=question)
     if re.search(r'единиц|в каких',question,re.I):
-        return PendingClarification(request_id=request.request_id,item_id=item.item_id,field='unit',kind='unit',question=question)
+        return PendingClarification(request_id=request.request_id,fingerprint=request_fingerprint(request),item_id=item.item_id,field='unit',kind='unit',question=question)
     return None
 
 
@@ -204,6 +206,11 @@ def answer_values(pending, text):
         return None,pending.question
     unit=find_unit(text)
     if pending.field=='unit':
+        from quantity import QUANTITY_RE
+        if match := QUANTITY_RE.fullmatch(text.strip()):
+            amount = Decimal(match[1].replace(',','.'))
+            if amount.is_finite() and amount > 0 and unit:
+                return {'quantity':str(amount),'unit':unit},None
         return ({'unit':unit},None) if unit else (None,pending.question)
     # A bare number or quantity with unit is valid; a cross-section is not a count.
     match=re.fullmatch(r'\s*(\d+(?:[.,]\d+)?)\s*(?:тн|т|кг|шт\.?|штук|штуки|м²|м2|пог\.\s*м|м)?\s*',text,re.I)

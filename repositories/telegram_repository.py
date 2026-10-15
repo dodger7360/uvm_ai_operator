@@ -55,15 +55,35 @@ class TelegramRepository:
         """Last ten relevant exchanges (20 messages); archived requests are excluded."""
         import json
         prefix = f'dialog:{int(user_id)}:{int(epoch)}:'
-        # Filter in SQL before limiting, without loading the entire history.
+        from dialog_history import select_turns, MAX_TURN_CHARACTERS
+        # Stream a bounded page; rejected long turns must not hide earlier ones.
         with self.database.connection() as c:
-            rows = c.execute("SELECT value FROM telegram_state WHERE key LIKE ? AND key<>? "
-                             "AND (json_extract(value,'$.request_id') IS NULL OR json_extract(value,'$.request_id')=?) "
-                             "ORDER BY key DESC LIMIT 10", (prefix+'%',prefix+'sequence',request_id)).fetchall()
-        messages = []
-        for row in reversed(rows):
-            entry = json.loads(row[0])
-            if len(entry['question'])+len(entry['answer']) > 8000: continue
-            messages.extend([{'role':'user','content':entry['question']},
-                             {'role':'assistant','content':entry['answer']}])
-        return messages
+            cursor = c.execute("SELECT value FROM telegram_state WHERE key LIKE ? AND key<>? "
+                "AND json_valid(value) AND json_type(value)='object' "
+                "AND (json_extract(value,'$.request_id') IS NULL OR json_extract(value,'$.request_id')=?) "
+                "AND length(json_extract(value,'$.question'))+length(json_extract(value,'$.answer'))<=? "
+                "ORDER BY key DESC", (prefix+'%',prefix+'sequence',request_id,MAX_TURN_CHARACTERS))
+            def turns():
+                while rows := cursor.fetchmany(16):
+                    for row in rows:
+                        entry = json.loads(row[0])
+                        if not isinstance(entry.get('question'), str) or not isinstance(entry.get('answer'),str): continue
+                        yield [{'role':'user','content':entry['question']},
+                               {'role':'assistant','content':entry['answer']}]
+            return select_turns(turns())
+
+    def save_calculation(self, user_id, calculation, *, epoch=0):
+        prefix = f'calculation:{int(user_id)}:{int(epoch)}:'
+        with self.database.connection() as c:
+            c.execute('INSERT INTO telegram_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (prefix+calculation.calculation_id,calculation.model_dump_json()))
+            c.execute('INSERT INTO telegram_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (prefix+'current',calculation.calculation_id))
+
+    def load_calculation(self, user_id, *, epoch=0):
+        from calculation_context import CalculationState
+        prefix = f'calculation:{int(user_id)}:{int(epoch)}:'
+        with self.database.connection() as c:
+            row = c.execute('SELECT value FROM telegram_state WHERE key=(SELECT ?||value FROM telegram_state WHERE key=?)',
+                (prefix,prefix+'current')).fetchone()
+        return CalculationState.model_validate_json(row[0]) if row else None
