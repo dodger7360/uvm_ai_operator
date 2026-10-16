@@ -121,6 +121,8 @@ class PendingClarification(BaseModel):
     question: str
     candidate: dict[str,str] = Field(default_factory=dict)
     options: list[ClarificationOption] = Field(default_factory=list)
+    # Snapshot scope for a shared unit-only answer; old JSON remains single-item.
+    unit_item_ids: list[str] = Field(default_factory=list)
 
 
 def find_unit(text):
@@ -133,10 +135,20 @@ def find_unit(text):
 
 
 def next_question(request):
+    unresolved = [item for item in request.items if not item.unit]
+    shared = (len(unresolved) > 1 and all(item.quantity is not None
+              and item.quantity.is_finite() and item.quantity > 0 for item in unresolved))
     for index,item in enumerate(request.items,1):
         source_position = getattr(item, 'source_position', None) or index
         if not item.unit:
             choices=[ClarificationOption(label=unit,values={'unit':unit}) for unit in ['т','кг','шт','м','пог. м','м²']]
+            if shared:
+                positions = ', '.join(str(getattr(member, 'source_position', None) or number)
+                    for number, member in enumerate(request.items, 1) if not member.unit)
+                return PendingClarification(request_id=request.request_id, fingerprint=request_fingerprint(request),
+                    item_id=item.item_id, field='unit', kind='choice', options=choices,
+                    unit_item_ids=[member.item_id for member in unresolved],
+                    question=f'Укажите общую единицу для исходных позиций {positions}: т, кг, шт., м, пог. м или м². Например, «тонны».')
             return PendingClarification(request_id=request.request_id,fingerprint=request_fingerprint(request),item_id=item.item_id,field='unit',kind='choice',
                 question=f'Укажите единицу исходной позиции {source_position}: 1 — т; 2 — кг; 3 — шт.; 4 — м; 5 — пог. м; 6 — м². Можно написать единицу словами.',options=choices)
         if item.quantity is None:
@@ -193,6 +205,10 @@ def question_state(question, request):
 def answer_values(pending, text):
     """Return (values, retry-question); never infer quantity from product dimensions."""
     answer=text.casefold().strip().strip('.!?')
+    if pending.unit_item_ids:
+        # A shared answer must specify only a unit, never a count or alternatives.
+        unit = UNITS.get(answer)
+        return ({'unit': unit}, None) if unit else (None, pending.question)
     if pending.kind=='confirmation':
         if answer in {'да','верно','подтверждаю','согласен'}:
             return pending.candidate,None

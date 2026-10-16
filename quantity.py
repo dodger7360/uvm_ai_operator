@@ -221,6 +221,30 @@ def literal_decimal(value):
     return Decimal(re.sub(r'[ \u00a0\u202f]', '', value).replace(',', '.'))
 
 
+def confirmed_unitless_quantity(source, claimed):
+    """Confirm an AI amount only in an explicit terminal quantity column.
+
+    A separated amount is evidence for the number, never for its missing unit.
+    Bare profile/standard/length numbers and multiple amount columns are rejected.
+    """
+    if claimed is None or not claimed.is_finite() or claimed <= 0:
+        return None
+    match = re.search(r'(?:\s[—–-]\s*|[|;\t]\s*)('
+                      + _LITERAL_NUMBER + r')\s*$', source)
+    if not match:
+        return None
+    prefix = source[:match.start()]
+    if (not prefix.strip()
+            or re.search(r'(?:длин\w*|раскрой|диаметр\w*|толщин\w*|стенк\w*|'
+                         r'ширин\w*|высот\w*|размер\w*|марк\w*|класс\w*|категори\w*|'
+                         r'номер\w*|серия|ГОСТ(?:\s*Р)?|ТУ|СТО)'
+                         r'(?:\s+изделия|\s+стали|\s+стенки)?\s*[:=]?\s*$', prefix, re.I)
+            or re.search(r'(?:\s[—–-]\s*|[|;\t]\s*)' + _LITERAL_NUMBER + r'\s*$', prefix)):
+        return None
+    amount = literal_decimal(match[1])
+    return amount if amount == claimed else None
+
+
 def length_mass_columns(source, group):
     """Confirmed angle/channel export: profile + grade/docs + length, kg, amount.
 

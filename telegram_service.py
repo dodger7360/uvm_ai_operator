@@ -150,7 +150,11 @@ def exact_source_attributes(item, defer_grade_question=False):
             item.unit = {'м2':'м²','тн':'т','шт.':'шт'}.get(raw, 'пог. м' if raw.startswith('пог') else raw)
             item.source_unit = reverse['unit']
         else:
-            item.quantity = None
+            from quantity import confirmed_unitless_quantity
+            item.quantity = confirmed_unitless_quantity(quantity_source, item.quantity)
+            # No source unit was confirmed, regardless of a model's suggestion.
+            item.unit = None
+            item.source_unit = None
     if quantities:
         last = quantities[-1]
         item.quantity = literal_decimal(last[1])
@@ -906,6 +910,34 @@ class TelegramService:
         if (pending.request_id != current.request_id
                 or (pending.fingerprint and pending.fingerprint != request_fingerprint(current))):
             raise PipelineError('stale_clarification','Уточнение относится к другой заявке. Отправьте новую заявку.')
+        if pending.unit_item_ids:
+            expected = next_question(current)
+            if (pending.field != 'unit' or not pending.fingerprint or expected is None
+                    or expected.unit_item_ids != pending.unit_item_ids):
+                raise PipelineError('stale_clarification', 'Область уточнения единиц изменилась. Повторите уточнение.')
+            values, question = answer_values(pending, text)
+            if values is None:
+                return [question]
+            changed = current.model_copy(deep=True)
+            targets = set(pending.unit_item_ids)
+            resolved = set()
+            for index, item in enumerate(changed.items):
+                if item.item_id in targets:
+                    item.unit = values['unit']
+                    item.source_unit = values['unit']
+                    resolved.add(f'items[{index}].unit')
+            changed.pending_operation = None
+            changed.pending_detail = None
+            changed.clarification_cancelled = False
+            changed.clarification_answers.append(text)
+            changed.missing_fields = [field for field in changed.missing_fields if field not in resolved]
+            changed.pending_clarification = next_question(changed)
+            self._queue_remaining_field_questions(user_id, changed, pending.question,
+                                                  current.clarification_answers + [text])
+            changed.is_valid = not changed.missing_fields and changed.pending_clarification is None
+            messages = self._response(changed, [])
+            self._save(user_id, changed)
+            return messages
         bulk = parse_bulk_quantity(text, current)
         if bulk == []:
             return ['Массовое изменение конфликтует с уже заданными количествами или единицами. Ничего не изменено. Уточните позиции или задайте новое количество явно.']

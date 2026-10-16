@@ -343,6 +343,11 @@ def route_dialog(service, user_id, text, current):
             routing.choice = None
             service.repository.save_routing(user_id,routing)
             return apply_working_reply(service,user_id,current,text)
+        if (work_matches and not calc_matches and current.pending_clarification
+                and current.pending_clarification.field == 'unit'):
+            # Unit words such as «тонны» belong to the bound clarification, even
+            # when the generic command regex only recognizes short symbols.
+            return apply_working_reply(service, user_id, current, text)
         if work_matches and calc_matches:
             routing.choice = ContextChoice(text=text,request_version=state_version(current),
                                            calculation_version=state_version(calculation))
