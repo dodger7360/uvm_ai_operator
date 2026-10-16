@@ -283,6 +283,40 @@ def append_request(service, user_id, current, text, body):
     return messages
 
 
+def request_tonnage(current):
+    """Read-only mass total; never convert pieces/metres using assumptions."""
+    from quantity import normalize_quantity, sum_quantities
+    from formatter import format_number
+    from telegram_service import split_positions
+    amounts, unknown = [], []
+    for index, item in enumerate(current.items):
+        position = item.source_position or index + 1
+        if any(f'items[{index}].{field}' in current.missing_fields for field in ('quantity', 'unit')):
+            unknown.append(position)
+            continue
+        try:
+            amount, unit = normalize_quantity(item.quantity, item.unit)
+        except ValueError:
+            unknown.append(position)
+            continue
+        if unit == 'т':
+            amounts.append(amount)
+        else:
+            unknown.append(position)
+    incomplete = bool(current.fallback_status or current.unprocessed_source or unknown or not current.items)
+    if not incomplete:
+        return [f'Общий тоннаж заявки: {format_number(sum_quantities(amounts))} т.']
+    lines = ([f'Известная масса: {format_number(sum_quantities(amounts))} т; это не полный тоннаж заявки.']
+             if amounts else ['Тоннаж заявки пока неизвестен; полный итог не определён.'])
+    if unknown:
+        lines.append('Масса не определена для исходных позиций: ' + ', '.join(map(str, unknown)) + '.')
+    messages = split_positions('\n'.join(lines))
+    if current.fallback_status or current.unprocessed_source:
+        from telegram_operator import fallback_messages
+        messages += fallback_messages(current)
+    return messages
+
+
 def route_dialog(service, user_id, text, current):
     """Return messages if handled; None delegates to the existing request path."""
     from telegram_operator import _is_question, _new_request
@@ -290,6 +324,22 @@ def route_dialog(service, user_id, text, current):
     wording = text.strip().casefold().strip('.!?')
     if current and current.pending_operation and current.pending_operation.user_id != user_id:
         return ['Уточнение относится к другому пользователю. Повторите вопрос.']
+    if wording in {'нормализуй', 'нормализуй заявку', 'покажи заявку', 'покажи текущую заявку',
+                   'текущая заявка', '/show', 'какой общий тоннаж', 'общий тоннаж',
+                   'общий вес заявки', 'какой общий вес заявки'}:
+        if current is None:
+            return ['Активной заявки нет. Пришлите спецификацию.']
+        if wording in {'какой общий тоннаж', 'общий тоннаж', 'общий вес заявки', 'какой общий вес заявки'}:
+            return request_tonnage(current)
+        # _response refreshes derived fields/policy; display must not mutate the
+        # active request or its clarification/history snapshots.
+        return service._response(current.model_copy(deep=True), [])
+    if wording in {'все', 'всё'}:
+        pending = current.pending_clarification if current else None
+        if (pending and pending.unit_item_ids and pending.request_id == current.request_id
+                and pending.fingerprint == request_fingerprint(current)):
+            return [pending.question]  # Group is known, but the unit is still needed.
+        return ['Что применить ко всем позициям? Укажите действие или ответ на ожидающий вопрос.']
     from calculation_context import reply_values as calculation_reply_values, resume
     from telegram_service import EDIT_WORDS
     routing = service.repository.load_routing(user_id)
