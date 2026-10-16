@@ -1,0 +1,2751 @@
+[
+  {
+    "case": "angles",
+    "source_count": 38,
+    "transport_count": 38,
+    "preserved_count": 38,
+    "fully_valid_count": 38,
+    "damaged": [],
+    "missing_positions": [],
+    "events": [
+      {
+        "event": "operation_complete",
+        "operation": "be4d7ee1aec3",
+        "stage": "sqlite_save",
+        "result": "ok",
+        "calls": 0,
+        "stage_calls": {},
+        "medium": false,
+        "stage_ms": {
+          "routing": 16.629,
+          "sqlite_load": 0.348,
+          "extraction": 16.933,
+          "validation": 28.688,
+          "normalization": 0.986,
+          "sorting": 0.529,
+          "formatting": 27.29,
+          "sqlite_save": 9.99
+        },
+        "http_attempts": 0,
+        "sdk_retries": 0,
+        "duration_ms": 101.409
+      }
+    ],
+    "output_lines": 30,
+    "expected_lines": 28,
+    "source_mass_t": "205.355",
+    "saved_mass_t": "205.355",
+    "grouped_mass_t": "205.355",
+    "expected_mass_t": "205.355",
+    "fallback_status": null,
+    "is_valid": true,
+    "missing_fields": [],
+    "warnings": [],
+    "unprocessed_source": [],
+    "links": [
+      {
+        "line": 1,
+        "source_positions": [
+          4,
+          5
+        ],
+        "quantity": "7.805",
+        "grade": "ст3"
+      },
+      {
+        "line": 2,
+        "source_positions": [
+          6,
+          15,
+          19
+        ],
+        "quantity": "2.935",
+        "grade": "ст3"
+      },
+      {
+        "line": 3,
+        "source_positions": [
+          20
+        ],
+        "quantity": "0.193",
+        "grade": "ст3"
+      },
+      {
+        "line": 4,
+        "source_positions": [
+          7
+        ],
+        "quantity": "0.609",
+        "grade": "ст3"
+      },
+      {
+        "line": 5,
+        "source_positions": [
+          17
+        ],
+        "quantity": "0.084",
+        "grade": "ст3"
+      },
+      {
+        "line": 6,
+        "source_positions": [
+          18
+        ],
+        "quantity": "1.2",
+        "grade": "ст3"
+      },
+      {
+        "line": 7,
+        "source_positions": [
+          1,
+          3,
+          11
+        ],
+        "quantity": "0.549",
+        "grade": "ст3"
+      },
+      {
+        "line": 8,
+        "source_positions": [
+          12
+        ],
+        "quantity": "0.303",
+        "grade": "ст3"
+      },
+      {
+        "line": 9,
+        "source_positions": [
+          16
+        ],
+        "quantity": "0.047",
+        "grade": "С345-6"
+      },
+      {
+        "line": 10,
+        "source_positions": [
+          8
+        ],
+        "quantity": "7.213",
+        "grade": "С345-6"
+      },
+      {
+        "line": 11,
+        "source_positions": [
+          9
+        ],
+        "quantity": "19.935",
+        "grade": "С345-6"
+      },
+      {
+        "line": 12,
+        "source_positions": [
+          10
+        ],
+        "quantity": "2.358",
+        "grade": "С345-6"
+      },
+      {
+        "line": 13,
+        "source_positions": [
+          2
+        ],
+        "quantity": "0.103",
+        "grade": "09Г2С"
+      },
+      {
+        "line": 14,
+        "source_positions": [
+          13
+        ],
+        "quantity": "5.924",
+        "grade": "С345-6"
+      },
+      {
+        "line": 15,
+        "source_positions": [
+          14
+        ],
+        "quantity": "10.068",
+        "grade": "С345-6"
+      },
+      {
+        "line": 16,
+        "source_positions": [
+          38
+        ],
+        "quantity": "0.287",
+        "grade": "ст3"
+      },
+      {
+        "line": 17,
+        "source_positions": [
+          21
+        ],
+        "quantity": "2.22",
+        "grade": "ст3"
+      },
+      {
+        "line": 18,
+        "source_positions": [
+          22
+        ],
+        "quantity": "0.086",
+        "grade": "ст3"
+      },
+      {
+        "line": 19,
+        "source_positions": [
+          24,
+          25
+        ],
+        "quantity": "0.841",
+        "grade": "ст3"
+      },
+      {
+        "line": 20,
+        "source_positions": [
+          27
+        ],
+        "quantity": "0.104",
+        "grade": "ст3"
+      },
+      {
+        "line": 21,
+        "source_positions": [
+          29,
+          30
+        ],
+        "quantity": "3.710",
+        "grade": "ст3"
+      },
+      {
+        "line": 22,
+        "source_positions": [
+          23
+        ],
+        "quantity": "0.215",
+        "grade": "С345-6"
+      },
+      {
+        "line": 23,
+        "source_positions": [
+          26
+        ],
+        "quantity": "6.663",
+        "grade": "С345-6"
+      },
+      {
+        "line": 24,
+        "source_positions": [
+          28
+        ],
+        "quantity": "1.579",
+        "grade": "С345-6"
+      },
+      {
+        "line": 25,
+        "source_positions": [
+          31,
+          32
+        ],
+        "quantity": "6.327",
+        "grade": "С345"
+      },
+      {
+        "line": 26,
+        "source_positions": [
+          33
+        ],
+        "quantity": "0.446",
+        "grade": "09Г2С"
+      },
+      {
+        "line": 27,
+        "source_positions": [
+          34
+        ],
+        "quantity": "0.073",
+        "grade": "С345-6"
+      },
+      {
+        "line": 28,
+        "source_positions": [
+          35
+        ],
+        "quantity": "0.038",
+        "grade": "С345-6"
+      },
+      {
+        "line": 29,
+        "source_positions": [
+          36
+        ],
+        "quantity": "51",
+        "grade": "С345-6"
+      },
+      {
+        "line": 30,
+        "source_positions": [
+          37
+        ],
+        "quantity": "72.44",
+        "grade": "С345-6"
+      }
+    ],
+    "source_text_preserved": true,
+    "saved_items": [
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "45×45×4",
+        "grade": "С255",
+        "thickness_mm": 4.0,
+        "side_a_mm": 45.0,
+        "side_b_mm": 45.0,
+        "quantity": "2.22",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 45х45х4 / С255 ГОСТ 27772-2015 ГОСТ 8509-93 2,22 т",
+        "source_position": 4
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "45×45×4",
+        "grade": "С255-4",
+        "thickness_mm": 4.0,
+        "side_a_mm": 45.0,
+        "side_b_mm": 45.0,
+        "quantity": "5.585",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 45х45х4 / С255-4 ГОСТ 27772-2015 ГОСТ 8509-93 5,585 т",
+        "source_position": 5
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "50×50×5",
+        "grade": "С255-4",
+        "thickness_mm": 5.0,
+        "side_a_mm": 50.0,
+        "side_b_mm": 50.0,
+        "quantity": "0.317",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 50х50х5 / С255-4 ГОСТ 27772-2015 ГОСТ 8509-93 0,317 т",
+        "source_position": 6
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "50×50×5",
+        "grade": "С255",
+        "thickness_mm": 5.0,
+        "side_a_mm": 50.0,
+        "side_b_mm": 50.0,
+        "quantity": "0.073",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n50х50х5 / С255 ГОСТ 27772-2015\" ГОСТ 8509-93 0,073 т",
+        "source_position": 15
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "50×50×5",
+        "grade": "С345-6",
+        "thickness_mm": 5.0,
+        "side_a_mm": 50.0,
+        "side_b_mm": 50.0,
+        "quantity": "0.047",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n50х50х5 / С345-6 ГОСТ 27772-2015\" ГОСТ 8509-93 0,047 т",
+        "source_position": 16
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "50×50×5",
+        "grade": "С255",
+        "thickness_mm": 5.0,
+        "side_a_mm": 50.0,
+        "side_b_mm": 50.0,
+        "quantity": "2.545",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголок 50х50х5 / С255 ГОСТ 27772-2015 ГОСТ 8509-93 2,545 т",
+        "source_position": 19
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "50×50×5",
+        "grade": "ВСт3сп5",
+        "thickness_mm": 5.0,
+        "side_a_mm": 50.0,
+        "side_b_mm": 50.0,
+        "quantity": "0.193",
+        "unit": "т",
+        "source_unit": "т",
+        "form": "Б",
+        "gost_tu": "ГОСТ 8509-93, ГОСТ 535-05",
+        "source_text": "Уголок Б 50х50х5 \"ГОСТ8509-93/В Ст.3 сп.5\nГОСТ535-05\" 0,193 т",
+        "source_position": 20
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "63×63×5",
+        "grade": "С255-4",
+        "thickness_mm": 5.0,
+        "side_a_mm": 63.0,
+        "side_b_mm": 63.0,
+        "quantity": "0.609",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 63х63х5 / С255-4 ГОСТ 27772-2015 ГОСТ 8509-93 0,609 т",
+        "source_position": 7
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "63×63×5",
+        "grade": "С345-6",
+        "thickness_mm": 5.0,
+        "side_a_mm": 63.0,
+        "side_b_mm": 63.0,
+        "quantity": "7.213",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 63х63х5 / С345-6 ГОСТ 27772-2015 ГОСТ 8509-93 7,213 т",
+        "source_position": 8
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "75×75×6",
+        "grade": "С345-6",
+        "thickness_mm": 6.0,
+        "side_a_mm": 75.0,
+        "side_b_mm": 75.0,
+        "quantity": "19.935",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 75х75х6 / С345-6 ГОСТ 27772-2015 ГОСТ 8509-93 19,935 т",
+        "source_position": 9
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "75×75×6",
+        "grade": "С255-4",
+        "thickness_mm": 6.0,
+        "side_a_mm": 75.0,
+        "side_b_mm": 75.0,
+        "quantity": "0.084",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n75х75х6 / С255-4 ГОСТ 27772-2015\" ГОСТ 8509-93 0,084 т",
+        "source_position": 17
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "80×80×6",
+        "grade": "С345-6",
+        "thickness_mm": 6.0,
+        "side_a_mm": 80.0,
+        "side_b_mm": 80.0,
+        "quantity": "2.358",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 80х80х6 / С345-6 ГОСТ 27772-2015 ГОСТ 8509-93 2,358 т",
+        "source_position": 10
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "90×90×6",
+        "grade": "С255-4",
+        "thickness_mm": 6.0,
+        "side_a_mm": 90.0,
+        "side_b_mm": 90.0,
+        "quantity": "1.2",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n90х90х6 / С255-4 ГОСТ 27772-2015\" ГОСТ 8509-93 1,2 т",
+        "source_position": 18
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "100×100×8",
+        "grade": "С255",
+        "thickness_mm": 8.0,
+        "side_a_mm": 100.0,
+        "side_b_mm": 100.0,
+        "quantity": "0.428",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 100х100х8 / С255 ГОСТ 27772-2015 ГОСТ 8509-93 0,428 т",
+        "source_position": 1
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "100×100×8",
+        "grade": "Ст09Г2С",
+        "thickness_mm": 8.0,
+        "side_a_mm": 100.0,
+        "side_b_mm": 100.0,
+        "quantity": "0.103",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 100х100х8 / Ст09Г2С ГОСТ 8509-93 0,103 т",
+        "source_position": 2
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "100×100×8",
+        "grade": "Ст3пс5",
+        "thickness_mm": 8.0,
+        "side_a_mm": 100.0,
+        "side_b_mm": 100.0,
+        "quantity": "0.019",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 8509-93",
+        "source_text": "Уголки стальные горячекатаные равнополочные 100х100х8 / ст3пс5 ГОСТ 8509-93 0,019 т",
+        "source_position": 3
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "100×100×8",
+        "grade": "С255-4",
+        "thickness_mm": 8.0,
+        "side_a_mm": 100.0,
+        "side_b_mm": 100.0,
+        "quantity": "0.102",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n100х100х8 / С255-4 ГОСТ 27772-2015\" ГОСТ 8509-93 0,102 т",
+        "source_position": 11
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "125×125×8",
+        "grade": "С255-4",
+        "thickness_mm": 8.0,
+        "side_a_mm": 125.0,
+        "side_b_mm": 125.0,
+        "quantity": "0.303",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n125х125х8 / С255-4 ГОСТ 27772-2015\" ГОСТ 8509-93 0,303 т",
+        "source_position": 12
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "160×160×10",
+        "grade": "С345-6",
+        "thickness_mm": 10.0,
+        "side_a_mm": 160.0,
+        "side_b_mm": 160.0,
+        "quantity": "5.924",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n160х160х10 / С345-6 ГОСТ 27772-2015\" ГОСТ 8509-93 5,924 т",
+        "source_position": 13
+      },
+      {
+        "product": "Уголок",
+        "product_group": "angle",
+        "size_designation": "200×200×12",
+        "grade": "С345-6",
+        "thickness_mm": 12.0,
+        "side_a_mm": 200.0,
+        "side_b_mm": 200.0,
+        "quantity": "10.068",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8509-93",
+        "source_text": "\"Уголки стальные горячекатаные равнополочные\n200х200х12 / С345-6 ГОСТ 27772-2015\" ГОСТ 8509-93 10,068 т",
+        "source_position": 14
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "8У",
+        "grade": "С255-4",
+        "quantity": "0.287",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 8У / С255-4 ГОСТ\n27772-2015\" ГОСТ 8240-97 0,287 т",
+        "source_position": 38
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "10П",
+        "grade": "С255",
+        "quantity": "2.22",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллер 10П / С255 ГОСТ 27772-2015 ГОСТ 8240-97 2,22 т",
+        "source_position": 21
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "10У",
+        "grade": "С255-4",
+        "quantity": "0.086",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 10У / С255-4 ГОСТ 27772-2015 ГОСТ 8240-97 0,086 т",
+        "source_position": 22
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "10У",
+        "grade": "С345-6",
+        "quantity": "0.215",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 10У / С345-6 ГОСТ\n27772-2015\" ГОСТ 8240-97 0,215 т",
+        "source_position": 23
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "12У",
+        "grade": "С255",
+        "quantity": "0.562",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 12У / С255 ГОСТ\n27772-2015\" ГОСТ 8240-97 0,562 т",
+        "source_position": 24
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "12У",
+        "grade": "С255-4",
+        "quantity": "0.279",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 12У / С255-4 ГОСТ 27772-2015 ГОСТ 8240-97 0,279 т",
+        "source_position": 25
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "12У",
+        "grade": "С345-6",
+        "quantity": "6.663",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 12У / С345-6 ГОСТ 27772-2015 ГОСТ 8240-97 6,663 т",
+        "source_position": 26
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "14У",
+        "grade": "С255-4",
+        "quantity": "0.104",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 14У / С255-4 ГОСТ\n27772-2015\" ГОСТ 8240-97 0,104 т",
+        "source_position": 27
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "14У",
+        "grade": "С345-6",
+        "quantity": "1.579",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 14У / С345-6 ГОСТ 27772-2015 ГОСТ 8240-97 1,579 т",
+        "source_position": 28
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "16У",
+        "grade": "С255",
+        "quantity": "0.102",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 16У / С255 ГОСТ 27772-2015 ГОСТ 8240-97 0,102 т",
+        "source_position": 29
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "16У",
+        "grade": "С255-4",
+        "quantity": "3.608",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 16У / С255-4 ГОСТ\n27772-2015\" ГОСТ 8240-97 3,608 т",
+        "source_position": 30
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "16У",
+        "grade": "С345-3",
+        "quantity": "0.513",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 16У / С345-3 ГОСТ\n27772-2015\" ГОСТ 8240-97 0,513 т",
+        "source_position": 31
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "16У",
+        "grade": "С345-6",
+        "quantity": "5.814",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 16У / С345-6 ГОСТ 27772-2015 ГОСТ 8240-97 5,814 т",
+        "source_position": 32
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "20У",
+        "grade": "09Г2С",
+        "quantity": "0.446",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-88, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 20У / 09Г2С ГОСТ 27772-88 ГОСТ 8240-97 0,446 т",
+        "source_position": 33
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "20У",
+        "grade": "С345-6",
+        "quantity": "0.073",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 20У / С345-6 ГОСТ\n27772-2015\" ГОСТ 8240-97 0,073 т",
+        "source_position": 34
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "22У",
+        "grade": "С345-6",
+        "quantity": "0.038",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "Швеллеры стальные горячекатаные 22У / С345-6 ГОСТ 27772-2015 ГОСТ 8240-97 0,038 т",
+        "source_position": 35
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "24У",
+        "grade": "С345-6",
+        "quantity": "51",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 24У / С345-6 ГОСТ\n27772-2015\" ГОСТ 8240-97 51 т",
+        "source_position": 36
+      },
+      {
+        "product": "Швеллер",
+        "product_group": "channel",
+        "size_designation": "30У",
+        "grade": "С345-6",
+        "quantity": "72.44",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 8240-97",
+        "source_text": "\"Швеллеры стальные горячекатаные 30У / С345-6 ГОСТ\n27772-2015\" ГОСТ 8240-97 72,44 т",
+        "source_position": 37
+      }
+    ],
+    "model_calls": 1,
+    "arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          4,
+          5
+        ],
+        "sum_t": "7.805",
+        "expected_t": "7.805",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          6,
+          15,
+          19,
+          20
+        ],
+        "sum_t": "3.128",
+        "expected_t": "3.128",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          7
+        ],
+        "sum_t": "0.609",
+        "expected_t": "0.609",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          17
+        ],
+        "sum_t": "0.084",
+        "expected_t": "0.084",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          18
+        ],
+        "sum_t": "1.2",
+        "expected_t": "1.200",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          1,
+          3,
+          11
+        ],
+        "sum_t": "0.549",
+        "expected_t": "0.549",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          12
+        ],
+        "sum_t": "0.303",
+        "expected_t": "0.303",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          16
+        ],
+        "sum_t": "0.047",
+        "expected_t": "0.047",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 9,
+        "source_positions": [
+          8
+        ],
+        "sum_t": "7.213",
+        "expected_t": "7.213",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 10,
+        "source_positions": [
+          9
+        ],
+        "sum_t": "19.935",
+        "expected_t": "19.935",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 11,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "2.358",
+        "expected_t": "2.358",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 12,
+        "source_positions": [
+          2
+        ],
+        "sum_t": "0.103",
+        "expected_t": "0.103",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 13,
+        "source_positions": [
+          13
+        ],
+        "sum_t": "5.924",
+        "expected_t": "5.924",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 14,
+        "source_positions": [
+          14
+        ],
+        "sum_t": "10.068",
+        "expected_t": "10.068",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 15,
+        "source_positions": [
+          38
+        ],
+        "sum_t": "0.287",
+        "expected_t": "0.287",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 16,
+        "source_positions": [
+          21
+        ],
+        "sum_t": "2.22",
+        "expected_t": "2.220",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 17,
+        "source_positions": [
+          22
+        ],
+        "sum_t": "0.086",
+        "expected_t": "0.086",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 18,
+        "source_positions": [
+          24,
+          25
+        ],
+        "sum_t": "0.841",
+        "expected_t": "0.841",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 19,
+        "source_positions": [
+          27
+        ],
+        "sum_t": "0.104",
+        "expected_t": "0.104",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 20,
+        "source_positions": [
+          29,
+          30
+        ],
+        "sum_t": "3.710",
+        "expected_t": "3.710",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 21,
+        "source_positions": [
+          23
+        ],
+        "sum_t": "0.215",
+        "expected_t": "0.215",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 22,
+        "source_positions": [
+          26
+        ],
+        "sum_t": "6.663",
+        "expected_t": "6.663",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 23,
+        "source_positions": [
+          28
+        ],
+        "sum_t": "1.579",
+        "expected_t": "1.579",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 24,
+        "source_positions": [
+          31,
+          32
+        ],
+        "sum_t": "6.327",
+        "expected_t": "6.327",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 25,
+        "source_positions": [
+          33,
+          34
+        ],
+        "sum_t": "0.519",
+        "expected_t": "0.519",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 26,
+        "source_positions": [
+          35
+        ],
+        "sum_t": "0.038",
+        "expected_t": "0.038",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 27,
+        "source_positions": [
+          36
+        ],
+        "sum_t": "51",
+        "expected_t": "51.000",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 28,
+        "source_positions": [
+          37
+        ],
+        "sum_t": "72.44",
+        "expected_t": "72.440",
+        "difference_t": "0.000"
+      }
+    ],
+    "exact_text_match": false,
+    "diff": [
+      "--- expected",
+      "+++ actual",
+      "@@ -1,8 +1,9 @@",
+      " Уголок 45х45х4 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 7,805 т",
+      "-Уголок 50х50х5 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 3,128 т",
+      "+Уголок 50х50х5 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 2,935 т",
+      "+Уголок 50х50х5 ст3 Б ГОСТ 8509-93, ГОСТ 535-05 — 0,193 т",
+      " Уголок 63х63х5 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,609 т",
+      " Уголок 75х75х6 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,084 т",
+      "-Уголок 90х90х6 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 1,200 т",
+      "+Уголок 90х90х6 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 1,2 т",
+      " Уголок 100х100х8 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,549 т",
+      " Уголок 125х125х8 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,303 т",
+      " ",
+      "@@ -15,17 +16,18 @@",
+      " Уголок 200х200х12 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 10,068 т",
+      " ",
+      " Швеллер 8У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,287 т",
+      "-Швеллер 10П ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 2,220 т",
+      "+Швеллер 10П ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 2,22 т",
+      " Швеллер 10У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,086 т",
+      " Швеллер 12У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,841 т",
+      " Швеллер 14У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,104 т",
+      "-Швеллер 16У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 3,710 т",
+      "+Швеллер 16У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 3,71 т",
+      " ",
+      " Швеллер 10У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,215 т",
+      " Швеллер 12У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 6,663 т",
+      " Швеллер 14У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 1,579 т",
+      " Швеллер 16У С345 ГОСТ 27772-2015, ГОСТ 8240-97 — 6,327 т",
+      "-Швеллер 20У 09Г2С ГОСТ 27772-88, ГОСТ 8240-97 — 0,519 т",
+      "+Швеллер 20У 09Г2С ГОСТ 27772-88, ГОСТ 8240-97 — 0,446 т",
+      "+Швеллер 20У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,073 т",
+      " Швеллер 22У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,038 т",
+      "-Швеллер 24У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 51,000 т",
+      "-Швеллер 30У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 72,440 т",
+      "+Швеллер 24У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 51 т",
+      "+Швеллер 30У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 72,44 т"
+    ],
+    "actual_text": "Уголок 45х45х4 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 7,805 т\nУголок 50х50х5 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 2,935 т\nУголок 50х50х5 ст3 Б ГОСТ 8509-93, ГОСТ 535-05 — 0,193 т\nУголок 63х63х5 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,609 т\nУголок 75х75х6 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,084 т\nУголок 90х90х6 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 1,2 т\nУголок 100х100х8 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,549 т\nУголок 125х125х8 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,303 т\n\nУголок 50х50х5 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,047 т\nУголок 63х63х5 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 7,213 т\nУголок 75х75х6 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 19,935 т\nУголок 80х80х6 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 2,358 т\nУголок 100х100х8 09Г2С ГОСТ 8509-93 — 0,103 т\nУголок 160х160х10 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 5,924 т\nУголок 200х200х12 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 10,068 т\n\nШвеллер 8У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,287 т\nШвеллер 10П ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 2,22 т\nШвеллер 10У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,086 т\nШвеллер 12У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,841 т\nШвеллер 14У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,104 т\nШвеллер 16У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 3,71 т\n\nШвеллер 10У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,215 т\nШвеллер 12У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 6,663 т\nШвеллер 14У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 1,579 т\nШвеллер 16У С345 ГОСТ 27772-2015, ГОСТ 8240-97 — 6,327 т\nШвеллер 20У 09Г2С ГОСТ 27772-88, ГОСТ 8240-97 — 0,446 т\nШвеллер 20У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,073 т\nШвеллер 22У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,038 т\nШвеллер 24У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 51 т\nШвеллер 30У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 72,44 т",
+    "user_messages": [
+      "Уголок 45х45х4 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 7,805 т\nУголок 50х50х5 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 2,935 т\nУголок 50х50х5 ст3 Б ГОСТ 8509-93, ГОСТ 535-05 — 0,193 т\nУголок 63х63х5 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,609 т\nУголок 75х75х6 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,084 т\nУголок 90х90х6 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 1,2 т\nУголок 100х100х8 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,549 т\nУголок 125х125х8 ст3 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,303 т\n\nУголок 50х50х5 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 0,047 т\nУголок 63х63х5 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 7,213 т\nУголок 75х75х6 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 19,935 т\nУголок 80х80х6 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 2,358 т\nУголок 100х100х8 09Г2С ГОСТ 8509-93 — 0,103 т\nУголок 160х160х10 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 5,924 т\nУголок 200х200х12 С345-6 ГОСТ 27772-2015, ГОСТ 8509-93 — 10,068 т\n\nШвеллер 8У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,287 т\nШвеллер 10П ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 2,22 т\nШвеллер 10У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,086 т\nШвеллер 12У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,841 т\nШвеллер 14У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,104 т\nШвеллер 16У ст3 ГОСТ 27772-2015, ГОСТ 8240-97 — 3,71 т\n\nШвеллер 10У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,215 т\nШвеллер 12У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 6,663 т\nШвеллер 14У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 1,579 т\nШвеллер 16У С345 ГОСТ 27772-2015, ГОСТ 8240-97 — 6,327 т\nШвеллер 20У 09Г2С ГОСТ 27772-88, ГОСТ 8240-97 — 0,446 т\nШвеллер 20У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,073 т\nШвеллер 22У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 0,038 т\nШвеллер 24У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 51 т\nШвеллер 30У С345-6 ГОСТ 27772-2015, ГОСТ 8240-97 — 72,44 т"
+    ]
+  },
+  {
+    "case": "profiles",
+    "source_count": 22,
+    "transport_count": 22,
+    "preserved_count": 0,
+    "fully_valid_count": 0,
+    "damaged": [],
+    "missing_positions": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22
+    ],
+    "events": [
+      {
+        "event": "medium_retry",
+        "stage": "extraction",
+        "reason": "additional_positions"
+      },
+      {
+        "event": "operator_recovery",
+        "reason": "additional_positions",
+        "new_request": true
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "extracted_row_recovery",
+        "reason": "validation_error"
+      },
+      {
+        "event": "operator_result",
+        "status": "original",
+        "source_count": 15,
+        "checked_count": 0,
+        "unresolved_count": 15
+      },
+      {
+        "event": "operation_complete",
+        "operation": "16c0d08a9b14",
+        "stage": "fallback",
+        "result": "original",
+        "calls": 0,
+        "stage_calls": {},
+        "medium": false,
+        "stage_ms": {
+          "routing": 15.368,
+          "sqlite_load": 0.445,
+          "extraction": 20.083,
+          "validation": 27.867,
+          "normalization": 0.71,
+          "sorting": 6.918,
+          "sqlite_save": 6.738,
+          "fallback": 0.423
+        },
+        "http_attempts": 0,
+        "sdk_retries": 0,
+        "duration_ms": 78.564
+      }
+    ],
+    "output_lines": 0,
+    "expected_lines": 16,
+    "source_mass_t": "121.900",
+    "saved_mass_t": "0",
+    "grouped_mass_t": "0",
+    "expected_mass_t": "121.900",
+    "fallback_status": "original",
+    "is_valid": false,
+    "missing_fields": [],
+    "warnings": [],
+    "unprocessed_source": [
+      "Профили стальные гнутые замкнутые сварные 100х100х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 12,265 т",
+      "\"Профили стальные гнутые замкнутые сварные 120х120х5 /\nС345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 27,337 т",
+      "\"Профили стальные гнутые замкнутые сварные 120х120х6\n/ С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 2,439 т",
+      "\"Профили стальные гнутые замкнутые сварные 120х120х6\n/ С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 1,981 т",
+      "Профили стальные гнутые замкнутые сварные 140х140х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 16,265 т",
+      "\"Профили стальные гнутые замкнутые сварные 140х140х6\n/ С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,812 т",
+      "\"Профили стальные гнутые замкнутые сварные 140х60х5 /\nС345-3 ГОСТ 27772-88\" ГОСТ 30245-2003 0,375 т",
+      "Профили стальные гнутые замкнутые сварные 160х160х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 0,224 т",
+      "\"Профили стальные гнутые замкнутые сварные 160х160х6\n/ С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 19,447 т",
+      "\"Профили стальные гнутые замкнутые сварные 160х160х6\n/ С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 1,841 т",
+      "Профили стальные гнутые замкнутые сварные 180х140х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 4,502 т",
+      "Профили стальные гнутые замкнутые сварные 200х160х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 18,109 т",
+      "\"Профили стальные гнутые замкнутые сварные 80х80х4 /\nС255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,021 т",
+      "\"Профили стальные гнутые замкнутые сварные 80х80х4\n/ С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 8,88 т",
+      "\"Профили стальные гнутые замкнутые сварные 80х80х5 /\nС345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,94 т"
+    ],
+    "links": [],
+    "source_text_preserved": true,
+    "saved_items": [],
+    "model_calls": 2,
+    "arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          13
+        ],
+        "sum_t": "0.021",
+        "expected_t": "0.021",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          14
+        ],
+        "sum_t": "8.88",
+        "expected_t": "8.88",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          15
+        ],
+        "sum_t": "0.94",
+        "expected_t": "0.94",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          16
+        ],
+        "sum_t": "0.164",
+        "expected_t": "0.164",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          1,
+          17
+        ],
+        "sum_t": "12.572",
+        "expected_t": "12.572",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          2
+        ],
+        "sum_t": "27.337",
+        "expected_t": "27.337",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          3,
+          18
+        ],
+        "sum_t": "2.993",
+        "expected_t": "2.993",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          4,
+          19
+        ],
+        "sum_t": "2.430",
+        "expected_t": "2.43",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 9,
+        "source_positions": [
+          7
+        ],
+        "sum_t": "0.375",
+        "expected_t": "0.375",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 10,
+        "source_positions": [
+          5,
+          20
+        ],
+        "sum_t": "17.517",
+        "expected_t": "17.517",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 11,
+        "source_positions": [
+          6,
+          21
+        ],
+        "sum_t": "0.955",
+        "expected_t": "0.955",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 12,
+        "source_positions": [
+          8
+        ],
+        "sum_t": "0.224",
+        "expected_t": "0.224",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 13,
+        "source_positions": [
+          9,
+          22
+        ],
+        "sum_t": "23.040",
+        "expected_t": "23.04",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 14,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "1.841",
+        "expected_t": "1.841",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 15,
+        "source_positions": [
+          11
+        ],
+        "sum_t": "4.502",
+        "expected_t": "4.502",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 16,
+        "source_positions": [
+          12
+        ],
+        "sum_t": "18.109",
+        "expected_t": "18.109",
+        "difference_t": "0.000"
+      }
+    ],
+    "exact_text_match": false,
+    "diff": [
+      "--- expected",
+      "+++ actual",
+      "@@ -1,16 +0,0 @@",
+      "-Труба профильная 80х80х4 ст3/С255-4 — 0,021 т",
+      "-Труба профильная 80х80х4 09Г2С/С345-6 — 8,88 т",
+      "-Труба профильная 80х80х5 09Г2С/С345-6 — 0,94 т",
+      "-Труба профильная 100х100х5 ст3/С255-4 — 0,164 т",
+      "-Труба профильная 100х100х5 09Г2С/С345-6 — 12,572 т",
+      "-Труба профильная 120х120х5 09Г2С/С345-6 — 27,337 т",
+      "-Труба профильная 120х120х6 ст3/С255-4 — 2,993 т",
+      "-Труба профильная 120х120х6 09Г2С/С345-6 — 2,43 т",
+      "-Труба профильная 140х60х5 09Г2С/С345-3 — 0,375 т",
+      "-Труба профильная 140х140х5 09Г2С/С345-6 — 17,517 т",
+      "-Труба профильная 140х140х6 ст3/С255-4 — 0,955 т",
+      "-Труба профильная 160х160х5 09Г2С/С345-6 — 0,224 т",
+      "-Труба профильная 160х160х6 ст3/С255-4 — 23,04 т",
+      "-Труба профильная 160х160х6 09Г2С/С345-6 — 1,841 т",
+      "-Труба профильная 180х140х5 09Г2С/С345-6 — 4,502 т",
+      "-Труба профильная 200х160х5 09Г2С/С345-6 — 18,109 т"
+    ],
+    "actual_text": "",
+    "user_messages": [
+      "Исходная заявка сохранена без изменений:",
+      "Профили стальные гнутые замкнутые сварные 100х100х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 12,265 т\n\"Профили стальные гнутые замкнутые сварные 120х120х5 /\nС345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 27,337 т\n\"Профили стальные гнутые замкнутые сварные 120х120х6\n/ С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 2,439 т\n\"Профили стальные гнутые замкнутые сварные 120х120х6\n/ С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 1,981 т\nПрофили стальные гнутые замкнутые сварные 140х140х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 16,265 т\n\"Профили стальные гнутые замкнутые сварные 140х140х6\n/ С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,812 т\n\"Профили стальные гнутые замкнутые сварные 140х60х5 /\nС345-3 ГОСТ 27772-88\" ГОСТ 30245-2003 0,375 т\nПрофили стальные гнутые замкнутые сварные 160х160х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 0,224 т\n\"Профили стальные гнутые замкнутые сварные 160х160х6\n/ С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 19,447 т\n\"Профили стальные гнутые замкнутые сварные 160х160х6\n/ С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 1,841 т\nПрофили стальные гнутые замкнутые сварные 180х140х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 4,502 т\nПрофили стальные гнутые замкнутые сварные 200х160х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-2003 18,109 т\n\"Профили стальные гнутые замкнутые сварные 80х80х4 /\nС255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,021 т\n\"Профили стальные гнутые замкнутые сварные 80х80х4\n/ С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 8,88 т\n\"Профили стальные гнутые замкнутые сварные 80х80х5 /\nС345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,94 т\n\"Профили стальные гнутые замкнутые сварные\n100х100х5 / С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,164 т\n\"Профили стальные гнутые замкнутые сварные\n100х100х5 / С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,307 т\n\"Профили стальные гнутые замкнутые сварные\n120х120х6 / С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,554 т\n\"Профили стальные гнутые замкнутые сварные\n120х120х6 / С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,449 т\n\"Профили стальные гнутые замкнутые сварные\n140х140х5 / С345-6 ГОСТ 27772-2015\" ГОСТ 30245-2003 1,252 т\n\"Профили стальные гнутые замкнутые сварные\n140х140х6 / С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 0,143 т\n\"Профили стальные гнутые замкнутые сварные\n160х160х6 / С255-4 ГОСТ 27772-2015\" ГОСТ 30245-2003 3,593 т\n",
+      "Вопросы по заявке:\nУточните наименование и характеристики нераспознанных строк: «Профили стальные гнутые замкнутые сварные 100х100х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-20»; «\"Профили стальные гнутые замкнутые сварные 120х120х5 / С345-6 ГОСТ 27772-2015\" ГОСТ 30245-»; «\"Профили стальные гнутые замкнутые сварные 120х120х6 / С255-4 ГОСТ 27772-2015\" ГОСТ 30245-»; «\"Профили стальные гнутые замкнутые сварные 120х120х6 / С345-6 ГОСТ 27772-2015\" ГОСТ 30245-»; «Профили стальные гнутые замкнутые сварные 140х140х5 / С345-6 ГОСТ 27772-2015 ГОСТ 30245-20»; ещё 10 строк в исходной заявке."
+    ]
+  },
+  {
+    "case": "sheets",
+    "source_count": 27,
+    "transport_count": 27,
+    "preserved_count": 25,
+    "fully_valid_count": 4,
+    "damaged": [
+      {
+        "position": 14,
+        "differences": {
+          "grade": {
+            "source": "325-09Г2С",
+            "actual": "09Г2С"
+          }
+        }
+      },
+      {
+        "position": 22,
+        "differences": {
+          "grade": {
+            "source": "325-09Г2С",
+            "actual": "09Г2С"
+          }
+        }
+      }
+    ],
+    "missing_positions": [],
+    "events": [
+      {
+        "event": "operation_complete",
+        "operation": "18d107f72ec9",
+        "stage": "sqlite_save",
+        "result": "ok",
+        "calls": 0,
+        "stage_calls": {},
+        "medium": false,
+        "stage_ms": {
+          "routing": 12.859,
+          "sqlite_load": 0.384,
+          "extraction": 10.265,
+          "validation": 21.086,
+          "normalization": 1.826,
+          "sorting": 2.429,
+          "formatting": 11.916,
+          "sqlite_save": 25.908
+        },
+        "http_attempts": 0,
+        "sdk_retries": 0,
+        "duration_ms": 86.684
+      }
+    ],
+    "output_lines": 27,
+    "expected_lines": 15,
+    "source_mass_t": "442.296",
+    "saved_mass_t": "442.296",
+    "grouped_mass_t": "442.296",
+    "expected_mass_t": "442.296",
+    "fallback_status": "partial",
+    "is_valid": false,
+    "missing_fields": [
+      "items[6].width_mm",
+      "items[6].length_mm",
+      "items[3].width_mm",
+      "items[3].length_mm",
+      "items[4].width_mm",
+      "items[4].length_mm",
+      "items[12].width_mm",
+      "items[12].length_mm",
+      "items[13].width_mm",
+      "items[13].length_mm",
+      "items[14].width_mm",
+      "items[14].length_mm",
+      "items[15].width_mm",
+      "items[15].length_mm",
+      "items[16].width_mm",
+      "items[16].length_mm",
+      "items[17].width_mm",
+      "items[17].length_mm",
+      "items[18].width_mm",
+      "items[18].length_mm",
+      "items[19].width_mm",
+      "items[19].length_mm",
+      "items[20].width_mm",
+      "items[20].length_mm",
+      "items[21].width_mm",
+      "items[21].length_mm",
+      "items[22].width_mm",
+      "items[22].length_mm",
+      "items[23].width_mm",
+      "items[23].length_mm",
+      "items[24].width_mm",
+      "items[24].length_mm",
+      "items[2].width_mm",
+      "items[2].length_mm",
+      "items[5].width_mm",
+      "items[5].length_mm",
+      "items[7].width_mm",
+      "items[7].length_mm",
+      "items[8].width_mm",
+      "items[8].length_mm",
+      "items[9].width_mm",
+      "items[9].length_mm",
+      "items[10].width_mm",
+      "items[10].length_mm",
+      "items[11].width_mm",
+      "items[11].length_mm"
+    ],
+    "warnings": [
+      "Позиция 1: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 2: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 3: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 6: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 7: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 8: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 9: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 10: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 11: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 12: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 13: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 14: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 15: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 16: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 17: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 18: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 19: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 20: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 21: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 22: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 23: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 24: значение размера не подтверждается исходным фрагментом.",
+      "Позиция 25: значение размера не подтверждается исходным фрагментом."
+    ],
+    "unprocessed_source": [
+      "Листы:",
+      "Наименование материала Марка, тип , ГОСТ, ТУ Количество Ед.изм."
+    ],
+    "links": [
+      {
+        "line": 1,
+        "source_positions": [
+          19
+        ],
+        "quantity": "6.939",
+        "grade": "ст3"
+      },
+      {
+        "line": 2,
+        "source_positions": [
+          2
+        ],
+        "quantity": "0.01",
+        "grade": "ст3"
+      },
+      {
+        "line": 3,
+        "source_positions": [
+          20
+        ],
+        "quantity": "0.077",
+        "grade": "ст3"
+      },
+      {
+        "line": 4,
+        "source_positions": [
+          24
+        ],
+        "quantity": "0.177",
+        "grade": "ст3"
+      },
+      {
+        "line": 5,
+        "source_positions": [
+          6
+        ],
+        "quantity": "0.01",
+        "grade": "ст3"
+      },
+      {
+        "line": 6,
+        "source_positions": [
+          7
+        ],
+        "quantity": "1.539",
+        "grade": "ст3"
+      },
+      {
+        "line": 7,
+        "source_positions": [
+          10
+        ],
+        "quantity": "0.558",
+        "grade": "ст3"
+      },
+      {
+        "line": 8,
+        "source_positions": [
+          26
+        ],
+        "quantity": "29.58",
+        "grade": "12Х18Н10Т"
+      },
+      {
+        "line": 9,
+        "source_positions": [
+          27
+        ],
+        "quantity": "0.53",
+        "grade": "12Х18Н10Т"
+      },
+      {
+        "line": 10,
+        "source_positions": [
+          3
+        ],
+        "quantity": "0.125",
+        "grade": "09Г2С"
+      },
+      {
+        "line": 11,
+        "source_positions": [
+          1
+        ],
+        "quantity": "1.177",
+        "grade": "255-4"
+      },
+      {
+        "line": 12,
+        "source_positions": [
+          21
+        ],
+        "quantity": "0.802",
+        "grade": "09Г2С-12"
+      },
+      {
+        "line": 13,
+        "source_positions": [
+          22
+        ],
+        "quantity": "0.085",
+        "grade": "09Г2С"
+      },
+      {
+        "line": 14,
+        "source_positions": [
+          23
+        ],
+        "quantity": "0.077",
+        "grade": "Вст09Г2С"
+      },
+      {
+        "line": 15,
+        "source_positions": [
+          25
+        ],
+        "quantity": "60.816",
+        "grade": "С345-6"
+      },
+      {
+        "line": 16,
+        "source_positions": [
+          8
+        ],
+        "quantity": "275.425",
+        "grade": "С345-6"
+      },
+      {
+        "line": 17,
+        "source_positions": [
+          9
+        ],
+        "quantity": "1.101",
+        "grade": "09Г2С-12"
+      },
+      {
+        "line": 18,
+        "source_positions": [
+          11
+        ],
+        "quantity": "0.121",
+        "grade": "С345-6"
+      },
+      {
+        "line": 19,
+        "source_positions": [
+          12
+        ],
+        "quantity": "0.242",
+        "grade": "09Г2С-12"
+      },
+      {
+        "line": 20,
+        "source_positions": [
+          13
+        ],
+        "quantity": "4.607",
+        "grade": "С345-6"
+      },
+      {
+        "line": 21,
+        "source_positions": [
+          14
+        ],
+        "quantity": "0.129",
+        "grade": "09Г2С"
+      },
+      {
+        "line": 22,
+        "source_positions": [
+          15
+        ],
+        "quantity": "2.54",
+        "grade": "355-6"
+      },
+      {
+        "line": 23,
+        "source_positions": [
+          16
+        ],
+        "quantity": "29.122",
+        "grade": "С345-6"
+      },
+      {
+        "line": 24,
+        "source_positions": [
+          17
+        ],
+        "quantity": "1.695",
+        "grade": "09Г2С-12"
+      },
+      {
+        "line": 25,
+        "source_positions": [
+          18
+        ],
+        "quantity": "0.261",
+        "grade": "С345-6"
+      },
+      {
+        "line": 26,
+        "source_positions": [
+          4
+        ],
+        "quantity": "11.048",
+        "grade": "С245"
+      },
+      {
+        "line": 27,
+        "source_positions": [
+          5
+        ],
+        "quantity": "13.503",
+        "grade": "С245-4"
+      }
+    ],
+    "source_text_preserved": true,
+    "saved_items": [
+      {
+        "product": "Лист Х/К",
+        "product_group": "sheet",
+        "size_designation": "0.8×1000×1500",
+        "grade": "12Х18Н10Т",
+        "thickness_mm": 0.8,
+        "width_mm": 1000.0,
+        "length_mm": 1500.0,
+        "quantity": "29.58",
+        "unit": "т",
+        "source_unit": "т",
+        "form": "БТ-ПН-О",
+        "gost_tu": "ГОСТ 19904-90, ГОСТ 5582-75",
+        "source_text": "Прокат листовой холоднокатаный из стали 12Х18Н10ТЛист БТ-ПН-О-0,8х1000х1500/12Х18Н10Т \"ГОСТ 19904-90/\nГОСТ 5582-75\" 29,58 т",
+        "source_position": 26
+      },
+      {
+        "product": "Лист Х/К",
+        "product_group": "sheet",
+        "size_designation": "1.6×1500×2000",
+        "grade": "12Х18Н10Т",
+        "thickness_mm": 1.6,
+        "width_mm": 1500.0,
+        "length_mm": 2000.0,
+        "quantity": "0.53",
+        "unit": "т",
+        "source_unit": "т",
+        "form": "БТ-ПН-О",
+        "gost_tu": "ГОСТ 19904-90, ГОСТ 5582-75",
+        "source_text": "Прокат листовой холоднокатаный из стали 12Х18Н10ТЛист БТ-ПН-О-1,6х1500х2000/12Х18Н10Т ГОСТ 19904-90/ГОСТ 5582-75 0,53 т",
+        "source_position": 27
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "4",
+        "grade": "С255",
+        "thickness_mm": 4.0,
+        "quantity": "6.939",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 4 / С255 ГОСТ 27772-2015 ГОСТ 19903-2015 6,939 т",
+        "source_position": 19
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "6",
+        "grade": "С255",
+        "thickness_mm": 6.0,
+        "quantity": "0.01",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 6 / С255 ГОСТ 27772-\n2015\" ГОСТ 19903-2015 0,01 т",
+        "source_position": 2
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "6",
+        "grade": "09Г2С",
+        "thickness_mm": 6.0,
+        "quantity": "0.125",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-88, ГОСТ 19903-74, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 6 / 09Г2С ГОСТ 27772-88 \"ГОСТ 19903-74\nГОСТ 19903-2015\" 0,125 т",
+        "source_position": 3
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "6",
+        "grade": "С255-4",
+        "thickness_mm": 6.0,
+        "quantity": "0.077",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 6 / С255-4 ГОСТ 27772-\n2015\" ГОСТ 19903-2015 0,077 т",
+        "source_position": 20
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "8",
+        "grade": "255-4",
+        "thickness_mm": 8.0,
+        "quantity": "1.177",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 8 / 255-4 ГОСТ 27772-2015 ГОСТ 19903-2015 1,177 т",
+        "source_position": 1
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "8",
+        "grade": "09Г2С-12",
+        "thickness_mm": 8.0,
+        "quantity": "0.802",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-88, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 8 / 09Г2С-12 ГОСТ 27772-88 ГОСТ 19903-2015 0,802 т",
+        "source_position": 21
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "8",
+        "grade": "09Г2С",
+        "thickness_mm": 8.0,
+        "quantity": "0.085",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-2014, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 8 / 325-09Г2С ГОСТ\n19281-2014\" ГОСТ 19903-2015 0,085 т",
+        "source_position": 22
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "8",
+        "grade": "Вст09Г2С",
+        "thickness_mm": 8.0,
+        "quantity": "0.077",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 8 / Вст09Г2С ГОСТ\n27772-2015\" ГОСТ 19903-2015 0,077 т",
+        "source_position": 23
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "8",
+        "grade": "С255",
+        "thickness_mm": 8.0,
+        "quantity": "0.177",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 8 / С255 ГОСТ 27772-2015 ГОСТ 19903-2015 0,177 т",
+        "source_position": 24
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "8",
+        "grade": "С345-6",
+        "thickness_mm": 8.0,
+        "quantity": "60.816",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 8 / С345-6 ГОСТ 27772-2015 ГОСТ 19903-2015 60,816 т",
+        "source_position": 25
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "10",
+        "grade": "С255",
+        "thickness_mm": 10.0,
+        "quantity": "0.01",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 10 / С255 ГОСТ 27772-\n2015\" ГОСТ 19903-2015 0,01 т",
+        "source_position": 6
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "10",
+        "grade": "С255-4",
+        "thickness_mm": 10.0,
+        "quantity": "1.539",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 10 / С255-4 ГОСТ 27772-2015 ГОСТ 19903-2015 1,539 т",
+        "source_position": 7
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "10",
+        "grade": "С345-6",
+        "thickness_mm": 10.0,
+        "quantity": "275.425",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 10 / С345-6 ГОСТ 27772-2015 ГОСТ 19903-2015 275,425 т",
+        "source_position": 8
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "10",
+        "grade": "Ст09Г2С-12",
+        "thickness_mm": 10.0,
+        "quantity": "1.101",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-2014, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 10 / ст09Г2С-12 ГОСТ\n19281-2014\" ГОСТ 19903-2015 1,101 т",
+        "source_position": 9
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "12",
+        "grade": "ВСт3сп5",
+        "thickness_mm": 12.0,
+        "quantity": "0.558",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-88, ГОСТ 19903-74",
+        "source_text": "Прокат листовой горячекатаный 12 / Вст3сп5 ГОСТ 27772-88 ГОСТ 19903-74 0,558 т",
+        "source_position": 10
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "12",
+        "grade": "С345-6",
+        "thickness_mm": 12.0,
+        "quantity": "0.121",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 12 / С345-6 ГОСТ\n27772-2015\" ГОСТ 19903-2015 0,121 т",
+        "source_position": 11
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "12",
+        "grade": "Ст09Г2С-12",
+        "thickness_mm": 12.0,
+        "quantity": "0.242",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-2014, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 12 / ст09Г2С-12 ГОСТ\n19281-2014\" ГОСТ 19903-2015 0,242 т",
+        "source_position": 12
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "16",
+        "grade": "С345-6",
+        "thickness_mm": 16.0,
+        "quantity": "4.607",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 16 / С345-6 ГОСТ\n27772-2015\" ГОСТ 19903-2015 4,607 т",
+        "source_position": 13
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "20",
+        "grade": "09Г2С",
+        "thickness_mm": 20.0,
+        "quantity": "0.129",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-2014, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 20 / 325-09Г2С ГОСТ\n19281-2014\" ГОСТ 19903-2015 0,129 т",
+        "source_position": 14
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "20",
+        "grade": "355-6",
+        "thickness_mm": 20.0,
+        "quantity": "2.54",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-2014, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 20 / 355-6 ГОСТ 19281-\n2014\" ГОСТ 19903-2015 2,54 т",
+        "source_position": 15
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "20",
+        "grade": "С345-6",
+        "thickness_mm": 20.0,
+        "quantity": "29.122",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 20 / С345-6 ГОСТ\n27772-2015\" ГОСТ 19903-2015 29,122 т",
+        "source_position": 16
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "20",
+        "grade": "Ст09Г2С-12",
+        "thickness_mm": 20.0,
+        "quantity": "1.695",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-2014, ГОСТ 19903-2015",
+        "source_text": "\"Прокат листовой горячекатаный 20 / ст09Г2С-12 ГОСТ\n19281-2014\" ГОСТ 19903-2015 1,695 т",
+        "source_position": 17
+      },
+      {
+        "product": "Лист Г/К",
+        "product_group": "sheet",
+        "size_designation": "25",
+        "grade": "С345-6",
+        "thickness_mm": 25.0,
+        "quantity": "0.261",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ 19903-2015",
+        "source_text": "Прокат листовой горячекатаный 25 / С345-6 ГОСТ 27772-2015 ГОСТ 19903-2015 0,261 т",
+        "source_position": 18
+      },
+      {
+        "product": "Листы стальные просечно-вытяжные",
+        "product_group": "expanded_metal",
+        "size_designation": "506",
+        "grade": "С245",
+        "quantity": "11.048",
+        "unit": "т",
+        "source_unit": "т",
+        "form": "ПВ1",
+        "gost_tu": "ГОСТ 27772-2015, ТУ 36.26.11-5-89",
+        "source_text": "Листы стальные просечно-вытяжные ПВ1 506 / С245 ГОСТ 27772-2015 ТУ 36.26.11-5-89 11,048 т",
+        "source_position": 4
+      },
+      {
+        "product": "Листы стальные просечно-вытяжные",
+        "product_group": "expanded_metal",
+        "size_designation": "506",
+        "grade": "С245-4",
+        "quantity": "13.503",
+        "unit": "т",
+        "source_unit": "т",
+        "form": "ПВ1",
+        "gost_tu": "ГОСТ 27772-2015, ТУ 36.26.11-5-89",
+        "source_text": "\"Листы стальные просечно-вытяжные ПВ1 506 / С245-4\nГОСТ 27772-2015\" ТУ 36.26.11-5-89 13,503 т",
+        "source_position": 5
+      }
+    ],
+    "model_calls": 1,
+    "arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          26
+        ],
+        "sum_t": "29.58",
+        "expected_t": "29.58",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          27
+        ],
+        "sum_t": "0.53",
+        "expected_t": "0.53",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          19
+        ],
+        "sum_t": "6.939",
+        "expected_t": "6.939",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          2,
+          20
+        ],
+        "sum_t": "0.087",
+        "expected_t": "0.087",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          3
+        ],
+        "sum_t": "0.125",
+        "expected_t": "0.125",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          1,
+          24
+        ],
+        "sum_t": "1.354",
+        "expected_t": "1.354",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          21,
+          22,
+          23,
+          25
+        ],
+        "sum_t": "61.780",
+        "expected_t": "61.780",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          6,
+          7
+        ],
+        "sum_t": "1.549",
+        "expected_t": "1.549",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 9,
+        "source_positions": [
+          8,
+          9
+        ],
+        "sum_t": "276.526",
+        "expected_t": "276.526",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 10,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "0.558",
+        "expected_t": "0.558",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 11,
+        "source_positions": [
+          11,
+          12
+        ],
+        "sum_t": "0.363",
+        "expected_t": "0.363",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 12,
+        "source_positions": [
+          13
+        ],
+        "sum_t": "4.607",
+        "expected_t": "4.607",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 13,
+        "source_positions": [
+          14,
+          15,
+          16,
+          17
+        ],
+        "sum_t": "33.486",
+        "expected_t": "33.486",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 14,
+        "source_positions": [
+          18
+        ],
+        "sum_t": "0.261",
+        "expected_t": "0.261",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 15,
+        "source_positions": [
+          4,
+          5
+        ],
+        "sum_t": "24.551",
+        "expected_t": "24.551",
+        "difference_t": "0.000"
+      }
+    ],
+    "exact_text_match": false,
+    "diff": [
+      "--- expected",
+      "+++ actual",
+      "@@ -1,17 +1,29 @@",
+      "-Лист Х/К 0,8х1000х1500 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 29,58 т",
+      "-Лист Х/К 1,6х1500х2000 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 0,53 т",
+      "+Лист Г/К 4 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 6,939 т",
+      "+Лист Г/К 6 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,01 т",
+      "+Лист Г/К 6 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,077 т",
+      "+Лист Г/К 8 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,177 т",
+      "+Лист Г/К 10 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,01 т",
+      "+Лист Г/К 10 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 1,539 т",
+      "+Лист Г/К 12 ст3 ГОСТ 27772-88, ГОСТ 19903-74 — 0,558 т",
+      " ",
+      "-Лист Г/К 4 Ст3 — 6,939 т",
+      "-Лист Г/К 6 Ст3 — 0,087 т",
+      "-Лист Г/К 6 09Г2С — 0,125 т",
+      "-Лист Г/К 8 Ст3 — 1,354 т",
+      "-Лист Г/К 8 09Г2С — 61,780 т",
+      "-Лист Г/К 10 Ст3 — 1,549 т",
+      "-Лист Г/К 10 09Г2С — 276,526 т",
+      "-Лист Г/К 12 Ст3сп5 — 0,558 т",
+      "-Лист Г/К 12 09Г2С — 0,363 т",
+      "-Лист Г/К 16 09Г2С — 4,607 т",
+      "-Лист Г/К 20 09Г2С — 33,486 т",
+      "-Лист Г/К 25 09Г2С — 0,261 т",
+      "+Лист Х/К 0.8х1000х1500 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 29,58 т",
+      "+Лист Х/К 1.6х1500х2000 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 0,53 т",
+      "+Лист Г/К 6 09Г2С ГОСТ 27772-88, ГОСТ 19903-74, ГОСТ 19903-2015 — 0,125 т",
+      "+Лист Г/К 8 255-4 ГОСТ 27772-2015, ГОСТ 19903-2015 — 1,177 т",
+      "+Лист Г/К 8 09Г2С-12 ГОСТ 27772-88, ГОСТ 19903-2015 — 0,802 т",
+      "+Лист Г/К 8 09Г2С ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,085 т",
+      "+Лист Г/К 8 Вст09Г2С ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,077 т",
+      "+Лист Г/К 8 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 60,816 т",
+      "+Лист Г/К 10 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 275,425 т",
+      "+Лист Г/К 10 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 1,101 т",
+      "+Лист Г/К 12 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,121 т",
+      "+Лист Г/К 12 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,242 т",
+      "+Лист Г/К 16 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 4,607 т",
+      "+Лист Г/К 20 09Г2С ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,129 т",
+      "+Лист Г/К 20 355-6 ГОСТ 19281-2014, ГОСТ 19903-2015 — 2,54 т",
+      "+Лист Г/К 20 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 29,122 т",
+      "+Лист Г/К 20 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 1,695 т",
+      "+Лист Г/К 25 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,261 т",
+      " ",
+      "-Лист ПВЛ ПВ1 506 Ст3 ГОСТ 27772-2015, ТУ 36.26.11-5-89 — 24,551 т",
+      "+Лист ПВЛ 506 С245 ПВ1 ГОСТ 27772-2015, ТУ 36.26.11-5-89 — 11,048 т",
+      "+Лист ПВЛ 506 С245-4 ПВ1 ГОСТ 27772-2015, ТУ 36.26.11-5-89 — 13,503 т"
+    ],
+    "actual_text": "Лист Г/К 4 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 6,939 т\nЛист Г/К 6 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,01 т\nЛист Г/К 6 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,077 т\nЛист Г/К 8 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,177 т\nЛист Г/К 10 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,01 т\nЛист Г/К 10 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 1,539 т\nЛист Г/К 12 ст3 ГОСТ 27772-88, ГОСТ 19903-74 — 0,558 т\n\nЛист Х/К 0.8х1000х1500 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 29,58 т\nЛист Х/К 1.6х1500х2000 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 0,53 т\nЛист Г/К 6 09Г2С ГОСТ 27772-88, ГОСТ 19903-74, ГОСТ 19903-2015 — 0,125 т\nЛист Г/К 8 255-4 ГОСТ 27772-2015, ГОСТ 19903-2015 — 1,177 т\nЛист Г/К 8 09Г2С-12 ГОСТ 27772-88, ГОСТ 19903-2015 — 0,802 т\nЛист Г/К 8 09Г2С ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,085 т\nЛист Г/К 8 Вст09Г2С ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,077 т\nЛист Г/К 8 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 60,816 т\nЛист Г/К 10 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 275,425 т\nЛист Г/К 10 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 1,101 т\nЛист Г/К 12 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,121 т\nЛист Г/К 12 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,242 т\nЛист Г/К 16 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 4,607 т\nЛист Г/К 20 09Г2С ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,129 т\nЛист Г/К 20 355-6 ГОСТ 19281-2014, ГОСТ 19903-2015 — 2,54 т\nЛист Г/К 20 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 29,122 т\nЛист Г/К 20 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 1,695 т\nЛист Г/К 25 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,261 т\n\nЛист ПВЛ 506 С245 ПВ1 ГОСТ 27772-2015, ТУ 36.26.11-5-89 — 11,048 т\nЛист ПВЛ 506 С245-4 ПВ1 ГОСТ 27772-2015, ТУ 36.26.11-5-89 — 13,503 т",
+    "user_messages": [
+      "Частичная нормализация; требуется проверка:\nЛист Г/К 4 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 6,939 т\nЛист Г/К 6 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,01 т\nЛист Г/К 6 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,077 т\nЛист Г/К 8 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,177 т\nЛист Г/К 10 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,01 т\nЛист Г/К 10 ст3 ГОСТ 27772-2015, ГОСТ 19903-2015 — 1,539 т\nЛист Г/К 12 ст3 ГОСТ 27772-88, ГОСТ 19903-74 — 0,558 т\n\nЛист Х/К 0.8х1000х1500 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 29,58 т\nЛист Х/К 1.6х1500х2000 12Х18Н10Т БТ-ПН-О ГОСТ 19904-90, ГОСТ 5582-75 — 0,53 т\nЛист Г/К 6 09Г2С ГОСТ 27772-88, ГОСТ 19903-74, ГОСТ 19903-2015 — 0,125 т\nЛист Г/К 8 255-4 ГОСТ 27772-2015, ГОСТ 19903-2015 — 1,177 т\nЛист Г/К 8 09Г2С-12 ГОСТ 27772-88, ГОСТ 19903-2015 — 0,802 т\nЛист Г/К 8 09Г2С ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,085 т\nЛист Г/К 8 Вст09Г2С ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,077 т\nЛист Г/К 8 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 60,816 т\nЛист Г/К 10 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 275,425 т\nЛист Г/К 10 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 1,101 т\nЛист Г/К 12 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,121 т\nЛист Г/К 12 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,242 т\nЛист Г/К 16 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 4,607 т\nЛист Г/К 20 09Г2С ГОСТ 19281-2014, ГОСТ 19903-2015 — 0,129 т\nЛист Г/К 20 355-6 ГОСТ 19281-2014, ГОСТ 19903-2015 — 2,54 т\nЛист Г/К 20 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 29,122 т\nЛист Г/К 20 09Г2С-12 ГОСТ 19281-2014, ГОСТ 19903-2015 — 1,695 т\nЛист Г/К 25 С345-6 ГОСТ 27772-2015, ГОСТ 19903-2015 — 0,261 т\n\nЛист ПВЛ 506 С245 ПВ1 ГОСТ 27772-2015, ТУ 36.26.11-5-89 — 11,048 т\nЛист ПВЛ 506 С245-4 ПВ1 ГОСТ 27772-2015, ТУ 36.26.11-5-89 — 13,503 т",
+      "Исходная заявка сохранена без изменений:",
+      "Листы:\nНаименование материала Марка, тип , ГОСТ, ТУ Количество Ед.изм.\nПрокат листовой горячекатаный 8 / 255-4 ГОСТ 27772-2015 ГОСТ 19903-2015 1,177 т\n\"Прокат листовой горячекатаный 6 / С255 ГОСТ 27772-\n2015\" ГОСТ 19903-2015 0,01 т\nПрокат листовой горячекатаный 6 / 09Г2С ГОСТ 27772-88 \"ГОСТ 19903-74\nГОСТ 19903-2015\" 0,125 т\nЛисты стальные просечно-вытяжные ПВ1 506 / С245 ГОСТ 27772-2015 ТУ 36.26.11-5-89 11,048 т\n\"Листы стальные просечно-вытяжные ПВ1 506 / С245-4\nГОСТ 27772-2015\" ТУ 36.26.11-5-89 13,503 т\n\"Прокат листовой горячекатаный 10 / С255 ГОСТ 27772-\n2015\" ГОСТ 19903-2015 0,01 т\nПрокат листовой горячекатаный 10 / С255-4 ГОСТ 27772-2015 ГОСТ 19903-2015 1,539 т\nПрокат листовой горячекатаный 10 / С345-6 ГОСТ 27772-2015 ГОСТ 19903-2015 275,425 т\n\"Прокат листовой горячекатаный 10 / ст09Г2С-12 ГОСТ\n19281-2014\" ГОСТ 19903-2015 1,101 т\nПрокат листовой горячекатаный 12 / Вст3сп5 ГОСТ 27772-88 ГОСТ 19903-74 0,558 т\n\"Прокат листовой горячекатаный 12 / С345-6 ГОСТ\n27772-2015\" ГОСТ 19903-2015 0,121 т\n\"Прокат листовой горячекатаный 12 / ст09Г2С-12 ГОСТ\n19281-2014\" ГОСТ 19903-2015 0,242 т\n\"Прокат листовой горячекатаный 16 / С345-6 ГОСТ\n27772-2015\" ГОСТ 19903-2015 4,607 т\n\"Прокат листовой горячекатаный 20 / 325-09Г2С ГОСТ\n19281-2014\" ГОСТ 19903-2015 0,129 т\n\"Прокат листовой горячекатаный 20 / 355-6 ГОСТ 19281-\n2014\" ГОСТ 19903-2015 2,54 т\n\"Прокат листовой горячекатаный 20 / С345-6 ГОСТ\n27772-2015\" ГОСТ 19903-2015 29,122 т\n\"Прокат листовой горячекатаный 20 / ст09Г2С-12 ГОСТ\n19281-2014\" ГОСТ 19903-2015 1,695 т\nПрокат листовой горячекатаный 25 / С345-6 ГОСТ 27772-2015 ГОСТ 19903-2015 0,261 т\nПрокат листовой горячекатаный 4 / С255 ГОСТ 27772-2015 ГОСТ 19903-2015 6,939 т\n\"Прокат листовой горячекатаный 6 / С255-4 ГОСТ 27772-\n2015\" ГОСТ 19903-2015 0,077 т\nПрокат листовой горячекатаный 8 / 09Г2С-12 ГОСТ 27772-88 ГОСТ 19903-2015 0,802 т\n\"Прокат листовой горячекатаный 8 / 325-09Г2С ГОСТ\n19281-2014\" ГОСТ 19903-2015 0,085 т\n\"Прокат листовой горячекатаный 8 / Вст09Г2С ГОСТ\n27772-2015\" ГОСТ 19903-2015 0,077 т\nПрокат листовой горячекатаный 8 / С255 ГОСТ 27772-2015 ГОСТ 19903-2015 0,177 т\nПрокат листовой горячекатаный 8 / С345-6 ГОСТ 27772-2015 ГОСТ 19903-2015 60,816 т\nПрокат листовой холоднокатаный из стали 12Х18Н10ТЛист БТ-ПН-О-0,8х1000х1500/12Х18Н10Т \"ГОСТ 19904-90/\nГОСТ 5582-75\" 29,58 т\nПрокат листовой холоднокатаный из стали 12Х18Н10ТЛист БТ-ПН-О-1,6х1500х2000/12Х18Н10Т ГОСТ 19904-90/ГОСТ 5582-75 0,53 т\n",
+      "Вопросы по заявке:\nТребуются уточнения:\nПоз. 1 — Лист Г/К: ширину и длину.\nПоз. 2 — Лист Г/К: ширину и длину.\nПоз. 3 — Лист Г/К: ширину и длину.\nПоз. 6 — Лист Г/К: ширину и длину.\nПоз. 7 — Лист Г/К: ширину и длину.\nПоз. 8 — Лист Г/К: ширину и длину.\nПоз. 9 — Лист Г/К: ширину и длину.\nПоз. 10 — Лист Г/К: ширину и длину.\nПоз. 11 — Лист Г/К: ширину и длину.\nПоз. 12 — Лист Г/К: ширину и длину.\nПоз. 13 — Лист Г/К: ширину и длину.\nПоз. 14 — Лист Г/К: ширину и длину.\nПоз. 15 — Лист Г/К: ширину и длину.\nПоз. 16 — Лист Г/К: ширину и длину.\nПоз. 17 — Лист Г/К: ширину и длину.\nПоз. 18 — Лист Г/К: ширину и длину.\nПоз. 19 — Лист Г/К: ширину и длину.\nПоз. 20 — Лист Г/К: ширину и длину.\nПоз. 21 — Лист Г/К: ширину и длину.\nПоз. 22 — Лист Г/К: ширину и длину.\nПоз. 23 — Лист Г/К: ширину и длину.\nПоз. 24 — Лист Г/К: ширину и длину.\nПоз. 25 — Лист Г/К: ширину и длину.\nУточните наименование и характеристики нераспознанных строк: «Листы:»; «Наименование материала Марка, тип , ГОСТ, ТУ Количество Ед.изм.»."
+    ]
+  },
+  {
+    "case": "beams",
+    "source_count": 10,
+    "transport_count": 10,
+    "preserved_count": 10,
+    "fully_valid_count": 10,
+    "damaged": [],
+    "missing_positions": [],
+    "events": [
+      {
+        "event": "operation_complete",
+        "operation": "745cb1cd0c8a",
+        "stage": "sqlite_save",
+        "result": "ok",
+        "calls": 0,
+        "stage_calls": {},
+        "medium": false,
+        "stage_ms": {
+          "routing": 7.267,
+          "sqlite_load": 0.341,
+          "extraction": 2.358,
+          "validation": 5.378,
+          "normalization": 1.434,
+          "sorting": 0.1,
+          "formatting": 6.396,
+          "sqlite_save": 17.398
+        },
+        "http_attempts": 0,
+        "sdk_retries": 0,
+        "duration_ms": 40.684
+      }
+    ],
+    "output_lines": 10,
+    "expected_lines": 8,
+    "source_mass_t": "476.313",
+    "saved_mass_t": "476.313",
+    "grouped_mass_t": "476.313",
+    "expected_mass_t": "476.313",
+    "fallback_status": "partial",
+    "is_valid": false,
+    "missing_fields": [],
+    "warnings": [],
+    "unprocessed_source": [
+      "Балки:"
+    ],
+    "links": [
+      {
+        "line": 1,
+        "source_positions": [
+          1
+        ],
+        "quantity": "11.562",
+        "grade": "С345-6"
+      },
+      {
+        "line": 2,
+        "source_positions": [
+          2
+        ],
+        "quantity": "3.895",
+        "grade": "С345-3"
+      },
+      {
+        "line": 3,
+        "source_positions": [
+          3
+        ],
+        "quantity": "14.201",
+        "grade": "С345-6"
+      },
+      {
+        "line": 4,
+        "source_positions": [
+          5
+        ],
+        "quantity": "9.093",
+        "grade": "345-3"
+      },
+      {
+        "line": 5,
+        "source_positions": [
+          4
+        ],
+        "quantity": "19.25",
+        "grade": "С345-6"
+      },
+      {
+        "line": 6,
+        "source_positions": [
+          6
+        ],
+        "quantity": "4.619",
+        "grade": "С345-6"
+      },
+      {
+        "line": 7,
+        "source_positions": [
+          7
+        ],
+        "quantity": "58.485",
+        "grade": "09Г2С"
+      },
+      {
+        "line": 8,
+        "source_positions": [
+          8
+        ],
+        "quantity": "199.345",
+        "grade": "С345-6"
+      },
+      {
+        "line": 9,
+        "source_positions": [
+          9
+        ],
+        "quantity": "50.773",
+        "grade": "09Г2С"
+      },
+      {
+        "line": 10,
+        "source_positions": [
+          10
+        ],
+        "quantity": "105.09",
+        "grade": "С345-6"
+      }
+    ],
+    "source_text_preserved": true,
+    "saved_items": [
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "16Б1",
+        "grade": "С345-6",
+        "quantity": "11.562",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ Р 57837-2017",
+        "source_text": "Двутавры стальные горячекатаные 16Б1 / С345-6 ГОСТ 27772-2015 ГОСТ Р 57837-2017 11,562 т",
+        "source_position": 1
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "20Б1",
+        "grade": "С345-3",
+        "quantity": "3.895",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-88, СТО АСЧМ 20-93",
+        "source_text": "\"Двутавры стальные горячекатаные 20Б1 / С345-3 ГОСТ\n27772-88\" СТО АСЧМ 20-93 3,895 т",
+        "source_position": 2
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "20Б1",
+        "grade": "С345-6",
+        "quantity": "14.201",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ Р 57837-2017",
+        "source_text": "\"Двутавры стальные горячекатаные 20Б1 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 14,201 т",
+        "source_position": 3
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "20Ш1",
+        "grade": "345-3",
+        "quantity": "9.093",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-88, СТО АСЧМ 20-93",
+        "source_text": "Двутавры стальные горячекатаные 20Ш1 / 345-3 ГОСТ 27772-88 СТО АСЧМ 20-93 9,093 т",
+        "source_position": 5
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "20К2",
+        "grade": "С345-6",
+        "quantity": "19.25",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ Р 57837-2017",
+        "source_text": "\"Двутавры стальные горячекатаные 20К2 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 19,25 т",
+        "source_position": 4
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "20Ш2",
+        "grade": "С345-6",
+        "quantity": "4.619",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ Р 57837-2017",
+        "source_text": "\"Двутавры стальные горячекатаные 20Ш2 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 4,619 т",
+        "source_position": 6
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "25К2",
+        "grade": "09Г2С",
+        "quantity": "58.485",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-89, СТО АСЧМ 20-93",
+        "source_text": "\"Двутавры стальные горячекатаные 25К2 / 09Г2С ГОСТ\n19281-89\" СТО АСЧМ 20-93 58,485 т",
+        "source_position": 7
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "25К2",
+        "grade": "С345-6",
+        "quantity": "199.345",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ Р 57837-2017",
+        "source_text": "\"Двутавры стальные горячекатаные 25К2 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 199,345 т",
+        "source_position": 8
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "35К2",
+        "grade": "09Г2С",
+        "quantity": "50.773",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 19281-89, СТО АСЧМ 20-93",
+        "source_text": "\"Двутавры стальные горячекатаные 35К2 / 09Г2С ГОСТ\n19281-89\" СТО АСЧМ 20-93 50,773 т",
+        "source_position": 9
+      },
+      {
+        "product": "Двутавры стальные горячекатаные",
+        "product_group": "i_beam",
+        "size_designation": "40К3",
+        "grade": "С345-6",
+        "quantity": "105.09",
+        "unit": "т",
+        "source_unit": "т",
+        "gost_tu": "ГОСТ 27772-2015, ГОСТ Р 57837-2017",
+        "source_text": "\"Двутавры стальные горячекатаные 40К3 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 105,09 т",
+        "source_position": 10
+      }
+    ],
+    "model_calls": 1,
+    "arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          1
+        ],
+        "sum_t": "11.562",
+        "expected_t": "11.562",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          2,
+          3
+        ],
+        "sum_t": "18.096",
+        "expected_t": "18.096",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          4
+        ],
+        "sum_t": "19.25",
+        "expected_t": "19.25",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          5
+        ],
+        "sum_t": "9.093",
+        "expected_t": "9.093",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          6
+        ],
+        "sum_t": "4.619",
+        "expected_t": "4.619",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          7,
+          8
+        ],
+        "sum_t": "257.830",
+        "expected_t": "257.830",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          9
+        ],
+        "sum_t": "50.773",
+        "expected_t": "50.773",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "105.09",
+        "expected_t": "105.09",
+        "difference_t": "0.00"
+      }
+    ],
+    "exact_text_match": false,
+    "diff": [
+      "--- expected",
+      "+++ actual",
+      "@@ -1,8 +1,10 @@",
+      "-Балка 16Б1 С355 — 11,562 т",
+      "-Балка 20Б1 С355 — 18,096 т",
+      "-Балка 20К2 С355 — 19,25 т",
+      "-Балка 20Ш1 С355 — 9,093 т",
+      "-Балка 20Ш2 С355 — 4,619 т",
+      "-Балка 25К2 С355 — 257,830 т",
+      "-Балка 35К2 С355 — 50,773 т",
+      "-Балка 40К3 С355 — 105,09 т",
+      "+Двутавр 16Б1 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 11,562 т",
+      "+Двутавр 20Б1 С345-3 ГОСТ 27772-88, СТО АСЧМ 20-93 — 3,895 т",
+      "+Двутавр 20Б1 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 14,201 т",
+      "+Двутавр 20Ш1 345-3 ГОСТ 27772-88, СТО АСЧМ 20-93 — 9,093 т",
+      "+Двутавр 20К2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 19,25 т",
+      "+Двутавр 20Ш2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 4,619 т",
+      "+Двутавр 25К2 09Г2С ГОСТ 19281-89, СТО АСЧМ 20-93 — 58,485 т",
+      "+Двутавр 25К2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 199,345 т",
+      "+Двутавр 35К2 09Г2С ГОСТ 19281-89, СТО АСЧМ 20-93 — 50,773 т",
+      "+Двутавр 40К3 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 105,09 т"
+    ],
+    "actual_text": "Двутавр 16Б1 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 11,562 т\nДвутавр 20Б1 С345-3 ГОСТ 27772-88, СТО АСЧМ 20-93 — 3,895 т\nДвутавр 20Б1 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 14,201 т\nДвутавр 20Ш1 345-3 ГОСТ 27772-88, СТО АСЧМ 20-93 — 9,093 т\nДвутавр 20К2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 19,25 т\nДвутавр 20Ш2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 4,619 т\nДвутавр 25К2 09Г2С ГОСТ 19281-89, СТО АСЧМ 20-93 — 58,485 т\nДвутавр 25К2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 199,345 т\nДвутавр 35К2 09Г2С ГОСТ 19281-89, СТО АСЧМ 20-93 — 50,773 т\nДвутавр 40К3 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 105,09 т",
+    "user_messages": [
+      "Частичная нормализация; требуется проверка:\nДвутавр 16Б1 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 11,562 т\nДвутавр 20Б1 С345-3 ГОСТ 27772-88, СТО АСЧМ 20-93 — 3,895 т\nДвутавр 20Б1 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 14,201 т\nДвутавр 20Ш1 345-3 ГОСТ 27772-88, СТО АСЧМ 20-93 — 9,093 т\nДвутавр 20К2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 19,25 т\nДвутавр 20Ш2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 4,619 т\nДвутавр 25К2 09Г2С ГОСТ 19281-89, СТО АСЧМ 20-93 — 58,485 т\nДвутавр 25К2 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 199,345 т\nДвутавр 35К2 09Г2С ГОСТ 19281-89, СТО АСЧМ 20-93 — 50,773 т\nДвутавр 40К3 С345-6 ГОСТ 27772-2015, ГОСТ Р 57837-2017 — 105,09 т",
+      "Исходная заявка сохранена без изменений:",
+      "Балки:\nДвутавры стальные горячекатаные 16Б1 / С345-6 ГОСТ 27772-2015 ГОСТ Р 57837-2017 11,562 т\n\"Двутавры стальные горячекатаные 20Б1 / С345-3 ГОСТ\n27772-88\" СТО АСЧМ 20-93 3,895 т\n\"Двутавры стальные горячекатаные 20Б1 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 14,201 т\n\"Двутавры стальные горячекатаные 20К2 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 19,25 т\nДвутавры стальные горячекатаные 20Ш1 / 345-3 ГОСТ 27772-88 СТО АСЧМ 20-93 9,093 т\n\"Двутавры стальные горячекатаные 20Ш2 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 4,619 т\n\"Двутавры стальные горячекатаные 25К2 / 09Г2С ГОСТ\n19281-89\" СТО АСЧМ 20-93 58,485 т\n\"Двутавры стальные горячекатаные 25К2 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 199,345 т\n\"Двутавры стальные горячекатаные 35К2 / 09Г2С ГОСТ\n19281-89\" СТО АСЧМ 20-93 50,773 т\n\"Двутавры стальные горячекатаные 40К3 / С345-6 ГОСТ\n27772-2015\" ГОСТ Р 57837-2017 105,09 т\n",
+      "Вопросы по заявке:\nУточните наименование и характеристики нераспознанных строк: «Балки:»."
+    ]
+  }
+]

@@ -1,0 +1,1939 @@
+{
+  "angles": {
+    "source_count": 38,
+    "source_sha256": "8523c2182b80bc11340a382f7e1487b62408c35688460a98c86017749e8b7af2",
+    "rows": [
+      {
+        "position": 1,
+        "source_start": 0,
+        "source_end": 97,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.428",
+        "group": "angle",
+        "size": "100х100х8"
+      },
+      {
+        "position": 2,
+        "source_start": 98,
+        "source_end": 182,
+        "raw_grade": "Ст09Г2С",
+        "standards": [
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.103",
+        "group": "angle",
+        "size": "100х100х8"
+      },
+      {
+        "position": 3,
+        "source_start": 183,
+        "source_end": 266,
+        "raw_grade": "ст3пс5",
+        "standards": [
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.019",
+        "group": "angle",
+        "size": "100х100х8"
+      },
+      {
+        "position": 4,
+        "source_start": 267,
+        "source_end": 361,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "2.22",
+        "group": "angle",
+        "size": "45х45х4"
+      },
+      {
+        "position": 5,
+        "source_start": 362,
+        "source_end": 459,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "5.585",
+        "group": "angle",
+        "size": "45х45х4"
+      },
+      {
+        "position": 6,
+        "source_start": 460,
+        "source_end": 557,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.317",
+        "group": "angle",
+        "size": "50х50х5"
+      },
+      {
+        "position": 7,
+        "source_start": 558,
+        "source_end": 655,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.609",
+        "group": "angle",
+        "size": "63х63х5"
+      },
+      {
+        "position": 8,
+        "source_start": 656,
+        "source_end": 753,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "7.213",
+        "group": "angle",
+        "size": "63х63х5"
+      },
+      {
+        "position": 9,
+        "source_start": 754,
+        "source_end": 852,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "19.935",
+        "group": "angle",
+        "size": "75х75х6"
+      },
+      {
+        "position": 10,
+        "source_start": 853,
+        "source_end": 950,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "2.358",
+        "group": "angle",
+        "size": "80х80х6"
+      },
+      {
+        "position": 11,
+        "source_start": 951,
+        "source_end": 1052,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.102",
+        "group": "angle",
+        "size": "100х100х8"
+      },
+      {
+        "position": 12,
+        "source_start": 1053,
+        "source_end": 1154,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.303",
+        "group": "angle",
+        "size": "125х125х8"
+      },
+      {
+        "position": 13,
+        "source_start": 1155,
+        "source_end": 1257,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "5.924",
+        "group": "angle",
+        "size": "160х160х10"
+      },
+      {
+        "position": 14,
+        "source_start": 1258,
+        "source_end": 1361,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "10.068",
+        "group": "angle",
+        "size": "200х200х12"
+      },
+      {
+        "position": 15,
+        "source_start": 1362,
+        "source_end": 1459,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.073",
+        "group": "angle",
+        "size": "50х50х5"
+      },
+      {
+        "position": 16,
+        "source_start": 1460,
+        "source_end": 1559,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.047",
+        "group": "angle",
+        "size": "50х50х5"
+      },
+      {
+        "position": 17,
+        "source_start": 1560,
+        "source_end": 1659,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "0.084",
+        "group": "angle",
+        "size": "75х75х6"
+      },
+      {
+        "position": 18,
+        "source_start": 1660,
+        "source_end": 1757,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "1.2",
+        "group": "angle",
+        "size": "90х90х6"
+      },
+      {
+        "position": 19,
+        "source_start": 1758,
+        "source_end": 1816,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8509-93"
+        ],
+        "quantity": "2.545",
+        "group": "angle",
+        "size": "50х50х5"
+      },
+      {
+        "position": 20,
+        "source_start": 1817,
+        "source_end": 1878,
+        "raw_grade": "В Ст.3 сп.5",
+        "standards": [
+          "ГОСТ 8509-93",
+          "ГОСТ 535-05"
+        ],
+        "quantity": "0.193",
+        "group": "angle",
+        "size": "50х50х5"
+      },
+      {
+        "position": 21,
+        "source_start": 1880,
+        "source_end": 1934,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "2.22",
+        "group": "channel",
+        "size": "10П"
+      },
+      {
+        "position": 22,
+        "source_start": 1935,
+        "source_end": 2016,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.086",
+        "group": "channel",
+        "size": "10У"
+      },
+      {
+        "position": 23,
+        "source_start": 2017,
+        "source_end": 2100,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.215",
+        "group": "channel",
+        "size": "10У"
+      },
+      {
+        "position": 24,
+        "source_start": 2101,
+        "source_end": 2182,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.562",
+        "group": "channel",
+        "size": "12У"
+      },
+      {
+        "position": 25,
+        "source_start": 2183,
+        "source_end": 2264,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.279",
+        "group": "channel",
+        "size": "12У"
+      },
+      {
+        "position": 26,
+        "source_start": 2265,
+        "source_end": 2346,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "6.663",
+        "group": "channel",
+        "size": "12У"
+      },
+      {
+        "position": 27,
+        "source_start": 2347,
+        "source_end": 2430,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.104",
+        "group": "channel",
+        "size": "14У"
+      },
+      {
+        "position": 28,
+        "source_start": 2431,
+        "source_end": 2512,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "1.579",
+        "group": "channel",
+        "size": "14У"
+      },
+      {
+        "position": 29,
+        "source_start": 2513,
+        "source_end": 2592,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.102",
+        "group": "channel",
+        "size": "16У"
+      },
+      {
+        "position": 30,
+        "source_start": 2593,
+        "source_end": 2676,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "3.608",
+        "group": "channel",
+        "size": "16У"
+      },
+      {
+        "position": 31,
+        "source_start": 2677,
+        "source_end": 2760,
+        "raw_grade": "С345-3",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.513",
+        "group": "channel",
+        "size": "16У"
+      },
+      {
+        "position": 32,
+        "source_start": 2761,
+        "source_end": 2842,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "5.814",
+        "group": "channel",
+        "size": "16У"
+      },
+      {
+        "position": 33,
+        "source_start": 2843,
+        "source_end": 2921,
+        "raw_grade": "09Г2С",
+        "standards": [
+          "ГОСТ 27772-88",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.446",
+        "group": "channel",
+        "size": "20У"
+      },
+      {
+        "position": 34,
+        "source_start": 2922,
+        "source_end": 3005,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.073",
+        "group": "channel",
+        "size": "20У"
+      },
+      {
+        "position": 35,
+        "source_start": 3006,
+        "source_end": 3087,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.038",
+        "group": "channel",
+        "size": "22У"
+      },
+      {
+        "position": 36,
+        "source_start": 3088,
+        "source_end": 3168,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "51",
+        "group": "channel",
+        "size": "24У"
+      },
+      {
+        "position": 37,
+        "source_start": 3169,
+        "source_end": 3252,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "72.44",
+        "group": "channel",
+        "size": "30У"
+      },
+      {
+        "position": 38,
+        "source_start": 3253,
+        "source_end": 3335,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 8240-97"
+        ],
+        "quantity": "0.287",
+        "group": "channel",
+        "size": "8У"
+      }
+    ],
+    "expected_kind": "conservative_28_with_two_explicit_decisions_not_full_user_09g2s",
+    "procurement_arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          4,
+          5
+        ],
+        "sum_t": "7.805",
+        "expected_t": "7.805",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          6,
+          15,
+          19,
+          20
+        ],
+        "sum_t": "3.128",
+        "expected_t": "3.128",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          7
+        ],
+        "sum_t": "0.609",
+        "expected_t": "0.609",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          17
+        ],
+        "sum_t": "0.084",
+        "expected_t": "0.084",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          18
+        ],
+        "sum_t": "1.2",
+        "expected_t": "1.200",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          1,
+          3,
+          11
+        ],
+        "sum_t": "0.549",
+        "expected_t": "0.549",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          12
+        ],
+        "sum_t": "0.303",
+        "expected_t": "0.303",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          16
+        ],
+        "sum_t": "0.047",
+        "expected_t": "0.047",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 9,
+        "source_positions": [
+          8
+        ],
+        "sum_t": "7.213",
+        "expected_t": "7.213",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 10,
+        "source_positions": [
+          9
+        ],
+        "sum_t": "19.935",
+        "expected_t": "19.935",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 11,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "2.358",
+        "expected_t": "2.358",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 12,
+        "source_positions": [
+          2
+        ],
+        "sum_t": "0.103",
+        "expected_t": "0.103",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 13,
+        "source_positions": [
+          13
+        ],
+        "sum_t": "5.924",
+        "expected_t": "5.924",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 14,
+        "source_positions": [
+          14
+        ],
+        "sum_t": "10.068",
+        "expected_t": "10.068",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 15,
+        "source_positions": [
+          38
+        ],
+        "sum_t": "0.287",
+        "expected_t": "0.287",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 16,
+        "source_positions": [
+          21
+        ],
+        "sum_t": "2.22",
+        "expected_t": "2.220",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 17,
+        "source_positions": [
+          22
+        ],
+        "sum_t": "0.086",
+        "expected_t": "0.086",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 18,
+        "source_positions": [
+          24,
+          25
+        ],
+        "sum_t": "0.841",
+        "expected_t": "0.841",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 19,
+        "source_positions": [
+          27
+        ],
+        "sum_t": "0.104",
+        "expected_t": "0.104",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 20,
+        "source_positions": [
+          29,
+          30
+        ],
+        "sum_t": "3.710",
+        "expected_t": "3.710",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 21,
+        "source_positions": [
+          23
+        ],
+        "sum_t": "0.215",
+        "expected_t": "0.215",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 22,
+        "source_positions": [
+          26
+        ],
+        "sum_t": "6.663",
+        "expected_t": "6.663",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 23,
+        "source_positions": [
+          28
+        ],
+        "sum_t": "1.579",
+        "expected_t": "1.579",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 24,
+        "source_positions": [
+          31,
+          32
+        ],
+        "sum_t": "6.327",
+        "expected_t": "6.327",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 25,
+        "source_positions": [
+          33,
+          34
+        ],
+        "sum_t": "0.519",
+        "expected_t": "0.519",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 26,
+        "source_positions": [
+          35
+        ],
+        "sum_t": "0.038",
+        "expected_t": "0.038",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 27,
+        "source_positions": [
+          36
+        ],
+        "sum_t": "51",
+        "expected_t": "51.000",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 28,
+        "source_positions": [
+          37
+        ],
+        "sum_t": "72.44",
+        "expected_t": "72.440",
+        "difference_t": "0.000"
+      }
+    ],
+    "grouping_basis": "Audit of desired display only; not approval for technical substitution or production policy.",
+    "source_text_sha256": "63801d142777cc32e301628971ea76f81f4101450502cd34b2636484aa39b6b1"
+  },
+  "profiles": {
+    "source_count": 22,
+    "source_sha256": "feeeb132883f1333300c45e9ab4d152a9202718e2e22f10fd0024242d7439a15",
+    "rows": [
+      {
+        "position": 1,
+        "source_start": 0,
+        "source_end": 101,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "12.265",
+        "group": "profile_pipe",
+        "size": "100х100х5"
+      },
+      {
+        "position": 2,
+        "source_start": 102,
+        "source_end": 205,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "27.337",
+        "group": "profile_pipe",
+        "size": "120х120х5"
+      },
+      {
+        "position": 3,
+        "source_start": 206,
+        "source_end": 308,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "2.439",
+        "group": "profile_pipe",
+        "size": "120х120х6"
+      },
+      {
+        "position": 4,
+        "source_start": 309,
+        "source_end": 411,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "1.981",
+        "group": "profile_pipe",
+        "size": "120х120х6"
+      },
+      {
+        "position": 5,
+        "source_start": 412,
+        "source_end": 513,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "16.265",
+        "group": "profile_pipe",
+        "size": "140х140х5"
+      },
+      {
+        "position": 6,
+        "source_start": 514,
+        "source_end": 616,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.812",
+        "group": "profile_pipe",
+        "size": "140х140х6"
+      },
+      {
+        "position": 7,
+        "source_start": 617,
+        "source_end": 716,
+        "raw_grade": "С345-3",
+        "standards": [
+          "ГОСТ 27772-88",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.375",
+        "group": "profile_pipe",
+        "size": "140х60х5"
+      },
+      {
+        "position": 8,
+        "source_start": 717,
+        "source_end": 817,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.224",
+        "group": "profile_pipe",
+        "size": "160х160х5"
+      },
+      {
+        "position": 9,
+        "source_start": 818,
+        "source_end": 921,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "19.447",
+        "group": "profile_pipe",
+        "size": "160х160х6"
+      },
+      {
+        "position": 10,
+        "source_start": 922,
+        "source_end": 1024,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "1.841",
+        "group": "profile_pipe",
+        "size": "160х160х6"
+      },
+      {
+        "position": 11,
+        "source_start": 1025,
+        "source_end": 1125,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "4.502",
+        "group": "profile_pipe",
+        "size": "180х140х5"
+      },
+      {
+        "position": 12,
+        "source_start": 1126,
+        "source_end": 1227,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "18.109",
+        "group": "profile_pipe",
+        "size": "200х160х5"
+      },
+      {
+        "position": 13,
+        "source_start": 1228,
+        "source_end": 1328,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.021",
+        "group": "profile_pipe",
+        "size": "80х80х4"
+      },
+      {
+        "position": 14,
+        "source_start": 1329,
+        "source_end": 1428,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "8.88",
+        "group": "profile_pipe",
+        "size": "80х80х4"
+      },
+      {
+        "position": 15,
+        "source_start": 1429,
+        "source_end": 1528,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.94",
+        "group": "profile_pipe",
+        "size": "80х80х5"
+      },
+      {
+        "position": 16,
+        "source_start": 1529,
+        "source_end": 1631,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.164",
+        "group": "profile_pipe",
+        "size": "100х100х5"
+      },
+      {
+        "position": 17,
+        "source_start": 1632,
+        "source_end": 1734,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.307",
+        "group": "profile_pipe",
+        "size": "100х100х5"
+      },
+      {
+        "position": 18,
+        "source_start": 1735,
+        "source_end": 1837,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.554",
+        "group": "profile_pipe",
+        "size": "120х120х6"
+      },
+      {
+        "position": 19,
+        "source_start": 1838,
+        "source_end": 1940,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.449",
+        "group": "profile_pipe",
+        "size": "120х120х6"
+      },
+      {
+        "position": 20,
+        "source_start": 1941,
+        "source_end": 2043,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "1.252",
+        "group": "profile_pipe",
+        "size": "140х140х5"
+      },
+      {
+        "position": 21,
+        "source_start": 2044,
+        "source_end": 2146,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "0.143",
+        "group": "profile_pipe",
+        "size": "140х140х6"
+      },
+      {
+        "position": 22,
+        "source_start": 2147,
+        "source_end": 2249,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 30245-2003"
+        ],
+        "quantity": "3.593",
+        "group": "profile_pipe",
+        "size": "160х160х6"
+      }
+    ],
+    "expected_kind": "literal_user_procurement_expectation",
+    "procurement_arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          13
+        ],
+        "sum_t": "0.021",
+        "expected_t": "0.021",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          14
+        ],
+        "sum_t": "8.88",
+        "expected_t": "8.88",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          15
+        ],
+        "sum_t": "0.94",
+        "expected_t": "0.94",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          16
+        ],
+        "sum_t": "0.164",
+        "expected_t": "0.164",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          1,
+          17
+        ],
+        "sum_t": "12.572",
+        "expected_t": "12.572",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          2
+        ],
+        "sum_t": "27.337",
+        "expected_t": "27.337",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          3,
+          18
+        ],
+        "sum_t": "2.993",
+        "expected_t": "2.993",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          4,
+          19
+        ],
+        "sum_t": "2.430",
+        "expected_t": "2.43",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 9,
+        "source_positions": [
+          7
+        ],
+        "sum_t": "0.375",
+        "expected_t": "0.375",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 10,
+        "source_positions": [
+          5,
+          20
+        ],
+        "sum_t": "17.517",
+        "expected_t": "17.517",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 11,
+        "source_positions": [
+          6,
+          21
+        ],
+        "sum_t": "0.955",
+        "expected_t": "0.955",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 12,
+        "source_positions": [
+          8
+        ],
+        "sum_t": "0.224",
+        "expected_t": "0.224",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 13,
+        "source_positions": [
+          9,
+          22
+        ],
+        "sum_t": "23.040",
+        "expected_t": "23.04",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 14,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "1.841",
+        "expected_t": "1.841",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 15,
+        "source_positions": [
+          11
+        ],
+        "sum_t": "4.502",
+        "expected_t": "4.502",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 16,
+        "source_positions": [
+          12
+        ],
+        "sum_t": "18.109",
+        "expected_t": "18.109",
+        "difference_t": "0.000"
+      }
+    ],
+    "grouping_basis": "Audit of desired display only; not approval for technical substitution or production policy.",
+    "source_text_sha256": "feeeb132883f1333300c45e9ab4d152a9202718e2e22f10fd0024242d7439a15"
+  },
+  "sheets": {
+    "source_count": 27,
+    "source_sha256": "449a006bb329e5afa817a125605dc851c8f24c62acd0ba993282c28bd4d6a4eb",
+    "rows": [
+      {
+        "position": 1,
+        "source_start": 71,
+        "source_end": 150,
+        "raw_grade": "255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "1.177",
+        "group": "sheet",
+        "size": "8"
+      },
+      {
+        "position": 2,
+        "source_start": 151,
+        "source_end": 231,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.01",
+        "group": "sheet",
+        "size": "6"
+      },
+      {
+        "position": 3,
+        "source_start": 232,
+        "source_end": 325,
+        "raw_grade": "09Г2С",
+        "standards": [
+          "ГОСТ 27772-88",
+          "ГОСТ 19903-74",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.125",
+        "group": "sheet",
+        "size": "6"
+      },
+      {
+        "position": 4,
+        "source_start": 326,
+        "source_end": 415,
+        "raw_grade": "С245",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ТУ 36.26.11-5-89"
+        ],
+        "quantity": "11.048",
+        "group": "expanded_metal",
+        "size": "506"
+      },
+      {
+        "position": 5,
+        "source_start": 416,
+        "source_end": 509,
+        "raw_grade": "С245-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ТУ 36.26.11-5-89"
+        ],
+        "quantity": "13.503",
+        "group": "expanded_metal",
+        "size": "506"
+      },
+      {
+        "position": 6,
+        "source_start": 510,
+        "source_end": 591,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.01",
+        "group": "sheet",
+        "size": "10"
+      },
+      {
+        "position": 7,
+        "source_start": 592,
+        "source_end": 673,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "1.539",
+        "group": "sheet",
+        "size": "10"
+      },
+      {
+        "position": 8,
+        "source_start": 674,
+        "source_end": 757,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "275.425",
+        "group": "sheet",
+        "size": "10"
+      },
+      {
+        "position": 9,
+        "source_start": 758,
+        "source_end": 845,
+        "raw_grade": "ст09Г2С-12",
+        "standards": [
+          "ГОСТ 19281-2014",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "1.101",
+        "group": "sheet",
+        "size": "10"
+      },
+      {
+        "position": 10,
+        "source_start": 846,
+        "source_end": 924,
+        "raw_grade": "Вст3сп5",
+        "standards": [
+          "ГОСТ 27772-88",
+          "ГОСТ 19903-74"
+        ],
+        "quantity": "0.558",
+        "group": "sheet",
+        "size": "12"
+      },
+      {
+        "position": 11,
+        "source_start": 925,
+        "source_end": 1008,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.121",
+        "group": "sheet",
+        "size": "12"
+      },
+      {
+        "position": 12,
+        "source_start": 1009,
+        "source_end": 1096,
+        "raw_grade": "ст09Г2С-12",
+        "standards": [
+          "ГОСТ 19281-2014",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.242",
+        "group": "sheet",
+        "size": "12"
+      },
+      {
+        "position": 13,
+        "source_start": 1097,
+        "source_end": 1180,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "4.607",
+        "group": "sheet",
+        "size": "16"
+      },
+      {
+        "position": 14,
+        "source_start": 1181,
+        "source_end": 1267,
+        "raw_grade": "325-09Г2С",
+        "standards": [
+          "ГОСТ 19281-2014",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.129",
+        "group": "sheet",
+        "size": "20"
+      },
+      {
+        "position": 15,
+        "source_start": 1268,
+        "source_end": 1350,
+        "raw_grade": "355-6",
+        "standards": [
+          "ГОСТ 19281-2014",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "2.54",
+        "group": "sheet",
+        "size": "20"
+      },
+      {
+        "position": 16,
+        "source_start": 1351,
+        "source_end": 1435,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "29.122",
+        "group": "sheet",
+        "size": "20"
+      },
+      {
+        "position": 17,
+        "source_start": 1436,
+        "source_end": 1523,
+        "raw_grade": "ст09Г2С-12",
+        "standards": [
+          "ГОСТ 19281-2014",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "1.695",
+        "group": "sheet",
+        "size": "20"
+      },
+      {
+        "position": 18,
+        "source_start": 1524,
+        "source_end": 1605,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.261",
+        "group": "sheet",
+        "size": "25"
+      },
+      {
+        "position": 19,
+        "source_start": 1606,
+        "source_end": 1684,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "6.939",
+        "group": "sheet",
+        "size": "4"
+      },
+      {
+        "position": 20,
+        "source_start": 1685,
+        "source_end": 1768,
+        "raw_grade": "С255-4",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.077",
+        "group": "sheet",
+        "size": "6"
+      },
+      {
+        "position": 21,
+        "source_start": 1769,
+        "source_end": 1849,
+        "raw_grade": "09Г2С-12",
+        "standards": [
+          "ГОСТ 27772-88",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.802",
+        "group": "sheet",
+        "size": "8"
+      },
+      {
+        "position": 22,
+        "source_start": 1850,
+        "source_end": 1935,
+        "raw_grade": "325-09Г2С",
+        "standards": [
+          "ГОСТ 19281-2014",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.085",
+        "group": "sheet",
+        "size": "8"
+      },
+      {
+        "position": 23,
+        "source_start": 1936,
+        "source_end": 2020,
+        "raw_grade": "Вст09Г2С",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.077",
+        "group": "sheet",
+        "size": "8"
+      },
+      {
+        "position": 24,
+        "source_start": 2021,
+        "source_end": 2099,
+        "raw_grade": "С255",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "0.177",
+        "group": "sheet",
+        "size": "8"
+      },
+      {
+        "position": 25,
+        "source_start": 2100,
+        "source_end": 2181,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ 19903-2015"
+        ],
+        "quantity": "60.816",
+        "group": "sheet",
+        "size": "8"
+      },
+      {
+        "position": 26,
+        "source_start": 2182,
+        "source_end": 2305,
+        "raw_grade": "12Х18Н10Т",
+        "standards": [
+          "ГОСТ 19904-90",
+          "ГОСТ 5582-75"
+        ],
+        "quantity": "29.58",
+        "group": "sheet",
+        "size": "0,8х1000х1500"
+      },
+      {
+        "position": 27,
+        "source_start": 2306,
+        "source_end": 2425,
+        "raw_grade": "12Х18Н10Т",
+        "standards": [
+          "ГОСТ 19904-90",
+          "ГОСТ 5582-75"
+        ],
+        "quantity": "0.53",
+        "group": "sheet",
+        "size": "1,6х1500х2000"
+      }
+    ],
+    "expected_kind": "literal_user_procurement_expectation",
+    "procurement_arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          26
+        ],
+        "sum_t": "29.58",
+        "expected_t": "29.58",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          27
+        ],
+        "sum_t": "0.53",
+        "expected_t": "0.53",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          19
+        ],
+        "sum_t": "6.939",
+        "expected_t": "6.939",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          2,
+          20
+        ],
+        "sum_t": "0.087",
+        "expected_t": "0.087",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          3
+        ],
+        "sum_t": "0.125",
+        "expected_t": "0.125",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          1,
+          24
+        ],
+        "sum_t": "1.354",
+        "expected_t": "1.354",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          21,
+          22,
+          23,
+          25
+        ],
+        "sum_t": "61.780",
+        "expected_t": "61.780",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          6,
+          7
+        ],
+        "sum_t": "1.549",
+        "expected_t": "1.549",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 9,
+        "source_positions": [
+          8,
+          9
+        ],
+        "sum_t": "276.526",
+        "expected_t": "276.526",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 10,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "0.558",
+        "expected_t": "0.558",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 11,
+        "source_positions": [
+          11,
+          12
+        ],
+        "sum_t": "0.363",
+        "expected_t": "0.363",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 12,
+        "source_positions": [
+          13
+        ],
+        "sum_t": "4.607",
+        "expected_t": "4.607",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 13,
+        "source_positions": [
+          14,
+          15,
+          16,
+          17
+        ],
+        "sum_t": "33.486",
+        "expected_t": "33.486",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 14,
+        "source_positions": [
+          18
+        ],
+        "sum_t": "0.261",
+        "expected_t": "0.261",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 15,
+        "source_positions": [
+          4,
+          5
+        ],
+        "sum_t": "24.551",
+        "expected_t": "24.551",
+        "difference_t": "0.000"
+      }
+    ],
+    "grouping_basis": "Audit of desired display only; not approval for technical substitution or production policy.",
+    "source_text_sha256": "449a006bb329e5afa817a125605dc851c8f24c62acd0ba993282c28bd4d6a4eb"
+  },
+  "beams": {
+    "source_count": 10,
+    "source_sha256": "c24821fc197513ff8ad6efe114611cac4cafe3712dac2d91b6d20dfdd5fe47b0",
+    "rows": [
+      {
+        "position": 1,
+        "source_start": 7,
+        "source_end": 95,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ Р 57837-2017"
+        ],
+        "quantity": "11.562",
+        "group": "i_beam",
+        "size": "16Б1"
+      },
+      {
+        "position": 2,
+        "source_start": 96,
+        "source_end": 180,
+        "raw_grade": "С345-3",
+        "standards": [
+          "ГОСТ 27772-88",
+          "СТО АСЧМ 20-93"
+        ],
+        "quantity": "3.895",
+        "group": "i_beam",
+        "size": "20Б1"
+      },
+      {
+        "position": 3,
+        "source_start": 181,
+        "source_end": 271,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ Р 57837-2017"
+        ],
+        "quantity": "14.201",
+        "group": "i_beam",
+        "size": "20Б1"
+      },
+      {
+        "position": 4,
+        "source_start": 272,
+        "source_end": 361,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ Р 57837-2017"
+        ],
+        "quantity": "19.25",
+        "group": "i_beam",
+        "size": "20К2"
+      },
+      {
+        "position": 5,
+        "source_start": 362,
+        "source_end": 443,
+        "raw_grade": "345-3",
+        "standards": [
+          "ГОСТ 27772-88",
+          "СТО АСЧМ 20-93"
+        ],
+        "quantity": "9.093",
+        "group": "i_beam",
+        "size": "20Ш1"
+      },
+      {
+        "position": 6,
+        "source_start": 444,
+        "source_end": 533,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ Р 57837-2017"
+        ],
+        "quantity": "4.619",
+        "group": "i_beam",
+        "size": "20Ш2"
+      },
+      {
+        "position": 7,
+        "source_start": 534,
+        "source_end": 618,
+        "raw_grade": "09Г2С",
+        "standards": [
+          "ГОСТ 19281-89",
+          "СТО АСЧМ 20-93"
+        ],
+        "quantity": "58.485",
+        "group": "i_beam",
+        "size": "25К2"
+      },
+      {
+        "position": 8,
+        "source_start": 619,
+        "source_end": 710,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ Р 57837-2017"
+        ],
+        "quantity": "199.345",
+        "group": "i_beam",
+        "size": "25К2"
+      },
+      {
+        "position": 9,
+        "source_start": 711,
+        "source_end": 795,
+        "raw_grade": "09Г2С",
+        "standards": [
+          "ГОСТ 19281-89",
+          "СТО АСЧМ 20-93"
+        ],
+        "quantity": "50.773",
+        "group": "i_beam",
+        "size": "35К2"
+      },
+      {
+        "position": 10,
+        "source_start": 796,
+        "source_end": 886,
+        "raw_grade": "С345-6",
+        "standards": [
+          "ГОСТ 27772-2015",
+          "ГОСТ Р 57837-2017"
+        ],
+        "quantity": "105.09",
+        "group": "i_beam",
+        "size": "40К3"
+      }
+    ],
+    "expected_kind": "literal_user_procurement_expectation",
+    "procurement_arithmetic_groups": [
+      {
+        "expected_line": 1,
+        "source_positions": [
+          1
+        ],
+        "sum_t": "11.562",
+        "expected_t": "11.562",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 2,
+        "source_positions": [
+          2,
+          3
+        ],
+        "sum_t": "18.096",
+        "expected_t": "18.096",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 3,
+        "source_positions": [
+          4
+        ],
+        "sum_t": "19.25",
+        "expected_t": "19.25",
+        "difference_t": "0.00"
+      },
+      {
+        "expected_line": 4,
+        "source_positions": [
+          5
+        ],
+        "sum_t": "9.093",
+        "expected_t": "9.093",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 5,
+        "source_positions": [
+          6
+        ],
+        "sum_t": "4.619",
+        "expected_t": "4.619",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 6,
+        "source_positions": [
+          7,
+          8
+        ],
+        "sum_t": "257.830",
+        "expected_t": "257.830",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 7,
+        "source_positions": [
+          9
+        ],
+        "sum_t": "50.773",
+        "expected_t": "50.773",
+        "difference_t": "0.000"
+      },
+      {
+        "expected_line": 8,
+        "source_positions": [
+          10
+        ],
+        "sum_t": "105.09",
+        "expected_t": "105.09",
+        "difference_t": "0.00"
+      }
+    ],
+    "grouping_basis": "Audit of desired display only; not approval for technical substitution or production policy.",
+    "source_text_sha256": "c24821fc197513ff8ad6efe114611cac4cafe3712dac2d91b6d20dfdd5fe47b0"
+  }
+}
