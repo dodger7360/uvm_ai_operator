@@ -210,6 +210,7 @@ def _recover(service, user_id, text):
     recovered = ActiveRequest(request_id=uuid4().hex, source_text=text,
                               fallback_status='original', is_valid=False)
     extractions = list(_EXTRACTIONS.get() or [])
+    consumed = set()
     source_count = None
     try:
         prepared, heading_records = prepare_sheet_heading(text)
@@ -222,14 +223,37 @@ def _recover(service, user_id, text):
                 # First salvage real extracted rows through exactly the same
                 # source coverage/attribute/quantity checks, independently.
                 checked = None
-                candidates = [item for draft in extractions for item in draft.items
-                              if item.source_text == row]
+                slots = [(d, i, item) for d, draft in enumerate(extractions)
+                         for i, item in enumerate(draft.items)
+                         if (d, i) not in consumed and item.source_text == row]
+                candidates = [item for _, _, item in slots]
                 variants = {item.model_dump_json() for item in candidates}
                 if len(variants) == 1:
                     try:
                         checked = service._build_active(row, row, [],
                             draft=PurchaseRequest(items=[candidates[0].model_copy(deep=True)]))
+                        from rules import required_fields
+                        from validator import _has_compact_source_phrase, _has_number_source_evidence
+                        from product_identity import NUMERIC_FIELDS
+                        literal = checked.items[0]
+                        if any(getattr(literal, field) is not None
+                               and not _has_number_source_evidence(getattr(literal, field), row)
+                               for field in NUMERIC_FIELDS - {'length_mm'}):
+                            raise ValueError('Unconfirmed recovered geometry')
+                        if any(getattr(literal, field)
+                               and not _has_compact_source_phrase(getattr(literal, field), row)
+                               for field in ('form', 'processing')):
+                            raise ValueError('Unconfirmed recovered execution')
+                        if ('size_designation' in required_fields(checked.items[0].product_group)
+                                and checked.items[0].size_designation
+                                and not _has_compact_source_phrase(checked.items[0].size_designation, row)):
+                            raise ValueError('Unconfirmed recovered profile')
+                        if checked.warnings or (candidates[0].quantity is not None
+                                                and checked.items[0].quantity is None):
+                            raise ValueError('Unconfirmed recovered attributes')
+                        consumed.add(slots[0][:2])
                     except Exception as error:
+                        checked = None
                         emit('extracted_row_recovery', reason=safe_code(error))
                 result = RecognitionService().recognize_record(RecognitionRecord(
                     record_id=str(position), source=SourceRef(source_id=recovered.request_id,

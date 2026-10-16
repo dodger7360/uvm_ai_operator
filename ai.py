@@ -194,7 +194,11 @@ class AIService:
         try:
             self._validate_source_fragments(message.parsed, text)
         except ValueError as error:
-            raise SemanticExtractionError('source_fragment_mismatch', str(error), extracted_count=len(message.parsed.items)) from error
+            failure = SemanticExtractionError('source_fragment_mismatch', str(error), extracted_count=len(message.parsed.items))
+            # Ephemeral untrusted evidence, never a successful parse result or log.
+            # The operator may recheck individual rows in its current operation.
+            failure.rejected_extraction = message.parsed.model_copy(deep=True)
+            raise failure from error
         return PurchaseRequest(**message.parsed.model_dump())
 
     @staticmethod

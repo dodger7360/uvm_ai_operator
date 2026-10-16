@@ -579,7 +579,14 @@ class TelegramService:
             from telegram_operator import local_request_draft
             draft = local_request_draft(parse_text)
         if draft is None:
-            draft = self.ai.parse_request(parse_text) if effort is None else self.ai.parse_request(parse_text,reasoning_effort=effort)
+            try:
+                draft = self.ai.parse_request(parse_text) if effort is None else self.ai.parse_request(parse_text,reasoning_effort=effort)
+            except SemanticExtractionError as error:
+                rejected = getattr(error, 'rejected_extraction', None)
+                if self.reliable and rejected is not None:
+                    from telegram_operator import capture_extraction
+                    capture_extraction(rejected)
+                raise
             if self.reliable:
                 from telegram_operator import capture_extraction
                 capture_extraction(draft)
