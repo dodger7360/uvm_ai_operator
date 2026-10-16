@@ -128,7 +128,11 @@ def exact_source_attributes(item, defer_grade_question=False):
             item.product = 'Труба бесшовная'
         elif re.search(r'ГОСТ\s*10704(?:-91)?', source, re.I):
             item.product = 'Труба э/с'
-    from quantity import length_mass_columns, LITERAL_QUANTITY_RE, literal_decimal
+    from quantity import beam_export_columns, length_mass_columns, LITERAL_QUANTITY_RE, literal_decimal
+    beam_columns = beam_export_columns(source) if item.product_group == 'beam' else None
+    if beam_columns and item.length_requirement is None:
+        # Preserve the literal column; this format does not prove millimetres.
+        item.length_requirement = beam_columns['length_requirement']
     columns = length_mass_columns(source,item.product_group)
     if columns:
         item.length_mm=float(columns['length_mm'])

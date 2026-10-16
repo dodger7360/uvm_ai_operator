@@ -221,6 +221,28 @@ def literal_decimal(value):
     return Decimal(re.sub(r'[ \u00a0\u202f]', '', value).replace(',', '.'))
 
 
+def beam_export_columns(source):
+    """Recognize a complete beam/profile, raw length, grade, document, amount row.
+
+    This grammar proves column boundaries, not length units or document type.
+    Require a decimal amount: a bare integer ending is not enough evidence here.
+    """
+    match = re.fullmatch(
+        r'\s*Балка\s+(?P<profile>\d+[БШК]\d+)\s+'
+        r'(?P<length>' + _LITERAL_NUMBER + r')\s+'
+        r'(?P<grade>[СC]\d{3}(?:-\d+)?)\s+'
+        r'(?P<document>(?:(?:ГОСТ(?:\s+Р)?|Р)\s+)?\d{4,6}-\d{2,4})\s+'
+        r'(?P<amount>\d+(?:[ \u00a0\u202f]\d{3})*[.,]\d+)\s*', source, re.I)
+    if not match:
+        return None
+    length = literal_decimal(match['length'])
+    amount = literal_decimal(match['amount'])
+    if length <= 0 or length != length.to_integral_value() or amount <= 0:
+        return None
+    return {'profile': match['profile'], 'length_requirement': match['length'],
+            'quantity': amount}
+
+
 def confirmed_unitless_quantity(source, claimed):
     """Confirm an AI amount only in an explicit terminal quantity column.
 
@@ -229,6 +251,9 @@ def confirmed_unitless_quantity(source, claimed):
     """
     if claimed is None or not claimed.is_finite() or claimed <= 0:
         return None
+    columns = beam_export_columns(source)
+    if columns:
+        return columns['quantity'] if columns['quantity'] == claimed else None
     match = re.search(r'(?:\s[—–-]\s*|[|;\t]\s*)('
                       + _LITERAL_NUMBER + r')\s*$', source)
     if not match:
