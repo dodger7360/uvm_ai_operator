@@ -227,8 +227,45 @@ def prepare_sheet_heading(text):
     return ('\n'.join(prepared), records) if records else (text, [])
 
 
+def global_grade_plan(text, current):
+    """Explicit current-request replacement; no technical/commercial aliases."""
+    from normalizer import _normalize_grade
+    from source_attributes import designation_key
+    command = text.strip().rstrip('.!')
+    verb = r'(?:замени|заменить|поменяй)'
+    if (re.search(r'\b' + verb + r'\b', command, re.I) and GRADE_RE.search(command)
+            and re.search(r'родственн\w*|похож\w*|всеми?\s+(?:индекс\w*|категори\w*|производн\w*)', command, re.I)):
+        return MessagePlan(intent='clarify', question='Уточните точные марки и категории, которые нужно изменить. Родственные обозначения автоматически не включаются.')
+    patterns = (
+        rf'(?P<before>.+?)\s+{verb}\s+на\s+(?P<after>.+?)\s+везде',
+        rf'везде\s+(?P<before>.+?)\s+{verb}\s+на\s+(?P<after>.+?)',
+        rf'{verb}\s+(?P<before>.+?)\s+на\s+(?P<after>.+?)\s+во\s+всей\s+заявке',
+    )
+    match = next((match for pattern in patterns if (match := re.fullmatch(pattern, command, re.I))), None)
+    if match is None:
+        return None
+
+    def grade(value):
+        if re.fullmatch(r'сталь\s+3', value, re.I):
+            return 'Ст3'  # Explicit edit wording only, never a recognition alias.
+        return _normalize_grade(value) if GRADE_RE.fullmatch(value) else None
+
+    before, after = grade(match['before']), grade(match['after'])
+    if before is None or after is None:
+        return MessagePlan(intent='clarify', question='Уточните точные исходную и новую марки. Родственные обозначения и категории автоматически не включаются.')
+    edits = [Edit(item_id=item.item_id, field='grade', value=after) for item in current.items
+             if designation_key(item.grade or '') == designation_key(before)
+             and designation_key(item.grade or '') != designation_key(after)]
+    if not edits:
+        return MessagePlan(intent='show', question='Точных совпадений для замены нет; марки исходных позиций не изменены.')
+    return MessagePlan(intent='edit', edits=edits)
+
+
 def local_edit_plan(text, current, approved_rules=()):
     """Explicit source edits; a multi-source display row is never a quantity target."""
+    global_plan = global_grade_plan(text, current)
+    if global_plan is not None:
+        return global_plan
     from normalizer import _normalize_grade
     ordinals = {'первой': 1, 'второй': 2, 'третьей': 3, 'четвёртой': 4, 'четвертой': 4,
                 'пятой': 5, 'шестой': 6, 'седьмой': 7, 'восьмой': 8, 'девятой': 9, 'десятой': 10}
@@ -289,12 +326,6 @@ def local_edit_plan(text, current, approved_rules=()):
         if edits:
             return MessagePlan(intent='edit', edits=edits)
         return MessagePlan(intent='clarify', question='Нет позиций указанного вида и марки. Уточните область изменения.')
-    global_grade = re.fullmatch(r'\s*везде\s+(.+?)\s+(?:замени|заменить)\s+на\s+(.+?)\s*', text, re.I)
-    if global_grade and all(GRADE_RE.fullmatch(global_grade[n]) for n in (1, 2)):
-        original, replacement = (_normalize_grade(global_grade[n]) for n in (1, 2))
-        edits = [Edit(item_id=item.item_id,field='grade',value=replacement) for item in current.items if _normalize_grade(item.grade) == original]
-        if edits:
-            return MessagePlan(intent='edit', edits=edits)
     return None
 
 
@@ -506,6 +537,8 @@ class TelegramService:
             plan = local_edit_plan(text, current, approved_rules=self._approved_rules())
             if plan is not None:
                 emit('local_edit', stage='routing', edit_count=len(plan.edits))
+                if plan.intent == 'show':
+                    return self._response(current.model_copy(deep=True), []) + [plan.question]
                 if plan.intent == 'clarify':
                     return self._begin_clarification(user_id, current, text, plan)
                 return self._edit(user_id, current, plan, command=text)
@@ -839,6 +872,7 @@ class TelegramService:
 
     def _edit(self, user_id, current, plan, command='', confirmed=False, clarification=None):
         phase('correction')
+        global_plan = None
         if clarification is not None:
             from dialog_context import pending_detail, reply_values
             expected = pending_detail(current)
@@ -852,10 +886,15 @@ class TelegramService:
         else:
             # Explicit local selectors may intentionally select part of a commercial
             # display group. Re-derive the exact edit set; never trust AI scope here.
-            scoped_command = re.search(r'\bво?\s+всех\b|\bтам,?\s+где\s+(?:это\s+)?разрешено\b', command, re.I)
-            trusted = local_edit_plan(command, current, self._approved_rules()) if scoped_command else None
-            if not (trusted and trusted.intent == 'edit' and trusted.edits == plan.edits):
-                plan = scoped_plan(command, current, plan, confirmed=confirmed)
+            global_plan = global_grade_plan(command, current)
+            if global_plan is not None:
+                if global_plan.intent != 'edit' or global_plan.edits != plan.edits:
+                    raise SemanticExtractionError('edit_target_mismatch', 'Состав изменений не совпадает с точной областью команды. Ничего не изменено.')
+            else:
+                scoped_command = re.search(r'\bво?\s+всех\b|\bтам,?\s+где\s+(?:это\s+)?разрешено\b', command, re.I)
+                trusted = local_edit_plan(command, current, self._approved_rules()) if scoped_command else None
+                if not (trusted and trusted.intent == 'edit' and trusted.edits == plan.edits):
+                    plan = scoped_plan(command, current, plan, confirmed=confirmed)
         if plan.intent == 'clarify':
             return self._begin_clarification(user_id, current, command, plan)
         if not plan.edits:
@@ -911,6 +950,12 @@ class TelegramService:
             changed.pending_detail = pending_detail(changed)
             changed.is_valid = not changed.missing_fields and not changed.pending_clarification
         messages = self._response(changed, questions)
+        if global_plan is not None:
+            edited_ids = {edit.item_id for edit in global_plan.edits}
+            edited = sorted(item.source_position or index for index, item in enumerate(current.items, 1) if item.item_id in edited_ids)
+            untouched = sorted(item.source_position or index for index, item in enumerate(current.items, 1) if item.item_id not in edited_ids)
+            messages += ['Изменены исходные позиции: ' + ', '.join(map(str, edited)) + '.'
+                         + (' Без изменений: ' + ', '.join(map(str, untouched)) + '.' if untouched else '')]
         changed.dialog_state = 'active'
         self._save(user_id, changed)
         return messages
