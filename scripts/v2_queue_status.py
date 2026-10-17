@@ -1,6 +1,7 @@
 """Read-only metadata by default. Explicit offline abandon; never retries or sends."""
 import argparse
 import json
+import importlib.util
 from pathlib import Path
 import sqlite3
 import sys
@@ -37,7 +38,7 @@ def inspect(path, legacy_database=None):
             rollback_confirmation='rollback:'+str(cursor))
 
 
-def prepare_rollback(path, archive, confirmation, *, legacy_database=None):
+def prepare_rollback(path, archive, confirmation, *, legacy_database=None, startup_manifest=None, startup_guard=None):
     """Offline, caller holds process lock. Archive ALL tables before removing queue schema.
 
     Old published v2 Repository refuses extra tables and cannot start until this gate.
@@ -50,6 +51,20 @@ def prepare_rollback(path, archive, confirmation, *, legacy_database=None):
     state=inspect(path,legacy_database)
     if state['schema']!=1 or not state['rollback_ready'] or confirmation!=state['rollback_confirmation']:
         raise ValueError('queue_not_safe_for_rollback')
+    def armed_epoch():
+        with sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True) as c:
+            row=c.execute("SELECT value FROM steel_v2_queue_meta WHERE key='guard_epoch'").fetchone()
+        if row is None:return  # Pre-guard queue, retained only for compatibility/offline tests.
+        if startup_manifest is None or startup_guard is None:raise ValueError('persistent_guard_required')
+        spec=importlib.util.spec_from_file_location('rollback_startup_guard',startup_guard)
+        g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g)
+        g.persistent_manifest(startup_manifest,Path(startup_guard).parent)
+        m=g.model(g.read_json(startup_manifest));g.bundle_check(m,Path(startup_guard).parent)
+        if (m['phase']!='armed' or m['epoch']!=row[0] or
+                not Path(m['v2_database']).samefile(path) or not Path(m['legacy_database']).samefile(legacy_database) or
+                'rollback:'+str(m['offset_floor'])!=state['rollback_confirmation']):
+            raise ValueError('persistent_guard_not_armed_for_epoch')
+    armed_epoch()
     archive=Path(archive)
     saved=snapshot(Path(path),archive,archive.with_suffix(archive.suffix+'.manifest.json'))
     with Database(path).connection() as c:
@@ -61,6 +76,7 @@ def prepare_rollback(path, archive, confirmation, *, legacy_database=None):
         if c.execute("SELECT 1 FROM steel_v2_outbox WHERE state NOT IN ('delivered','rejected')").fetchone():raise ValueError('pending_outbox_after_backup')
         cursor=c.execute("SELECT value FROM steel_v2_queue_meta WHERE key='cursor'").fetchone()[0]
         if legacy_offset(legacy_database,path)!=cursor:raise ValueError('legacy_offset_changed_after_backup')
+        armed_epoch()
         for table in TABLES:c.execute('DROP TABLE '+table)
 
 
@@ -68,6 +84,8 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--database',required=True)
     parser.add_argument('--legacy-database',type=Path)
+    parser.add_argument('--startup-manifest',type=Path)
+    parser.add_argument('--startup-guard',type=Path)
     parser.add_argument('--guard-rollback',action='store_true')
     parser.add_argument('--abandon',type=int)
     parser.add_argument('--prepare-rollback',action='store_true')
@@ -89,7 +107,8 @@ def main(argv=None):
             if args.prepare_rollback:
                 if args.archive is None:parser.error('--archive required')
                 if args.archive.resolve().is_relative_to(args.root.resolve()):raise ValueError('archive_must_be_outside_checkout')
-                prepare_rollback(args.database,args.archive,args.confirm,legacy_database=args.legacy_database)
+                prepare_rollback(args.database,args.archive,args.confirm,legacy_database=args.legacy_database,
+                                 startup_manifest=args.startup_manifest,startup_guard=args.startup_guard)
                 print(json.dumps({'rollback_prepared':True,'archive':str(args.archive)}))
                 return 0
             DurableQueue(Database(args.database)).resolve(args.abandon,args.confirm)

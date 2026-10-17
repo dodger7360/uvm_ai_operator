@@ -1,5 +1,16 @@
 # Контролируемый выпуск на Windows
 
+**Актуализация №18: REQUIRES DESIGN APPROVAL, deployment не разрешён.**
+Для новой установки durable queue приоритет имеет
+[PERSISTENT_STARTUP_GUARD.md](PERSISTENT_STARTUP_GUARD.md): guard вне checkout,
+baseline → armed → active, обе штатные точки запуска должны быть переведены на
+постоянный путь **до** миграции/активации очереди. Нужна отдельно разрешённая смена
+Action существующей задачи и согласование ручного запуска после возврата старого SHA.
+Изменение Task Scheduler и установка guard в №18 не выполнялись. В новом checkout
+start-telegram.ps1 делегирует постоянному Start-UVM без fallback и без снятия maintenance
+до проверки. В старых SHA прежний start физически остаётся обходом; не считать его
+защищённым или поддерживаемым без отдельного решения о точке запуска.
+
 **Для версии с очередью №16 обязательно применить раздел «Уточнение №16» в конце
 этого файла. Прежнюю процедуру возврата на legacy нельзя использовать для обхода
 queue rollback gate. Этот этап разработки не разрешает deployment.**
@@ -304,7 +315,7 @@ queued можно продолжить только согласованным �
    вне checkout**, передав текущий rollback_confirmation:
 
 ```powershell
-& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --legacy-database $legacyDb --root $root --prepare-rollback --archive $newArchivePath --confirm $rollbackConfirmation
+& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --legacy-database $legacyDb --root $root --prepare-rollback --startup-manifest $guardManifest --startup-guard $guardCode --archive $newArchivePath --confirm $rollbackConfirmation
 ```
 
 Инструмент использует SQLite Backup API, integrity_check, hash/count manifest,

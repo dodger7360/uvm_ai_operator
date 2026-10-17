@@ -1,6 +1,6 @@
 param([ValidateRange(1,10)][int]$StartupAttempts = 2)
 $ErrorActionPreference = 'Stop'
-$projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$marker = Join-Path $projectDir 'telegram.maintenance'
-if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker }
-Start-Process -FilePath (Join-Path $projectDir '.venv\Scripts\pythonw.exe') -ArgumentList @(('"' + (Join-Path $projectDir 'windows_supervisor.py') + '"'), '--initial-attempts', $StartupAttempts) -WorkingDirectory $projectDir -WindowStyle Hidden
+$guardStart = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'UVM_Steel-Guard-v1\Start-UVM.ps1'
+if (-not (Test-Path -LiteralPath $guardStart -PathType Leaf)) { throw 'Permanent startup guard is not installed; no checkout fallback' }
+& $guardStart -StartupAttempts $StartupAttempts
+if ($LASTEXITCODE -ne 0) { throw 'Permanent startup guard refused launch' }

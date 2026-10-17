@@ -1,0 +1,8 @@
+{
+  "queue_protocol": 1,
+  "schema_versions": [1],
+  "admission": "write-before-ack-v1",
+  "commit": "snapshot-history-outbox-v1",
+  "recovery": "quarantine-unknown-v1",
+  "epoch_key": "guard_epoch"
+}

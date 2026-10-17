@@ -1,7 +1,7 @@
 """Independent acceptance: real child crashes and explicit unresolved rollback gate.
 
-Only synthetic data; the red rollback tests express the deployment requirement.
-They must not be marked xfail or weakened to accept a documented bypass.
+Only synthetic data; formerly red launch tests now exercise the installed external
+boundary, including a checkout of the actual previous published SHA. No skip/xfail.
 """
 import json
 from pathlib import Path
@@ -18,6 +18,7 @@ from steel_agent_v2 import Repository
 from steel_agent_v2.queue import DurableQueue, QueueConfig, Backpressure, QueueConflict
 from windows_runtime import ProcessLock, AlreadyRunning
 from test_steel_agent_v2_queue import rig, admit, update, API, Fake, proposal, Executor, Scheduler, drain
+from test_steel_agent_v2_guard import guard_install, assert_denied
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD = 'aa11380dfe1ed646fec2355b22880fdb03b0d706'
@@ -25,22 +26,26 @@ OLD = 'aa11380dfe1ed646fec2355b22880fdb03b0d706'
 
 @pytest.mark.parametrize('published', [False, True], ids=['candidate', 'previous-release'])
 @pytest.mark.parametrize('config', [None, {'handler': 'legacy'}], ids=['missing-config', 'legacy'])
-def test_pending_queue_must_prevent_legacy_selector_bypass(rig, tmp_path, published, config):
-    """Known RED: both releases select legacy without inspecting acknowledged inbox."""
+def test_pending_queue_must_prevent_legacy_selector_bypass(rig, tmp_path, published, config, guard_install):
+    """Same pending/offset/handler requirement, at the permanent launch boundary.
+
+    Old selector remains untouched: only a guard surviving the checkout can stop it.
+    A real guard process must reject before importing any checkout/Telegram code.
+    """
+    installed=guard_install
     from steel_agent_v2 import runtime
     if published:
         source = subprocess.run(['git', 'show', OLD+':steel_agent_v2/runtime.py'],
                                 capture_output=True, check=True, encoding='utf-8').stdout
         runtime = ModuleType('published_runtime')
         exec(compile(source, 'published_runtime.py', 'exec'), runtime.__dict__)
+        installed.published()
     admit(rig, 41)
     rig.legacy.set_offset(42)
     assert not rig.queue.rollback_ready()
-    if config is not None:
-        (tmp_path/'telegram-handler.json').write_text(json.dumps(config))
-    # Required fail-closed behavior, not an assertion that approves the unsafe result.
-    with pytest.raises((QueueConflict, ValueError), match='queue|rollback'):
-        runtime.selection(tmp_path)
+    installed.config(config)
+    assert runtime.selection(installed.root)==('legacy',None)
+    assert_denied(installed)
 
 
 CRASH = r'''

@@ -1,5 +1,17 @@
 # Фактическая архитектура
 
+## Подготовлено №18: постоянный guard запуска
+
+Внешний административно защищённый bundle и manifest проверяют release + queue
+protocol + epoch до supervisor и каждого worker, независимо от handler. Используются
+зафиксированные копии прежнего supervisor/locks; новая ОС-служба не добавлена.
+Guard только читает SQLite. Явный offline `v2_queue_epoch.py` связывает queue metadata
+с armed manifest; core schema/RequestEngine не меняются. Epoch-bound rollback CLI
+дополнительно требует armed manifest до DROP. Новый start facade не имеет fallback.
+Статус REQUIRES DESIGN APPROVAL: Task Scheduler/постоянная ручная точка не переключены,
+production не менялся. Старые in-checkout CLI не считаются автоматически перехваченными.
+Подробности — [PERSISTENT_STARTUP_GUARD.md](PERSISTENT_STARTUP_GUARD.md).
+
 ## Актуализация №16: durable queue
 
 Начиная с №16 ветка v2 в run_bot использует `queue_runtime.run_queue`.
