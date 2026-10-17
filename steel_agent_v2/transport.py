@@ -7,6 +7,7 @@ import threading
 import re
 from urllib.parse import urlsplit, parse_qsl
 from .contracts import AgentPlan, SourceLink
+from .wire import WireAgentPlan
 from diagnostics import emit, safe_code, phase, CURRENT
 
 INSTRUCTIONS = '''Ты Steel Agent v2, единый оператор одного Telegram-чата. Отвечай по-русски.
@@ -156,10 +157,10 @@ class OpenAITransport:
     def plan(self, context, *, diagnostics=(), previous=None):
         payload={'context':context,'diagnostics':list(diagnostics),'previous_proposal':previous}
         response=self._call('coordinate',self.client.responses.parse, instructions=INSTRUCTIONS,
-            input=json.dumps(payload,ensure_ascii=False),text_format=AgentPlan)
+            input=json.dumps(payload,ensure_ascii=False),text_format=WireAgentPlan)
         parsed=get(response,'output_parsed')
         if parsed is None:raise ValueError('missing_structured_plan')
-        return parsed
+        return parsed.to_internal() if isinstance(parsed,WireAgentPlan) else AgentPlan.model_validate(parsed)
 
     def search(self, query):
         try:
