@@ -15,6 +15,8 @@ def search_status_text(status):
         'no_sources':'Поиск не предоставил подтверждённых источников для ответа.',
         'no_tool':'В ответе API не подтверждено выполнение инструмента поиска.',
         'tool_incomplete':'Инструмент поиска не завершил выполнение.',
+        'tool_status_unknown':'API не сообщил распознаваемый статус одного из действий поиска; завершение не подтверждено.',
+        'no_final_message':'После поисковых действий не сформировано завершённое сообщение с ответом.',
         'empty_text':'Поиск не вернул текст ответа.',
         'incomplete_response':'API вернул незавершённый результат поиска.',
         'invalid_response':'Ответ поиска не удалось корректно разобрать.',
@@ -66,7 +68,9 @@ class SteelAgent:
                 'display_numbers':{str(n):item.id for n,item in enumerate(current.items,1)} if current else {},
                 'totals':totals(current.items) if current else ({},[]),
                 'history':self.repository.history(user_id,current.id if current else None),
-                'last_search':self.repository.last_search(user_id)}
+                'last_search':self.repository.last_search(user_id),
+                'previous_operation':self.repository.last_operation(user_id)}
+            context['last_search_explanation']=search_status_text(context['last_search'])
             notes=[];previous=None;updated=None;reply=None;first_intent=None
             for attempt in range(2):
                 # A rejected proposal must never leak into a readonly repair.

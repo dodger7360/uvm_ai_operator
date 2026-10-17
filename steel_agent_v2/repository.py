@@ -95,6 +95,16 @@ class Repository:
                      if code.startswith('search:') and code[7:] in SEARCH_REASONS),'unknown')
         return {'status':reply.status,'reason':reason}
 
+    def last_operation(self, user):
+        """Immediate previous turn metadata; no message text or stale-search inference."""
+        self._allowed(user)
+        with self.database.connection() as c:
+            row=c.execute('SELECT reply FROM steel_v2_turn WHERE user_id=? ORDER BY sequence DESC LIMIT 1',
+                          (user,)).fetchone()
+        if not row:return None
+        reply=Reply.model_validate_json(row[0])
+        return {'intent':reply.intent,'status':reply.status}
+
     def finish(self, user, event, sequence, message, reply, updated=None):
         digest = sha256(message.encode()).hexdigest()
         with self.database.connection() as c:

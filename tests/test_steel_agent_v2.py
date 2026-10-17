@@ -296,14 +296,14 @@ def test_sdk_responses_parse_actual_mock_transport_no_token_cap():
 def test_search_sdk_payload_and_verified_citations(completed,cited,url,passed):
     client=Mock();client.with_options.return_value=client
     client.responses.create.return_value={'status':'completed','output_text':'Ответ',
-        'output':[{'type':'web_search_call','status':'completed' if completed else 'failed'},
-                  {'type':'message','content':[{'annotations':[{'type':'url_citation','url':url,'title':'Источник'}] if cited else []}]}]}
+        'output':[{'id':'ws1','type':'web_search_call','status':'completed' if completed else 'failed','action':{'type':'search','query':'Synthetic'}},
+                  {'id':'msg1','type':'message','role':'assistant','status':'completed','content':[{'type':'output_text','text':'Ответ','annotations':[{'type':'url_citation','url':url,'title':'Источник'}] if cited else []}]}]}
     t=OpenAITransport(client)
     if passed:assert t.search('ГОСТ').sources[0].url==url
     else:
         with pytest.raises(SearchUnavailable):t.search('ГОСТ')
     payload=client.responses.create.call_args.kwargs
-    assert payload['tools']==[{'type':'web_search'}] and payload['max_tool_calls']==1
+    assert payload['tools']==[{'type':'web_search'}] and 'max_tool_calls' not in payload
     assert 'max_output_tokens' not in payload and payload['tool_choice']=='required'
     client.with_options.assert_called_once_with(max_retries=0,timeout=180)
 
@@ -429,7 +429,7 @@ def test_search_actual_responses_sdk_mock_http_contract():
         transport=OpenAITransport(OpenAI(api_key='offline-test',http_client=http))
         answer=transport.search('ГОСТ')
     assert answer.sources[0].url=='https://example.org/doc'
-    assert sent[0]['tools'][0]['type']=='web_search' and sent[0]['max_tool_calls']==1
+    assert sent[0]['tools'][0]['type']=='web_search' and 'max_tool_calls' not in sent[0]
 
 
 def test_live_runner_cannot_invoke_client_without_explicit_opt_in(tmp_path,monkeypatch):
