@@ -77,7 +77,7 @@ def test_v2_worker_dispatch_replay_edit_offset_and_legacy_isolation(tmp_path, mo
     configure(tmp_path, {'handler':'v2','database':'steel-agent-v2.sqlite3'})
     fake = Fake(proposal(), lambda ctx, _:dict(intent='edit_request',
         expected_request_id=ctx['active_request']['id'], expected_revision=ctx['active_request']['revision'], operations=[set_op()]))
-    monkeypatch.setattr(OpenAITransport, 'from_environment', classmethod(lambda cls:fake))
+    monkeypatch.setattr(OpenAITransport, 'from_environment', classmethod(lambda cls, **kwargs:fake))
     monkeypatch.setattr(bot, 'AIService', Mock(side_effect=AssertionError('legacy AI must not be constructed')))
     monkeypatch.setenv('OPERATOR_DB', str(legacy_path))
     monkeypatch.setenv('OPENAI_REASONING_EFFORT','medium')
@@ -118,7 +118,7 @@ def test_runtime_legacy_db_path_is_rejected_without_mutating_data(tmp_path, monk
     legacy = TelegramRepository(Database(tmp_path/'operator.sqlite3'))
     access = TelegramAccess(AccessRepository(legacy.database))
     before = legacy.database.path.read_bytes()
-    monkeypatch.setattr(OpenAITransport, 'from_environment', classmethod(lambda cls:Fake()))
+    monkeypatch.setattr(OpenAITransport, 'from_environment', classmethod(lambda cls, **kwargs:Fake()))
     with pytest.raises(ValueError):
         connect(legacy.database.path, access)
     assert legacy.database.path.read_bytes()==before

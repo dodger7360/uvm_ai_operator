@@ -28,5 +28,6 @@ def selection(root):
 def connect(database, access):
     from .telegram import build_service, handle_update
     from .transport import OpenAITransport
-    service = build_service(OpenAITransport.from_environment(), database_path=database, access=access)
+    transport = OpenAITransport.from_environment(model='gpt-6-luna', reasoning='high')
+    service = build_service(transport, database_path=database, access=access)
     return service, handle_update

@@ -25,6 +25,9 @@ operator.sqlite3. Отсутствующий telegram-handler.json выбира�
   Responses.create с web_search. По умолчанию gpt-6-luna/high; модель и reasoning
   из OPENAI_MODEL/OPENAI_REASONING_EFFORT, v2 не наследует принудительную legacy
   установку high. SDK retries=0, timeout=180 секунд на вызов, store=False.
+  В Telegram runtime №5 явно создаётся gpt-6-luna/high через параметры фабрики,
+  независимо от legacy env; глобальное окружение и legacy не меняются. Вызов
+  фабрики без override (например CLI) сохраняет чтение env.
   Токенных и денежных квот нет. Метрики вызовов/времени/токенов — через diagnostics;
   в памяти хранятся последние 256 метрик. Содержимое сообщений в эти логи не пишется.
 - **RequestEngine (engine.py)**: чистая проверка структуры, ссылок, partition,

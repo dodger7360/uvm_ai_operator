@@ -2,19 +2,42 @@
 
 **Инструкция для будущего разрешённого этапа. В №2/№3 rollout не выполнялся.**
 Базовый HEAD 6b16c40 не содержит реализацию №1/№2; она включается в публикацию №3.
-SHA публикации указан в итоговом отчёте №3 и определяется через `git log -1`
-опубликованной feature-ветки. У feature-ветки отсутствуют слитые PR9/10; непосредственное
-переключение Windows на эту ветку сейчас запрещено данным runbook.
+SHA публикации №3: `e8f3a04f2164998bff09c40f7dac477e6111d382`.
+Перед каждым выпуском сверять его с origin и фактическим production, а не
+предполагать наличие PR9/10. Переключение требует отдельного разрешения.
 
 ## 1. Входные условия и доставка
 
 Политика revoke/reapprove утверждена в №3: история и заявки сохраняются, повторное
 одобрение того же Telegram ID возвращает контекст. Отдельную систему отзыва не строить.
-После публикации feature-ветки отдельным этапом собрать релиз на фактическом
-актуальном production, сохранив
-права, /version и бюджетную защиту legacy; проверить diff/тесты, согласовать commit
-и push. V2 не получает искусственных денежных/токенных квот. Нельзя включать
-неограниченный старый AI-код вместо защищённого legacy при rollback.
+После публикации feature-ветки отдельно проверить совместимость с фактическим
+production, сохранив имеющиеся права, offset, locks и историю; проверить diff/тесты,
+согласовать commit и публикацию совместимого кандидата. /version и бюджетная
+защита сохраняются, если присутствуют в фактическом production; не переносить
+их из других веток автоматически. V2 не получает денежных/токенных квот.
+При rollback сохранять утверждённую политику исходной установки, не подменять её.
+
+№4 (2026-10-17): фактический production `19c9657`, является предком `e8f3a04`.
+Supervisor, windows_runtime, start/stop и requirements.txt не отличаются.
+PR9/10, /version и постоянные квоты отсутствуют в этой установке: возвращать их
+не требуется. Исправление Windows SQLite URI в offline launcher подготовлено
+локально в `fix/steel-agent-v2-windows-stage4`, не закоммичено/не опубликовано.
+Это проверочный кандидат, а не готовый одобренный релиз для установки.
+
+№5: Windows-кандидат публикуется отдельно в `fix/steel-agent-v2-windows-stage4`.
+Одобренный полный SHA взять из итогового сообщения №5 и сверить через ls-remote;
+не устанавливать просто текущий HEAD изменяемой feature-ветки. №4 остаётся
+историческим отчётом. Тесты №5: отдельный venv 182 passed / 20 subtests;
+production interpreter на staging-тестах 185 passed / 20 subtests (включая
+три legacy reasoning-регрессии). Предупреждения Git о 51 каталоге воспроизведены
+только sandbox-пользователем: у обычного пользователя status чистый без warning.
+51 каталог с защищённой DACL находится в корне production вне .git; не удалять.
+
+V2 runtime.connect явно передаёт model=gpt-6-luna, reasoning=high в фабрику
+транспорта. Значения .env low/medium больше не понижают выбранный v2 handler.
+Legacy и переменные окружения не изменяются; startup-лог v2 берёт фактические
+параметры транспорта. Прямой CLI from_environment() без override сохраняет своё
+прежнее поведение; для начальной Telegram-приёмки используется штатный runtime.
 
 На Windows сначала установить фактические каталог, interpreter, способ запуска,
 ветку/SHA, чистоту Git, пути OPERATOR_DB/бюджета и состояние supervisor/worker.
@@ -30,6 +53,11 @@ Set-Location -LiteralPath $Project
 $Before = git rev-parse HEAD
 git status --short
 git fetch origin
+if ($LASTEXITCODE -ne 0) { throw 'Fetch failed' }
+# $Target — заранее одобренный полный SHA из отчёта №5, не main/HEAD.
+if ((git rev-parse origin/fix/steel-agent-v2-windows-stage4) -ne $Target) {
+    throw 'Published candidate changed; review required'
+}
 git cat-file -e "$Target^{commit}"
 if ($LASTEXITCODE -ne 0) { throw 'Release commit is unavailable' }
 git merge-base --is-ancestor $Before $Target
@@ -38,20 +66,21 @@ git diff --name-status $Before $Target
 ```
 
 При локальных изменениях/другом обслуживании остановиться. Сохранить $Before и
-runtime manifest вне Git. На текущем состоянии проверка ancestry не проходит:
-это ожидаемая блокировка прямого deployment, не повод применять force/reset.
-Нужен уже опубликованный одобренный релиз; этот документ его не создаёт.
+runtime manifest вне Git. В №4 ancestry проходит для проверенной пары SHA;
+если будущий production отличается, повторить проверку и остановиться при
+несовместимости. Нужен опубликованный одобренный релиз; документ его не создаёт.
 
 ## 2. Проверка до остановки
 
 Доставить $Target в отдельный *проверочный* worktree (`git worktree add --detach
 $Stage $Target`), не копировать туда .env, БД, token, runtime config. Это не место
-запуска бота. Создать там временный venv Python 3.12, установить requirements-dev.txt,
+запуска бота. Создать там отдельный venv совместимой версии Python, установить requirements-dev.txt,
 проверить pip check и офлайн-команды TESTING.md. Ни main.py, ни Telegram CLI не запускать.
 Убедиться, что B6 Git-объект доступен; если нет — не выдавать skip за приёмку.
 Проверить `scripts/v2_llm_check.py --help`, не --live.
 
-Сверить версии production .venv с требованиями: Python 3.12, openai 3.19.2,
+Сверить версии production .venv с требованиями: в №3 проверен Python 3.12.14,
+на Windows №4 проверен Python 3.13.15; openai 3.19.2,
 pydantic 2.13.5 и остальные pins requirements*.txt. Не обновлять рабочий venv
 наугад. При несовпадении — остановиться и подготовить отдельный план зависимостей
 с проверенным возвратом; текущий путь rollout предполагает совместимый runtime.
@@ -59,8 +88,8 @@ pydantic 2.13.5 и остальные pins requirements*.txt. Не обновл�
 Подтвердить права NTFS на OPERATOR_DB, будущую v2 SQLite и backup: только текущий
 оператор/администратор. Не менять токен, endpoint, сеть, прокси, Task Scheduler.
 Проверить наличие нужных env по именам без вывода значений. В staging допустим
-только fake transport и временные SQLite. Отсутствие BETA_ROLLOUT.md в исходной
-ветке v2 — следствие отсутствия PR9, не причина пропускать его при сборке релиза.
+только fake transport и временные SQLite. Не переносить BETA_ROLLOUT.md/квоты из
+PR9, если их нет в фактической исходной установке и пользователь их не разрешил.
 
 ## 3. Остановка и окончательный backup
 
@@ -98,13 +127,22 @@ telegram-handler.json отдельно, если он был; .env не копи
 процессами, установить одобренный commit без изменения main ref:
 
 ```powershell
-git switch --detach $Target
+git switch --no-overwrite-ignore --detach $Target
 if ($LASTEXITCODE -ne 0) { throw 'Checkout failed; keep maintenance' }
 if ((git rev-parse HEAD) -ne $Target) { throw 'Unexpected HEAD' }
 ```
 
 Так сохраняется исходная ветка для возврата. При будущем разрешённом выпуске
 можно отдельно согласовать fast-forward основной ветки. Не применять reset/clean/stash.
+Для проверенной пары 19c9657 → кандидат №5 история не расходится: production
+является предком. Разные имена веток не означают несовместимую историю.
+При ином фактическом HEAD и провале ancestry не применять этот checkout:
+сохранить maintenance, вернуться к review отдельного staging worktree от
+проверенного SHA и подготовить отдельный совместимый кандидат. Не копировать
+staging поверх production и не запускать бота из второго каталога.
+--no-overwrite-ignore дополнительно запрещает перезаписать игнорируемые локальные
+файлы, совпавшие с путями нового кода. Флаг проверен на установленном Windows Git
+в одноразовом репозитории; production checkout в №5 не выполнялся.
 Повторить импорты/оффлайн-тесты в production interpreter; launcher не читает user DB.
 Существующие Windows startup scripts/main.py/supervisor/Task Scheduler не меняются.
 В релизе меняются telegram_bot.py и добавляется пакет v2; runtime выбор задаётся
@@ -147,9 +185,9 @@ OS locks и offset. Не запускать параллельно main.py ил�
 Сверить сохранённые права/active/history legacy по hash/count; telegram_state
 меняется только ожидаемым offset, его нельзя сравнивать как полностью неизменный.
 Бюджетный журнал legacy не сбрасывается. V2 schema/PRAGMA integrity_check=ok.
-Фактическая версия /version должна соответствовать одобренному релизу, а не
-автоматически старому номеру 1.10. Поддержку команды нужно сохранить при сборке
-релиза с PR10; в текущей feature-ветке её нет, новый номер не выдумывать.
+Если фактическая установка поддерживает /version, сохранить её при сборке
+совместимого релиза. У production №4 команды нет; идентификация выполняется
+полным Git SHA и telegram_handler=v2, новый номер не выдумывать.
 
 Только при отдельном разрешении платных вызовов/приёмки — один согласованный
 участник проверяет сценарии TESTING.md через существующий UVM_Steel. Иначе
@@ -166,7 +204,7 @@ OS locks и offset. Не запускать параллельно main.py ил�
 При остановленных процессах и чистом Git:
 
 ```powershell
-git switch --detach $Before
+git switch --no-overwrite-ignore --detach $Before
 if ($LASTEXITCODE -ne 0) { throw 'Rollback checkout failed; keep maintenance' }
 ```
 
@@ -174,7 +212,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Rollback checkout failed; keep maintenance' }
 если раньше его не было), сохранив неудачный config для диагностики. Если предыдущий
 код содержит selector и нужен legacy, явный JSON `{"handler":"legacy"}` допустим
 только после проверки прежней конфигурации. .env/SQLite/бюджет не восстанавливать
-автоматически. Старый runtime должен иметь прежние зависимости и защиту legacy AI.
+автоматически. Старый runtime должен иметь прежние зависимости и утверждённые
+настройки legacy AI. Для исходного 19c9657 квоты не добавлять.
 
 V2 active/version/turn сохраняются отдельно, старый код их не читает. В legacy
 снова доступна старая активная заявка; изменения v2 туда автоматически не переносятся.

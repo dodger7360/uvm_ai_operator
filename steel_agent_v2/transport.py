@@ -87,7 +87,7 @@ class OpenAITransport:
         self._metric_lock=threading.Lock()
 
     @classmethod
-    def from_environment(cls):
+    def from_environment(cls, *, model=None, reasoning=None):
         """Explicit construction only; does not read/copy .env or invoke API."""
         import os
         from openai import OpenAI, DefaultHttpxClient
@@ -95,8 +95,8 @@ class OpenAITransport:
         options={'event_hooks': {'request': [http_attempt]}}
         if os.getenv('OPENAI_PROXY'):options['proxy']=os.environ['OPENAI_PROXY']
         client=OpenAI(http_client=DefaultHttpxClient(**options),max_retries=0)
-        return cls(client,model=os.getenv('OPENAI_MODEL','gpt-6-luna'),
-                   reasoning=os.getenv('OPENAI_REASONING_EFFORT','high'))
+        return cls(client,model=model if model is not None else os.getenv('OPENAI_MODEL','gpt-6-luna'),
+                   reasoning=reasoning if reasoning is not None else os.getenv('OPENAI_REASONING_EFFORT','high'))
 
     def _call(self, stage, method, **payload):
         with self._metric_lock:

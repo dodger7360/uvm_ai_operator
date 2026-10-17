@@ -5,6 +5,8 @@ import socket
 import sqlite3
 import sys
 import tempfile
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 ROOT=Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
@@ -28,7 +30,13 @@ allowed=(ROOT,Path(tempfile.gettempdir()).resolve())
 
 def isolated_connect(database,*args,**kwargs):
     if str(database)!=':memory:':
-        path=Path(database).resolve()
+        value=os.fsdecode(database)
+        if kwargs.get('uri') and value.startswith('file:'):
+            parsed=urlsplit(value)
+            if parsed.netloc not in {'','localhost'}:
+                raise RuntimeError('Remote SQLite access prohibited by offline launcher')
+            value=url2pathname(parsed.path)
+        path=Path(value).resolve()
         if not any(path.is_relative_to(root) for root in allowed):
             raise RuntimeError('User SQLite access prohibited by offline launcher')
     return connect(database,*args,**kwargs)

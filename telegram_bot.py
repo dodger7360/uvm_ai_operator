@@ -255,7 +255,12 @@ def run_bot(root, token):
         LOG.info('telegram_handler=%s', handler_name)
         offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')
-        LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
+        if handler_name == 'v2':
+            LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(),
+                     getattr(service.transport, 'model', 'gpt-6-luna'),
+                     getattr(service.transport, 'reasoning', 'high'), 'none')
+        else:
+            LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
         failures, connected = 0, False
         while not maintenance_requested(root):
             try:
