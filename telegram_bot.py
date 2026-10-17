@@ -219,12 +219,14 @@ def run_bot(root, token):
     if maintenance_requested(root):
         LOG.info('maintenance_stop no_polling=true')
         return 0
-    if os.getenv('OPENAI_MODEL', 'gpt-6-luna') == 'gpt-6-luna':
-        # Pin this deployment's primary/retry effort without rewriting .env.
-        os.environ['OPENAI_REASONING_EFFORT'] = 'high'
-        os.environ['OPENAI_FALLBACK_REASONING_EFFORT'] = 'high'
     api = TelegramAPI(token)
     try:
+        from steel_agent_v2.runtime import selection, connect
+        handler_name, v2_database = selection(root)
+        if handler_name == 'legacy' and os.getenv('OPENAI_MODEL', 'gpt-6-luna') == 'gpt-6-luna':
+            # Preserve legacy settings; v2 respects its configured reasoning.
+            os.environ['OPENAI_REASONING_EFFORT'] = 'high'
+            os.environ['OPENAI_FALLBACK_REASONING_EFFORT'] = 'high'
         me = api.call('getMe')
         if api.call('getWebhookInfo').get('url'):
             LOG.error('existing_webhook_requires_review')
@@ -241,11 +243,16 @@ def run_bot(root, token):
         access = TelegramAccess(access_repository)
         if access_repository.admin_id() is None:
             LOG.warning('administrator_not_bound_access_closed')
-        policy = NormalizationPolicyRepository(repository.database, access_repository)
-        ai = AIService()
-        service = TelegramService(ai, AuthorizedRequestRepository(repository, access_repository),
-                                  commercial_view=True, reliable=True, policy_repository=policy,
-                                  assistant=WorkAssistantService(ai.assistant_transport))
+        if handler_name == 'v2':
+            service, dispatch = connect(v2_database, access)
+        else:
+            policy = NormalizationPolicyRepository(repository.database, access_repository)
+            ai = AIService()
+            service = TelegramService(ai, AuthorizedRequestRepository(repository, access_repository),
+                                      commercial_view=True, reliable=True, policy_repository=policy,
+                                      assistant=WorkAssistantService(ai.assistant_transport))
+            dispatch = handle_update
+        LOG.info('telegram_handler=%s', handler_name)
         offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')
         LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
@@ -260,7 +267,7 @@ def run_bot(root, token):
                 for update in updates:
                     if maintenance_requested(root):
                         break  # Leave unprocessed update IDs unacknowledged.
-                    handle_update(update, service, api, access)
+                    dispatch(update, service, api, access)
                     offset = update['update_id'] + 1
                     repository.set_offset(offset)
             except TelegramError as error:

@@ -38,3 +38,4 @@ telegram-supervisor.log
 telegram-supervisor.lock
 telegram.maintenance
 telegram.ready
+telegram-handler.json
