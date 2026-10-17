@@ -68,12 +68,18 @@ class AgentPlan(ContractModel):
     extraction: Extraction | None = None
     operations: list[Operation] = Field(default_factory=list)
     answer: str = ''
-    view: Literal['normalized', 'original', 'totals', 'explanation'] = 'normalized'
+    view: Literal['normalized', 'original', 'totals', 'explanation',
+                  'forward', 'custom', 'search_status'] = 'normalized'
     search_query: str | None = None
     remaining_questions: list[str] | None = None
 
     @model_validator(mode='after')
     def only_intended_mutation(self):
+        if self.view in {'forward','custom','search_status'}:
+            if self.intent not in {'show_request','answer_question'}:
+                raise ValueError('readonly presentation requires show_request or answer_question')
+            if self.view=='custom' and not self.answer.strip():
+                raise ValueError('custom presentation requires answer')
         if self.intent == 'create_request':
             if self.extraction is None or self.operations:
                 raise ValueError('create_request requires extraction and no operations')

@@ -179,7 +179,7 @@ def test_dialog_and_show_do_not_modify_request(rig,intent,view,answer):
     result=agent.handle(1,'пользовательское сообщение',event_id='dialog')
     assert result.status=='ok' and repo.load(1).model_dump_json()==before
     if view=='original':assert result.text.endswith(SOURCE)
-    if view=='totals':assert '2.000 т' in result.text
+    if view=='totals':assert '2 т' in result.text
     if view=='explanation':assert 'Предложение GPT' in result.text
     assert repo.version(1,repo.load(1).id,2) is None
 
@@ -231,7 +231,10 @@ def test_unknown_product_and_all_nonproduct_text_remain_visible(tmp_path):
         items=[dict(id='i',source_id='r',label='Квантовый профиль Ψ',quantity='7',unit='шт',quantity_text='7',unit_text='шт')],
         groups=[dict(id='g',label='Ψ',item_ids=['i'],rationale='Исходная позиция')]))
     repo=Repository(Database(tmp_path/'x.sqlite3'));reply=SteelAgent(Fake(plan),repo).handle(1,source,event_id='x')
-    assert reply.status=='partial' and '???' in reply.text and 'Примечание' in reply.text
+    assert reply.status=='partial' and '???' in reply.text
+    from steel_agent_v2.presentation import render
+    assert 'Примечание' in render(repo.load(1),'explanation')
+    assert repo.load(1).original_text==source
 
 
 @pytest.mark.parametrize('search_result',[SearchUnavailable('no tool'),RuntimeError('api key secret'),
@@ -241,7 +244,7 @@ def test_unavailable_search_does_not_fake_sources_or_change_request(rig,search_r
     fake.plans=[dict(intent='web_search',search_query='Актуальный ГОСТ')];fake.search_result=search_result
     result=agent.handle(1,'проверь через интернет',event_id='search')
     assert result.status=='failed' and not result.sources
-    assert 'Актуальность не проверена' in result.text
+    assert 'проверить не удалось' in result.text
     assert repo.load(1).model_dump_json()==before
     assert len(fake.calls)==2 and len(fake.search_calls)==1
 
@@ -460,7 +463,8 @@ def test_mixed_request_headers_are_accounted_and_can_supply_evidence(tmp_path):
         groups=[dict(id='g',label='Лист',item_ids=['i'],rationale='Одна исходная позиция')]))
     repo=Repository(Database(tmp_path/'header.sqlite3'))
     result=SteelAgent(Fake(plan),repo).handle(1,source,event_id='header')
-    assert result.status=='ok' and 'Марка С245' in result.text
+    assert result.status=='ok' and 'С245' in result.text
+    assert repo.load(1).original_text==source
 
 
 def test_general_chat_survives_new_request_without_old_technical_context(rig):
@@ -510,7 +514,7 @@ def test_transport_reports_unsupported_search_without_fake_answer():
     client=Mock();client.with_options.return_value=client
     client.responses.create.side_effect=BadRequestError('not supported',response=httpx2.Response(400,
         request=httpx2.Request('POST','https://api.openai.com/v1/responses')),body=None)
-    with pytest.raises(SearchUnavailable,match='api_bad_request'):
+    with pytest.raises(SearchUnavailable,match='api_error'):
         OpenAITransport(client,model='configured-model').search('question')
     client.responses.create.assert_called_once()
 

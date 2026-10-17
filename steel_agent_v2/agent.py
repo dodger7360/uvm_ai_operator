@@ -5,7 +5,21 @@ from .contracts import AgentPlan, Reply
 from .engine import RequestEngine, EngineError, totals
 from .repository import Busy
 from .presentation import render
-from .transport import SearchUnavailable, safe_source
+from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
+
+
+def search_status_text(status):
+    if not status:return 'Нет сохранённой диагностики поиска. Причина недоступности не установлена.'
+    if status['status']=='ok':return 'Последний поиск завершился с подтверждёнными источниками.'
+    reasons={
+        'no_sources':'Поиск не предоставил подтверждённых источников для ответа.',
+        'no_tool':'В ответе API не подтверждено выполнение инструмента поиска.',
+        'tool_incomplete':'Инструмент поиска не завершил выполнение.',
+        'empty_text':'Поиск не вернул текст ответа.',
+        'incomplete_response':'API вернул незавершённый результат поиска.',
+        'invalid_response':'Ответ поиска не удалось корректно разобрать.',
+        'api_error':'Запрос поиска завершился ошибкой API или соединения. Более точная причина пользователю не подтверждена.'}
+    return reasons.get(status['reason'],'Точная техническая причина отказа поиска не установлена.')+' Актуальные сведения проверить не удалось; заявка не изменена.'
 from diagnostics import emit, safe_code, CURRENT
 
 
@@ -49,8 +63,10 @@ class SteelAgent:
                 'active_request': current.model_dump(mode='json',exclude={'undo_stack','changes','originals'}) if current else None,
                 'recent_changes':[c.model_dump() for c in current.changes[-10:]] if current else [],
                 'can_undo': bool(current and current.undo_stack),
+                'display_numbers':{str(n):item.id for n,item in enumerate(current.items,1)} if current else {},
                 'totals':totals(current.items) if current else ({},[]),
-                'history':self.repository.history(user_id,current.id if current else None)}
+                'history':self.repository.history(user_id,current.id if current else None),
+                'last_search':self.repository.last_search(user_id)}
             notes=[];previous=None;updated=None;reply=None;first_intent=None
             for attempt in range(2):
                 # A rejected proposal must never leak into a readonly repair.
@@ -74,7 +90,11 @@ class SteelAgent:
                         updated=self.engine.edit(current,plan,message,
                             lambda key,rev:self.repository.version(user_id,key,rev))
                         text=render(updated)
-                    elif plan.intent=='show_request' or plan.intent=='answer_question' and plan.view in {'original','totals','explanation'}:
+                    elif plan.view=='search_status':
+                        text=search_status_text(context['last_search'])
+                    elif plan.view=='custom':
+                        text=('Заявка требует уточнения.\n' if current and self.engine.partial(current) else '')+plan.answer
+                    elif plan.intent=='show_request' or plan.intent=='answer_question' and plan.view in {'original','totals','explanation','forward'}:
                         text=render(current,plan.view)
                     elif plan.intent=='web_search':
                         # Search has no mutation tools and its text is NEVER parsed as a plan.
@@ -82,22 +102,29 @@ class SteelAgent:
                         try:
                             result=self.transport.search(plan.search_query)
                             sources=list(result.sources)
-                            if not sources or any(not safe_source(s.url) for s in sources):
-                                raise SearchUnavailable('no_safe_sources')
-                            text='Интернет-поиск (заявка не изменена):\n' + result.text + '\n\nИсточники:\n' + '\n'.join(s.title+' — '+s.url for s in sources)
+                            providers=getattr(result,'providers',())
+                            if (not sources and not providers or any(not safe_source(s.url) for s in sources)
+                                    or any(p not in SEARCH_PROVIDERS for p in providers)):
+                                raise SearchUnavailable('no_sources')
+                            text=result.text+'\n\nИсточники:\n'+'\n'.join(
+                                [s.title+' — '+s.url if s.title!=s.url else s.url for s in sources]+
+                                ['Сервис web_search: '+p for p in providers])
                             reply=Reply(text=text,status='ok',intent=plan.intent,request_id=current.id if current else None,
                                 revision=current.revision if current else None,sources=sources,calls=calls)
                         except Exception as error:
                             emit('steel_v2_search_unavailable', reason=safe_code(error))
-                            reply=Reply(text='Интернет-поиск недоступен или не подтверждён источниками. Актуальность не проверена. Заявка не изменена.',
+                            reason=error.reason if isinstance(error,SearchUnavailable) else 'unknown'
+                            reply=Reply(text=search_status_text({'status':'failed','reason':reason}),
                                 status='failed',intent=plan.intent,request_id=current.id if current else None,
-                                revision=current.revision if current else None,calls=calls,diagnostics=['search_unavailable'])
+                                revision=current.revision if current else None,calls=calls,diagnostics=['search_unavailable','search:'+reason])
                         break
                     else:
                         if not plan.answer.strip():raise EngineError('answer_or_clarification_required')
                         text=plan.answer
                     state=updated or current
-                    reply=Reply(text=text,status='partial' if updated and self.engine.partial(updated) else 'ok',
+                    request_view=plan.intent=='show_request' or plan.intent=='answer_question' and plan.view in {'original','totals','explanation','forward','custom'}
+                    partial=state and self.engine.partial(state) and (updated is not None or request_view)
+                    reply=Reply(text=text,status='partial' if partial else 'ok',
                         intent=plan.intent,request_id=state.id if state else None,revision=state.revision if state else None,calls=calls)
                     break
                 except (ValidationError,EngineError,json.JSONDecodeError,ValueError) as error:

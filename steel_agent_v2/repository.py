@@ -81,6 +81,20 @@ class Repository:
                              {'role':'assistant','content':Reply.model_validate_json(row['reply']).text}])
         return bounded_history(messages)
 
+    def last_search(self, user):
+        """Bounded technical summary from existing history, never model speculation."""
+        self._allowed(user)
+        with self.database.connection() as c:
+            row=c.execute("SELECT reply FROM steel_v2_turn WHERE user_id=? "
+                          "AND json_extract(reply,'$.intent')='web_search' "
+                          "ORDER BY sequence DESC LIMIT 1",(user,)).fetchone()
+        if not row:return None
+        reply=Reply.model_validate_json(row[0])
+        from .transport import SEARCH_REASONS
+        reason=next((code[7:] for code in reply.diagnostics
+                     if code.startswith('search:') and code[7:] in SEARCH_REASONS),'unknown')
+        return {'status':reply.status,'reason':reason}
+
     def finish(self, user, event, sequence, message, reply, updated=None):
         digest = sha256(message.encode()).hexdigest()
         with self.database.connection() as c:
