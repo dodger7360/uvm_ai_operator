@@ -339,20 +339,21 @@ def test_old_release_cannot_open_queue_schema_and_offline_rollback_preserves_all
     old=old_repository_class()
     admit(rig,1)
     with pytest.raises(ValueError):old(rig.queue.database)
-    with pytest.raises(ValueError):prepare_rollback(rig.queue.database.path,tmp_path/'must-not-exist.sqlite3','rollback:2')
+    with pytest.raises(ValueError):prepare_rollback(rig.queue.database.path,tmp_path/'must-not-exist.sqlite3','rollback:2',legacy_database=rig.legacy.database.path)
     assert not (tmp_path/'must-not-exist.sqlite3').exists()
     Executor(rig.queue,rig.access,lambda:rig.api,lambda:Fake(proposal())).execute(rig.queue.claim())
+    rig.legacy.set_offset(rig.queue.cursor())  # Poller mirror must be aligned before downgrade.
     from scripts.v2_sqlite_snapshot import metadata
     with rig.queue.database.connection() as c:before=metadata(c)
     archive=tmp_path/'verified-queue-archive.sqlite3'
-    prepare_rollback(rig.queue.database.path,archive,inspect(rig.queue.database.path)['rollback_confirmation'])
+    prepare_rollback(rig.queue.database.path,archive,inspect(rig.queue.database.path)['rollback_confirmation'],legacy_database=rig.legacy.database.path)
     with rig.queue.database.connection() as c:after=metadata(c)
     core={'steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_inflight'}
     assert set(after['tables'])==core
     assert {k:before['tables'][k] for k in core}==after['tables']
     with sqlite3.connect(archive) as c:assert metadata(c)==before
     assert old(rig.queue.database).load(1).revision==1
-    assert rig.legacy.get_offset()==0
+    assert rig.legacy.get_offset()==2
 
 
 def test_crash_after_access_commit_never_repeats_approval(rig,monkeypatch):

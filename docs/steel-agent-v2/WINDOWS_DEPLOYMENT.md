@@ -265,11 +265,15 @@ Read-only, из установленной версии, с явно устан�
 
 ```powershell
 & .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db
-& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --guard-rollback
+& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --legacy-database $legacyDb --guard-rollback
 ```
 
 Вывод содержит состояния/счётчики/update IDs/opaque confirmation, без переписки,
-user IDs и ключей. guard возвращает 2, если есть незакрытые jobs/claims/outbox.
+user IDs и ключей. `$legacyDb` — проверенный фактический путь legacy SQLite.
+guard возвращает 2, если есть незакрытые jobs/claims/outbox, не указан legacy путь
+или его offset не равен durable cursor. `queue_drained` отдельно от `offset_verified`;
+поле `rollback_ready` требует обе проверки и известную версию схемы. Диагностика
+без legacy пути не удостоверяет готовность rollback и ничего не создаёт.
 В логах queue update_id связан с operation ID, далее с безопасной API-диагностикой.
 Не выгружать тела сообщений/ответов для диагностики.
 
@@ -300,14 +304,18 @@ queued можно продолжить только согласованным �
    вне checkout**, передав текущий rollback_confirmation:
 
 ```powershell
-& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --root $root --prepare-rollback --archive $newArchivePath --confirm $rollbackConfirmation
+& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --legacy-database $legacyDb --root $root --prepare-rollback --archive $newArchivePath --confirm $rollbackConfirmation
 ```
 
 Инструмент использует SQLite Backup API, integrity_check, hash/count manifest,
 повторное открытие и сравнение с source под write lock. Архивы не перезаписываются.
 После проверки атомарно удаляются **только** четыре operational queue таблицы;
 их история полностью остаётся в архиве. Active/version/turn/inflight и общий legacy
-offset не заменяются. При ошибке backup таблицы не удаляются.
+offset не заменяются. При ошибке backup таблицы не удаляются. Перед архивированием
+и непосредственно перед DROP проверяется равенство legacy offset и durable cursor.
+Если mirror отстал/опередил cursor, rollback запрещён; инструмент не меняет offset.
+Разбирать это состояние нужно совместимым runtime после остановки и сверки backups,
+не ручной коррекцией telegram_state. Процедура требует обоих свободных process locks.
 
 6. Установить согласованный прежний полный SHA безопасным detached checkout
    `--no-overwrite-ignore`. Сохранить handler=v2 и прежние database paths. Не восстанавливать
@@ -319,6 +327,14 @@ offset не заменяются. При ошибке backup таблицы не
 handler на legacy, удалением config или ручным DROP. Такой переход требует отдельной
 процедуры и решения пользователя. Исходную процедуру rollback на legacy ниже
 нельзя автоматически применять к версии с очередью.
+
+**Предпусковая проверка №17: REQUIRES DESIGN CHANGES.** Запрет обхода через legacy
+в этом разделе пока процедурный: selector кандидата и aa11380 выбирает legacy
+при отсутствии config либо при явном legacy, не проверяя v2 queue. Прямая смена
+SHA с сохранением v2 блокируется старым Repository, но смена handler обходит его.
+Не считать этот кандидат разрешённым к установке. Нужен согласованный startup gate,
+сохраняющийся вне сменяемого checkout и проверяющий queue независимо от handler;
+подробности и проверенные границы — reports/017-queue-predeployment-validation.md.
 
 Полный проект и границы гарантий: CONCURRENT_QUEUE_DESIGN.md. Абсолютное exactly-once
 внешних API не гарантируется; unknown означает ручное решение без автоматических повторов.
