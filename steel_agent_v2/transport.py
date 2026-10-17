@@ -4,6 +4,7 @@ from collections import deque
 import json
 import time
 import threading
+import re
 from urllib.parse import urlsplit, parse_qsl
 from .contracts import AgentPlan, SourceLink
 from diagnostics import emit, safe_code, phase, CURRENT
@@ -64,6 +65,29 @@ class SearchUnavailable(ValueError):
     pass
 
 
+def api_error_metadata(error):
+    """Only bounded API metadata; never body/message/headers or arbitrary strings."""
+    result={}
+    status=getattr(error,'status_code',None)
+    if type(status) is int and 100 <= status <= 599:
+        result['http_status']=status
+    allowed_codes={'invalid_json_schema','invalid_request_error','unsupported_parameter',
+                   'unsupported_value','invalid_api_key','model_not_found',
+                   'rate_limit_exceeded','insufficient_quota','server_error',
+                   'context_length_exceeded','permission_denied'}
+    allowed_params={'model','reasoning','reasoning.effort','text','text.format',
+                    'text.format.schema','response_format','input','tools','tool_choice',
+                    'max_tool_calls','max_output_tokens','store','temperature'}
+    for field,allowed in [('code',allowed_codes),('param',allowed_params)]:
+        value=getattr(error,field,None)
+        if isinstance(value,str):
+            result['api_error_'+field]=value if value in allowed else 'other'
+    request_id=getattr(error,'request_id',None)
+    if isinstance(request_id,str) and re.fullmatch(r'req_[A-Za-z0-9_-]{1,100}',request_id):
+        result['api_request_id']=request_id
+    return result
+
+
 def get(obj, key, default=None):
     return obj.get(key, default) if isinstance(obj, dict) else getattr(obj,key,default)
 
@@ -108,7 +132,7 @@ class OpenAITransport:
             trace.calls+=1
             trace.stage_calls[stage]=trace.stage_calls.get(stage,0)+1
             trace.model,trace.reasoning=self.model,self.reasoning
-        started=time.monotonic();response=None;failure=None
+        started=time.monotonic();response=None;failure=None;error_metadata={}
         try:
             response=method(model=self.model, reasoning={'effort':self.reasoning},store=False,**payload)
             if get(response,'status')!='completed':
@@ -116,6 +140,7 @@ class OpenAITransport:
             return response
         except Exception as error:
             failure=safe_code(error)
+            error_metadata=api_error_metadata(error)
             raise
         finally:
             usage=get(response,'usage')
@@ -123,6 +148,8 @@ class OpenAITransport:
             details=get(usage,'output_tokens_details')
             if type(get(details,'reasoning_tokens')) is int:fields['reasoning_tokens']=get(details,'reasoning_tokens')
             metric=dict(call_index=call_index,stage=stage,model=self.model,duration_ms=round((time.monotonic()-started)*1000),reason=failure,**fields)
+            metric.update(error_metadata)
+            metric['operation']=trace.operation_id if trace else None
             with self._metric_lock:self.metrics.append(metric)
             emit('steel_v2_model_call',**metric)
 

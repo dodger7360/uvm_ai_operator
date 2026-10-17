@@ -6,7 +6,7 @@ from .engine import RequestEngine, EngineError, totals
 from .repository import Busy
 from .presentation import render
 from .transport import SearchUnavailable, safe_source
-from diagnostics import emit, safe_code
+from diagnostics import emit, safe_code, CURRENT
 
 
 def source_lines(text):
@@ -115,6 +115,9 @@ class SteelAgent:
         except Exception as error:
             # No SDK retries; no automatic replay after timeout/transport/storage failure.
             code=safe_code(error)
+            trace=CURRENT.get()
+            if trace:
+                trace.result=code
             emit('steel_v2_failure',reason=code,exception=type(error).__name__,calls=calls)
             reply=Reply(text='Обработка не завершена. Активная заявка не изменена; исходное сообщение сохранено в истории. '
                 'Повторите позже или сообщите администратору.',status='failed',intent='clarify',
