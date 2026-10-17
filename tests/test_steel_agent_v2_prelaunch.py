@@ -89,17 +89,20 @@ def test_v2_worker_dispatch_replay_edit_offset_and_legacy_isolation(tmp_path, mo
         if method=='getWebhookInfo':return {}
         if method=='getUpdates':
             polls.append(payload['offset'])
-            assert len(polls)==1
-            return [update(41,SOURCE),update(41,SOURCE),update(42,'Ст3')]
+            if len(polls)==1:return [update(41,SOURCE),update(41,SOURCE),update(42,'Ст3')]
+            from threading import Event
+            Event().wait(.01)
+            return []
         if method=='sendMessage':
             sent.append(payload['text'])
-            if len(sent)==3:(tmp_path/'telegram.maintenance').touch()
+            if len(sent)==2:(tmp_path/'telegram.maintenance').touch()
+            return {'message_id':len(sent)}
         return {}
     api=Mock();api.call.side_effect=call
     monkeypatch.setattr(bot, 'TelegramAPI', lambda _:api)
     assert bot.run_bot(tmp_path,'offline')==0
-    assert polls==[41] and legacy.get_offset()==43
-    assert len(fake.calls)==2 and len(sent)==3 and sent[0]==sent[1]
+    assert polls[0]==41 and all(value==43 for value in polls[1:]) and legacy.get_offset()==43
+    assert len(fake.calls)==2 and len(sent)==2
     assert fake.calls[0][0]['active_request'] is None
     assert Repository(Database(tmp_path/'steel-agent-v2.sqlite3')).load(1).revision==2
     assert bot.os.environ['OPENAI_REASONING_EFFORT']=='medium'

@@ -69,7 +69,8 @@ class SteelAgent:
                 'totals':totals(current.items) if current else ({},[]),
                 'history':self.repository.history(user_id,current.id if current else None),
                 'last_search':self.repository.last_search(user_id),
-                'previous_operation':self.repository.last_operation(user_id)}
+                'previous_operation':self.repository.last_operation(user_id),
+                'supported_edit_operations':['set','regroup','undo'],'append_supported':False}
             context['last_search_explanation']=search_status_text(context['last_search'])
             notes=[];previous=None;updated=None;reply=None;first_intent=None
             for attempt in range(2):
@@ -136,7 +137,8 @@ class SteelAgent:
                     emit('steel_v2_validation',attempt=attempt+1,reason=type(error).__name__,issue_count=len(notes))
                     if attempt:
                         reply=Reply(text='Ответ модели не прошёл проверку структуры или полноты. Активная заявка не изменена. '
-                            'Исходное сообщение сохранено в истории. Требуется уточнение или повторная подача исходника.\nПроверка: ' + '; '.join(notes),
+                            'Исходное сообщение сохранено в истории. Уточните действие. '
+                            'Добавление новых позиций к сохранённой заявке пока не поддерживается.',
                             status='failed',intent='clarify',request_id=current.id if current else None,
                             revision=current.revision if current else None,diagnostics=notes,calls=calls)
                         updated=None

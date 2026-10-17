@@ -1,5 +1,9 @@
 # Контролируемый выпуск на Windows
 
+**Для версии с очередью №16 обязательно применить раздел «Уточнение №16» в конце
+этого файла. Прежнюю процедуру возврата на legacy нельзя использовать для обхода
+queue rollback gate. Этот этап разработки не разрешает deployment.**
+
 **Инструкция для будущего разрешённого этапа. В №2/№3 rollout не выполнялся.**
 Базовый HEAD 6b16c40 не содержит реализацию №1/№2; она включается в публикацию №3.
 SHA публикации №3: `e8f3a04f2164998bff09c40f7dac477e6111d382`.
@@ -232,3 +236,89 @@ SUCCESS / ROLLBACK / BLOCKED; фактические SHA до/после, Python
 пути backup/manifest/отчёта, integrity/hash/count без содержимого, offset до/после,
 права и история, PID/число polling, длительность наблюдения, выполненные живые
 сценарии или явное «не выполнялись». Не объявлять качество GPT по mock-проверкам.
+# Уточнение №16: очередь и обязательный gate отката
+
+Этот раздел имеет приоритет над прежней процедурой rollback ниже, если устанавливается
+версия с durable queue. Разработка №16 не означает разрешения deployment.
+
+Перед будущей установкой: штатно остановить supervisor/worker; удерживать maintenance;
+сделать verified SQLite backups; убедиться в отсутствии старого unresolved inflight.
+Не очищать его автоматически. Проверить целевой полный опубликованный SHA и
+staging-тесты. Сохранить прежний handler=v2 и отдельные пути БД, .env и общий offset.
+Схема queue version=1 создаётся аддитивно в v2; legacy schema не меняется.
+
+Начальная локальная конфигурация `telegram-queue.json` необязательна: без неё
+workers=3, max_pending=100, max_pending_per_user=20, max_pending_bytes=8388608.
+Это admission limits, не API-квоты. Файл не публиковать. Изменения применяются при
+следующем согласованном запуске; production-конфигурация в №16 не создавалась.
+Проверить DPAPI под действительным Windows account запуска, если используется
+существующая bootstrap-команда /claim. Нет новых ключей/пакетов/переменных .env.
+
+Остановка остаётся прежней. Maintenance прекращает admission и планирование,
+даёт active завершиться, queued сохраняет. Две plan-попытки и search с timeout=180
+могут идти дольше stop timeout=180. При timeout не убивать процессы, не выполнять
+checkout и не запускать новый worker. Дождаться выхода обоих процессов/locks.
+
+## Диагностика и unknown
+
+Read-only, из установленной версии, с явно установленным фактическим `$db`:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db
+& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --guard-rollback
+```
+
+Вывод содержит состояния/счётчики/update IDs/opaque confirmation, без переписки,
+user IDs и ключей. guard возвращает 2, если есть незакрытые jobs/claims/outbox.
+В логах queue update_id связан с operation ID, далее с безопасной API-диагностикой.
+Не выгружать тела сообщений/ответов для диагностики.
+
+Unknown не означает отсутствие внешнего эффекта. Сверить canonical snapshot/version,
+callback audit/access status и известные receipt. Не повторять GPT/send/approval
+автоматически. Для **закрытия без повторов**, после штатной остановки и backups:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --root $root --abandon $updateId --confirm $exactConfirmation
+```
+
+`$root` — фактический production root, `$exactConfirmation` — точное значение для
+этого unknown из read-only вывода. CLI требует maintenance, свободных supervisor
+и worker locks, совпадения handler=v2/database. Активные данные не откатываются;
+обычный исходный текст сохраняется в history перед снятием точного claim.
+Никаких отправок и платных повторов этот инструмент не делает. После закрытия
+queued можно продолжить только согласованным запуском совместимого кода.
+
+## Разрешённый rollback на предыдущий aa11380
+
+1. Не выполнять checkout старого SHA, пока queue gate запрещает возврат.
+2. Дождаться обработки queued совместимым runtime. Если это невозможно, BLOCKED:
+   нужен recovery/fix-forward, а не ручное удаление заданий или изменение offset.
+3. Штатно остановить оба процесса, сохранить maintenance и свежие backups всех БД.
+4. Unknown разрешить явно после сверки результата. Права после неоднозначного
+   approval не отзывать и не выдавать повторно автоматически.
+5. Только если guard успешен, архивировать всю v2 SQLite в **новый защищённый путь
+   вне checkout**, передав текущий rollback_confirmation:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --root $root --prepare-rollback --archive $newArchivePath --confirm $rollbackConfirmation
+```
+
+Инструмент использует SQLite Backup API, integrity_check, hash/count manifest,
+повторное открытие и сравнение с source под write lock. Архивы не перезаписываются.
+После проверки атомарно удаляются **только** четыре operational queue таблицы;
+их история полностью остаётся в архиве. Active/version/turn/inflight и общий legacy
+offset не заменяются. При ошибке backup таблицы не удаляются.
+
+6. Установить согласованный прежний полный SHA безопасным detached checkout
+   `--no-overwrite-ignore`. Сохранить handler=v2 и прежние database paths. Не восстанавливать
+   старые SQLite и не откручивать offset. Проверить импорты и штатно запустить один
+   supervisor; провести согласованное наблюдение и сверку данных.
+
+Старый опубликованный v2 Repository отвергает дополнительные таблицы, поэтому без
+этого downgrade gate он не начнёт polling. **Нельзя** обходить защиту переключением
+handler на legacy, удалением config или ручным DROP. Такой переход требует отдельной
+процедуры и решения пользователя. Исходную процедуру rollback на legacy ниже
+нельзя автоматически применять к версии с очередью.
+
+Полный проект и границы гарантий: CONCURRENT_QUEUE_DESIGN.md. Абсолютное exactly-once
+внешних API не гарантируется; unknown означает ручное решение без автоматических повторов.

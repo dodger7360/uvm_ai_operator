@@ -1,5 +1,47 @@
 # Фактическая архитектура
 
+## Актуализация №16: durable queue
+
+Начиная с №16 ветка v2 в run_bot использует `queue_runtime.run_queue`.
+Один прежний ProcessLock и один poller; отдельный scheduler thread и по умолчанию
+три execution threads, независимые GPT/Telegram-клиенты. Внутри user_id FIFO,
+между пользователями справедливое распределение. .env/Task Scheduler/supervisor
+не заменяются. Настройки `telegram-queue.json` локальные и исключены из Git.
+
+`queue.py` добавляет четыре таблицы version=1 в отдельную v2 SQLite:
+steel_v2_inbox, steel_v2_attempt, steel_v2_outbox, steel_v2_queue_meta.
+Admission commit предшествует продвижению общего legacy offset; повтор update
+дедуплицируется. Repo finish в одной транзакции сохраняет snapshot/version/history,
+завершает claim и записывает все части ответа. Ни API-вызов, ни обычная доставка
+не удерживают SQLite write transaction. Стадии/unknown/ограничения —
+[CONCURRENT_QUEUE_DESIGN.md](CONCURRENT_QUEUE_DESIGN.md).
+
+Авторизация линейризуется legacy BEGIN IMMEDIATE gate, затем v2 commit.
+Генерация approved/revision связывает admission, выполнение и delivery-start:
+revoke/reapprove не возобновляет старый job. Callback/admin тоже durable, фактические
+уведомления журналируются; одобрение требует настоящего успеха отправки. Авария
+между access commit и completion карантинируется, transition не повторяется.
+Bootstrap credential `/claim` защищается DPAPI, не хранится plaintext.
+
+Обычный обработчик `telegram.handle_update` остаётся доступен для изолированных
+прямых тестов; production poller v2 больше не вызывает его синхронно.
+Legacy poller не меняется. Оригиналы и все прежние версии остаются в core-таблицах;
+техническая очистка source records касается только непересекающихся, нессылаемых
+service whitespace. Все инварианты затем проверяются заново.
+
+Unknown GPT/delivery не повторяются автоматически. Вопрос об append получает
+clarify: новый append не реализован, создание заявки не является заменой добавления.
+Технические коды validation исключены из пользовательского сообщения.
+WireAgentPlan/Decimal/RequestEngine operations не расширены.
+
+Для rollback старый v2 Repository сам блокирует дополнительную queue-схему.
+Нужны offline gate, verified archive и лишь затем удаление operational таблиц
+при полностью закрытой очереди. Core/history/offset не заменяются. Не переключать
+handler на legacy для обхода этой проверки. Полный порядок — WINDOWS_DEPLOYMENT.md.
+
+Следующие разделы описывают исходный синхронный путь до №16 и компоненты ядра;
+в части очереди, авторизации и rollback приоритет имеет эта актуализация.
+
 ## Поток
 
 `main.py → telegram_bot.main → ProcessLock → run_bot → TelegramAccess → dispatch`
@@ -21,7 +63,7 @@ operator.sqlite3. Отсутствующий telegram-handler.json выбира�
 - **contracts.py**: Pydantic frozen/extra=forbid. AgentPlan, Extraction,
   SourceRecord, Item, CommercialGroup, Operation, RequestSnapshot, Reply.
   Контракт ограничивает операции выбранным intent; expected id/revision для edit.
-- **OpenAITransport (transport.py)**: Responses.parse с AgentPlan,
+- **OpenAITransport (transport.py)**: Responses.parse с WireAgentPlan → AgentPlan,
   Responses.create с web_search. По умолчанию gpt-6-luna/high; модель и reasoning
   из OPENAI_MODEL/OPENAI_REASONING_EFFORT, v2 не наследует принудительную legacy
   установку high. SDK retries=0, timeout=180 секунд на вызов, store=False.
@@ -67,7 +109,7 @@ Telegram ID после повторного одобрения; отдельна
 ## Поиск
 
 Отдельный read-only вызов: tools=[web_search], tool_choice=required,
-max_tool_calls=1. Требуются completed web_search_call, текст и url_citation с
+без max_tool_calls=1. Требуются completed web_search_call, завершённый финальный message и
 безопасными HTTP(S) URL; ссылки возвращаются и сохраняются в Reply. Отсутствие
 поддержки/источников даёт явный отказ. Поисковый ответ не разбирается как план
 операций; последующий координатор получает историю как недоверенные данные.

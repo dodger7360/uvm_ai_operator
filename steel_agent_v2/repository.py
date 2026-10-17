@@ -3,6 +3,7 @@
 No legacy constructors or schema initialization; never auto-discovers a user DB.
 """
 from hashlib import sha256
+from contextlib import nullcontext
 from .contracts import RequestSnapshot, Reply
 from .engine import EngineError
 from dialog_history import bounded_history
@@ -13,14 +14,17 @@ class Busy(EngineError):
 
 
 class Repository:
-    def __init__(self, database, *, authorize=None):
+    def __init__(self, database, *, authorize=None, commit_guard=None, finish_hook=None):
         self.database = database
         self.authorize = authorize or (lambda _: True)  # Trusted offline/core caller.
+        self.commit_guard = commit_guard or (lambda _: nullcontext())
+        self.finish_hook = finish_hook
         if str(database.path) == ':memory:':
             raise ValueError('Use an explicit isolated SQLite file with short-lived connections')
         with database.connection() as c:
             tables={row[0] for row in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            if tables - {'steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_inflight'}:
+            if tables - {'steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_inflight',
+                         'steel_v2_inbox','steel_v2_attempt','steel_v2_outbox','steel_v2_queue_meta'}:
                 raise ValueError('Refusing to initialize v2 over a non-v2 database')
             c.executescript('''
                 CREATE TABLE IF NOT EXISTS steel_v2_active(
@@ -106,6 +110,10 @@ class Repository:
         return {'intent':reply.intent,'status':reply.status}
 
     def finish(self, user, event, sequence, message, reply, updated=None):
+        with self.commit_guard(user):
+            return self._finish(user, event, sequence, message, reply, updated)
+
+    def _finish(self, user, event, sequence, message, reply, updated=None):
         digest = sha256(message.encode()).hexdigest()
         with self.database.connection() as c:
             c.execute('BEGIN IMMEDIATE')
@@ -125,6 +133,8 @@ class Repository:
                       (user,event,digest,message,reply.model_dump_json(),
                        None if reply.intent == 'free_chat' else reply.request_id,sequence+1))
             c.execute('DELETE FROM steel_v2_inflight WHERE user_id=? AND event_id=?',(user,event))
+            if self.finish_hook:
+                self.finish_hook(c, user, event, reply, updated)
         return reply
 
     def abandon(self, user, event):

@@ -1,5 +1,41 @@
 # Проверки и критерии приёмки
 
+## №16: queue / crash / authorization
+
+Добавить к целевому набору `tests/test_steel_agent_v2_queue.py` и
+`tests/test_steel_agent_v2_015_reproduction.py`. Всегда использовать offline launcher,
+временную SQLite и fake Telegram; установленный OpenAI SDK работает через httpx2
+MockTransport. Живые API-вызовы не разрешены этим набором.
+
+Event-тесты доказывают: три GPT-операции действительно перекрываются; четвёртая
+ждёт; медленный A не блокирует B; A1/A2 FIFO; новые пользователи не вытесняют
+ожидающих. Фоновое планирование не требует возврата getUpdates.
+Проверяются crash до admission commit/после commit до offset, claimed/API-start,
+потерянный результат, атомарный rollback snapshot+history+outbox, восстановление
+committed, неизвестная/многочастная доставка, bounded admission, SQLite busy,
+maintenance/drain, replay и изоляция.
+
+Гонка прав проверяется разными экземплярами AccessRepository и реальными locks
+двух SQLite: revoke до commit блокирует мутацию; revoke во время permission gate
+ожидает окончания v2 commit; revoke/reapprove не оживляет старую операцию.
+Проверяется настоящий callback, fail-closed approval notification и авария после
+access commit без повторной transition. DPAPI round-trip использует синтетический
+binding credential на Windows; это не обращение к API/production секретам.
+
+Rollback тест загружает Repository из Git-объекта опубликованного aa11380:
+queue schema блокирует старый runtime, queued/unknown запрещают downgrade;
+verified archive и разрешённое удаление только operational таблиц сохраняют
+хеши/количества всех core-таблиц. Offset не изменяется.
+
+Фикстура четырёх балок остаётся буквальной, итог 381,164 т. Новые отрицательные
+тесты исключают удаление product/unresolved/referenced/overlapping whitespace,
+дубликатов IDs и недопустимых границ. Проверены CRLF, Unicode, шапка и примечание.
+Отдельно проверены сообщения без внутренних кодов и unsupported append без мутации.
+
+Mock подтверждает Python и интеграцию, но не качество решений живой модели,
+реальное ограничение API-аккаунта или устойчивость Windows при отключении питания.
+Результаты текущего запуска: reports/016-concurrent-queue-implementation.md.
+
 ## Безопасный офлайн-запуск
 
 Mac: `.venv/bin/python scripts/v2_offline_tests.py tests/test_steel_agent_v2.py tests/test_steel_agent_v2_prelaunch.py`

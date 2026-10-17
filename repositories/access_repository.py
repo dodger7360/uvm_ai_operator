@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import time
+from contextlib import contextmanager
 
 
 class StaleAccessAction(ValueError):
@@ -69,6 +70,20 @@ class AccessRepository:
         row = self.get(user_id)
         # A valid initial admin is always approved; role alone cannot bypass status.
         return bool(row and row['status'] == 'approved')
+
+    @contextmanager
+    def commit_permission(self, user_id, *, expected_revision=None):
+        """Linearize a short v2 commit against every SQLite access writer.
+
+        Lock order MUST be legacy then v2. Never hold this across a GPT call.
+        BEGIN IMMEDIATE also excludes writers using other AccessRepository instances.
+        """
+        with self.database.connection() as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            row = connection.execute('SELECT status,revision FROM telegram_access_user WHERE user_id=?', (user_id,)).fetchone()
+            if row is None or row['status'] != 'approved' or (expected_revision is not None and row['revision']!=expected_revision):
+                raise PermissionError('Access denied')
+            yield
 
     def is_admin(self, user_id):
         row = self.get(user_id)

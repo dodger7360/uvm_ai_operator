@@ -101,8 +101,19 @@ class RequestEngine:
         return request
 
     def create(self, extraction, source, event_key):
+        # Only disjoint, unreferenced *service* whitespace records can be discarded.
+        # Validate identity and geometry BEFORE filtering, so this cannot hide damage.
+        records=extraction.records
+        unique([r.id for r in records],'duplicate_source_id')
+        for record in records:
+            require(0 <= record.start < record.end <= len(source),'invalid_source_range:'+record.id)
+        referenced={i.source_id for i in extraction.items} | {
+            key for i in extraction.items for char in i.characteristics for key in char.source_ids}
+        records=[r for r in records if not (r.kind in {'header','note'} and r.id not in referenced
+            and not source[r.start:r.end].strip()
+            and all(r is other or r.end <= other.start or other.end <= r.start for other in records))]
         request = RequestSnapshot(id=str(uuid5(NAMESPACE_URL, event_key)), revision=1,
-            original_text=source, records=extraction.records, originals=[i.model_copy(deep=True) for i in extraction.items],
+            original_text=source, records=records, originals=[i.model_copy(deep=True) for i in extraction.items],
             items=[i.model_copy(deep=True) for i in extraction.items], groups=extraction.groups, questions=extraction.questions)
         return self.validate(request)
 
