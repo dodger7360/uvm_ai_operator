@@ -12,7 +12,8 @@ from repositories.telegram_repository import TelegramRepository
 from schemas import PurchaseRequest, RequestItem
 from telegram_service import TelegramService, MessagePlan, Edit, ActiveRequest
 from telegram_operator import ClarificationMessage, safe_chunks
-from telegram_bot import send_operator_message, TelegramError, handle_update
+from legacy_telegram_adapter import send_operator_message, handle_update
+from telegram_bot import TelegramError
 from work_assistant import WorkAssistantService, AssistantAnswer, needs_search
 
 

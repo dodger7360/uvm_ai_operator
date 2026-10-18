@@ -7,7 +7,7 @@ from schemas import PurchaseRequest, RequestItem
 from database import Database
 from repositories.telegram_repository import TelegramRepository
 from telegram_service import TelegramService, MessagePlan, Edit, split_positions, exact_source_attributes
-from telegram_bot import handle_update
+from legacy_telegram_adapter import handle_update
 from formatter import format_normalized_request, sort_items
 
 

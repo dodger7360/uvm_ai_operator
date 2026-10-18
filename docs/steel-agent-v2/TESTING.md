@@ -1,3 +1,35 @@
+Финал №19: **406 passed** актуального контура; отдельно **132 passed и 20 subtests
+passed** исторических регрессий. Ни skip, ни xfail. Команды запуска — offline
+launcher с явным списком файлов из reports/019-forward-only-deployment.md;
+историческая группа перечислена там отдельно и не используется для обоснования
+готовности нового ИИ-маршрута. pip check и diff --check проходят.
+
+# Текущая приёмка №19
+
+`tests/test_steel_agent_v2_forward_only.py` заменяет тесты установки guard №18:
+штатный PowerShell start с перехватом только Start-Process; неизменность прежних
+supervisor/stop/ProcessLock; отсутствие ProgramData/admin зависимости; все стадии
+очереди, backup/reopen, миграция из aa11380, повреждение схемы/metadata/PK/orphans,
+cursor/offset, запрет удаления очереди. Четыре selector-теста №17 проверяют текущий
+реальный run_bot с missing/legacy config × queued/unknown: отказ до внешних вызовов.
+Возврат старого SHA больше не поддерживается, поэтому внешний барьер через checkout
+не является текущим критерием. Это изменение требований владельца, не skip/xfail.
+
+Старые тесты синхронного poller и legacy reasoning перенесены в tests/legacy/.
+Они читают фиксированный исторический telegram_bot и selector из Git aa11380,
+не подменяют действующий v2 selector и не включают legacy в новом entrypoint.
+Сохранены все assertions; этот набор запускается отдельно как исторический.
+Старые тесты адаптера (test_telegram_operator, test_telegram, test_typing,
+test_normalizer_stabilization) используют явно legacy_telegram_adapter и также
+проверяются отдельно. AccessRepository — общий компонент, его набор остаётся
+в приёмке v2. Активный create/edit/offset тест запрещает вызов старых AIService,
+TelegramService.process и WorkAssistantService.answer. Отдельно проверяются AST
+entrypoint и отказ missing/legacy конфигурации даже без существующей очереди.
+
+Все прежние fault injection, overlap/FIFO/доступ/Decimal/история тесты остаются.
+Список полного целевого набора и фактические результаты — reports/019-forward-only-deployment.md.
+Исторические отчёты №15–18 не изменяются. Ни один API вызов не разрешён тестами.
+
 # Проверки и критерии приёмки
 
 ## №16: queue / crash / authorization
@@ -22,10 +54,9 @@ maintenance/drain, replay и изоляция.
 access commit без повторной transition. DPAPI round-trip использует синтетический
 binding credential на Windows; это не обращение к API/production секретам.
 
-Rollback тест загружает Repository из Git-объекта опубликованного aa11380:
-queue schema блокирует старый runtime, queued/unknown запрещают downgrade;
-verified archive и разрешённое удаление только operational таблиц сохраняют
-хеши/количества всех core-таблиц. Offset не изменяется.
+Forward-only тест загружает Repository из aa11380 для проверки аддитивной
+миграции настоящей прежней core schema. Hash/count всех core-таблиц неизменны;
+полный Backup API архив сохраняет и queue-таблицы. DROP/downgrade не выполняются.
 
 Фикстура четырёх балок остаётся буквальной, итог 381,164 т. Новые отрицательные
 тесты исключают удаление product/unresolved/referenced/overlapping whitespace,

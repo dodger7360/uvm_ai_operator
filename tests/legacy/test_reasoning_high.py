@@ -1,4 +1,4 @@
-"""Deployment effort is checked through offline API transports only."""
+"""Historical legacy effort regression; not the active v2 configuration."""
 import os
 from unittest.mock import Mock
 
@@ -6,7 +6,8 @@ import pytest
 
 from ai import AIService
 from schemas import PurchaseRequestExtraction
-import telegram_bot as bot
+from .reference import telegram_bot
+bot=telegram_bot()
 from work_assistant import WorkAssistantService
 
 

@@ -22,10 +22,20 @@ class Repository:
         if str(database.path) == ':memory:':
             raise ValueError('Use an explicit isolated SQLite file with short-lived connections')
         with database.connection() as c:
+            # Schema/cursor checks must see one snapshot while other users admit jobs.
+            c.execute('BEGIN')
             tables={row[0] for row in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if tables - {'steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_inflight',
                          'steel_v2_inbox','steel_v2_attempt','steel_v2_outbox','steel_v2_queue_meta'}:
                 raise ValueError('Refusing to initialize v2 over a non-v2 database')
+            from .queue import TABLES, DurableQueue
+            core={'steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_inflight'}
+            if tables and not core.issubset(tables):raise ValueError('incomplete_v2_schema')
+            if tables.intersection(TABLES):
+                if not set(TABLES).issubset(tables):raise ValueError('incomplete_queue_schema')
+                version=c.execute("SELECT value FROM steel_v2_queue_meta WHERE key='schema'").fetchone()
+                if not version or version[0]!=1:raise ValueError('unsupported_queue_schema')
+                DurableQueue._validate_schema(c)
             c.executescript('''
                 CREATE TABLE IF NOT EXISTS steel_v2_active(
                     user_id INTEGER PRIMARY KEY, sequence INTEGER NOT NULL, payload TEXT);

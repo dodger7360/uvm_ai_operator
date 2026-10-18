@@ -1,16 +1,26 @@
 # Фактическая архитектура
 
-## Подготовлено №18: постоянный guard запуска
+## Решение владельца №19: forward-only
 
-Внешний административно защищённый bundle и manifest проверяют release + queue
-protocol + epoch до supervisor и каждого worker, независимо от handler. Используются
-зафиксированные копии прежнего supervisor/locks; новая ОС-служба не добавлена.
-Guard только читает SQLite. Явный offline `v2_queue_epoch.py` связывает queue metadata
-с armed manifest; core schema/RequestEngine не меняются. Epoch-bound rollback CLI
-дополнительно требует armed manifest до DROP. Новый start facade не имеет fallback.
-Статус REQUIRES DESIGN APPROVAL: Task Scheduler/постоянная ручная точка не переключены,
-production не менялся. Старые in-checkout CLI не считаются автоматически перехваченными.
-Подробности — [PERSISTENT_STARTUP_GUARD.md](PERSISTENT_STARTUP_GUARD.md).
+> Steel Agent v2 развивается по стратегии forward-only. Откат на устаревший код не является поддерживаемым штатным сценарием. Сохранность данных, очереди и восстановление после аварий остаются обязательными.
+
+Штатные точки запуска — существующие Task Scheduler Action, windows_supervisor.py
+и start-telegram.ps1. Внешний guard, ProgramData, manifest/epoch и административная
+установка исключены. start-telegram.ps1 восстановлен в точности из production aa11380;
+stop/supervisor/ProcessLock не меняются. Старые документы №15–18 остаются историей,
+включая PERSISTENT_STARTUP_GUARD.md; их процедуры rollback/retirement не применять.
+
+Единственный ИИ-мозг Telegram — Steel Agent v2, GPT-6 Luna High. В telegram_bot
+полностью отсутствуют сборка AIService/WorkAssistantService/TelegramService и старый
+синхронный intent dispatch. Единственный рабочий путь — runtime.connect → run_queue.
+selection() принимает только явный handler=v2: отсутствие или legacy config
+завершает startup до обращения к Telegram, без fallback и переключателей режима.
+Старый адаптер перенесён в legacy_telegram_adapter.py исключительно для сравнения;
+ни main, ни telegram_bot, ни v2 его не импортируют. Старые парсеры/БД сохраняются.
+Данные и известная queue schema проверяются внутри Repository/DurableQueue, без
+внешнего SHA allowlist. Подтверждение опубликованного полного SHA — этап установки.
+Unknown закрывает обработку только затронутого пользователя, не очищается и не
+повторяется автоматически. Неподдерживаемая схема/повреждение/cursor ahead — отказ.
 
 ## Актуализация №16: durable queue
 
@@ -46,20 +56,21 @@ clarify: новый append не реализован, создание заяв�
 Технические коды validation исключены из пользовательского сообщения.
 WireAgentPlan/Decimal/RequestEngine operations не расширены.
 
-Для rollback старый v2 Repository сам блокирует дополнительную queue-схему.
-Нужны offline gate, verified archive и лишь затем удаление operational таблиц
-при полностью закрытой очереди. Core/history/offset не заменяются. Не переключать
-handler на legacy для обхода этой проверки. Полный порядок — WINDOWS_DEPLOYMENT.md.
+Удаление operational queue-таблиц больше не является операцией эксплуатации.
+Диагностика и явное offline разрешение unknown сохранены; --check-forward проверяет
+схему и направление cursor/offset, а не разрешение downgrade. Новые совместимые
+изменения добавляются миграциями вперёд. При сбое — maintenance, backup, диагностика,
+следующий совместимый коммит. Подробнее — WINDOWS_DEPLOYMENT.md.
 
-Следующие разделы описывают исходный синхронный путь до №16 и компоненты ядра;
-в части очереди, авторизации и rollback приоритет имеет эта актуализация.
+Следующие разделы описывают также исходный синхронный путь до №16;
+приоритет у актуализации №19 и CONCURRENT_QUEUE_DESIGN.md.
 
 ## Поток
 
 `main.py → telegram_bot.main → ProcessLock → run_bot → TelegramAccess → dispatch`
 
 В run_bot сохраняются прежние getUpdates, maintenance, готовность и offset в
-operator.sqlite3. Отсутствующий telegram-handler.json выбирает legacy.
+operator.sqlite3. Живой запуск требует telegram-handler.json с handler=v2; fallback отсутствует.
 Явный локальный JSON `{ "handler":"v2", "database":"steel-agent-v2.sqlite3" }`
 выбирает steel_agent_v2.runtime.connect и steel_agent_v2.telegram.handle_update.
 Некорректный JSON/режим останавливает запуск кодом 7, без скрытого fallback.

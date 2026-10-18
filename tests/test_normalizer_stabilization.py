@@ -17,7 +17,8 @@ from diagnostics import CURRENT, SemanticExtractionError, operation, http_attemp
 from normalizer import normalize_request
 from repositories.telegram_repository import TelegramRepository
 from schemas import PurchaseRequest, PurchaseRequestExtraction, RequestItem
-from telegram_bot import handle_update, TypingIndicator
+from legacy_telegram_adapter import handle_update
+from telegram_bot import TypingIndicator
 from telegram_service import TelegramService, MessagePlan, Edit, prepare_sheet_heading
 from validator import validate_request
 

@@ -33,12 +33,12 @@ def configure(root, value):
     (root / 'telegram-handler.json').write_text(json.dumps(value), encoding='utf-8')
 
 
-def test_selection_defaults_legacy_and_persists_without_environment(tmp_path):
-    assert selection(tmp_path) == ('legacy', None)
+def test_selection_requires_v2_and_persists_without_environment(tmp_path):
+    with pytest.raises(ValueError):selection(tmp_path)
     configure(tmp_path, {'handler':'v2', 'database':'steel-agent-v2.sqlite3'})
-    assert selection(tmp_path) == ('v2', tmp_path / 'steel-agent-v2.sqlite3')
+    assert selection(tmp_path)==('v2',tmp_path/'steel-agent-v2.sqlite3')
     configure(tmp_path, {'handler':'legacy'})
-    assert selection(tmp_path) == ('legacy', None)
+    with pytest.raises(ValueError):selection(tmp_path)
 
 
 @pytest.mark.parametrize('config', [[], {}, {'handler':'typo'}, {'handler':'v2'},
@@ -78,7 +78,12 @@ def test_v2_worker_dispatch_replay_edit_offset_and_legacy_isolation(tmp_path, mo
     fake = Fake(proposal(), lambda ctx, _:dict(intent='edit_request',
         expected_request_id=ctx['active_request']['id'], expected_revision=ctx['active_request']['revision'], operations=[set_op()]))
     monkeypatch.setattr(OpenAITransport, 'from_environment', classmethod(lambda cls, **kwargs:fake))
-    monkeypatch.setattr(bot, 'AIService', Mock(side_effect=AssertionError('legacy AI must not be constructed')))
+    import ai
+    monkeypatch.setattr(ai, 'AIService', Mock(side_effect=AssertionError('legacy AI must not be constructed')))
+    import telegram_service
+    import work_assistant
+    monkeypatch.setattr(telegram_service.TelegramService,'process',Mock(side_effect=AssertionError('legacy router forbidden')))
+    monkeypatch.setattr(work_assistant.WorkAssistantService,'answer',Mock(side_effect=AssertionError('legacy chat forbidden')))
     monkeypatch.setenv('OPERATOR_DB', str(legacy_path))
     monkeypatch.setenv('OPENAI_REASONING_EFFORT','medium')
     monkeypatch.delenv('ADMIN_TELEGRAM_ID', raising=False)

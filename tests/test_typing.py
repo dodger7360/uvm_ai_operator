@@ -2,7 +2,8 @@ import threading
 import time
 import unittest
 from unittest.mock import Mock, patch
-from telegram_bot import TypingIndicator, handle_update
+from telegram_bot import TypingIndicator
+from legacy_telegram_adapter import handle_update
 
 
 class TypingTests(unittest.TestCase):

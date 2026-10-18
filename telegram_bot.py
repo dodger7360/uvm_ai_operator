@@ -5,23 +5,17 @@ import os
 from pathlib import Path
 import time
 import threading
-from html import escape
 import urllib.request
 import urllib.error
 import socket
 import ssl
 from windows_runtime import AlreadyRunning, ProcessLock, maintenance_requested, wait_or_maintenance
 from dotenv import load_dotenv
-from ai import AIService
 from database import Database
 from repositories.telegram_repository import TelegramRepository
-from repositories.normalization_policy_repository import NormalizationPolicyRepository
-from telegram_service import TelegramService
-from telegram_operator import ClarificationMessage, safe_chunks
-from work_assistant import WorkAssistantService
-from repositories.access_repository import AccessRepository, AuthorizedRequestRepository
+from repositories.access_repository import AccessRepository
 from telegram_access import TelegramAccess
-from diagnostics import PipelineError, safe_code, operation, phase, emit, record_error
+from diagnostics import safe_code, emit
 
 LOG = logging.getLogger('telegram_operator')
 
@@ -116,83 +110,6 @@ class TypingIndicator:
         return False
 
 
-def handle_update(update, service, api, access=None):
-    with operation():
-        return _handle_update(update, service, api, access)
-
-
-def _handle_update(update, service, api, access=None):
-    phase('authorization')
-    # Fail closed even when a caller forgets to supply the access controller.
-    if access is not None:
-        if access.route(update, api):
-            return
-    else:
-        message = update.get('message', {})
-        if message.get('chat', {}).get('type') == 'private':
-            api.call('sendMessage', chat_id=message['chat']['id'], text='Доступ к боту ограничен. Администратор ещё не настроен.')
-        return
-    message = update.get('message', {})
-    if message.get('chat', {}).get('type') != 'private' or message.get('from', {}).get('is_bot'):
-        return
-    chat_id, user_id = message['chat']['id'], message['from']['id']
-    text = message.get('text')
-    if not text or not text.strip():
-        api.call('sendMessage', chat_id=chat_id, text='Пришлите заявку текстом. Вложения пока не поддерживаются.')
-        return
-    if text.split()[0].split('@')[0] in {'/start', '/help'}:
-        messages = ['Отправьте заявку на металлопрокат обычным сообщением. После ответа можно написать: «Везде С255 замени на Ст3» или «В пятой позиции измени количество на 2,5 т».']
-    else:
-        try:
-            with TypingIndicator(api,chat_id):
-                messages = service.process(user_id, text)
-        except PipelineError as exc:
-            record_error(exc)
-            messages = [exc.public_message]
-        except ValueError as exc:
-            record_error(exc)
-            LOG.warning('validation_error class=%s reason=%s',type(exc).__name__,safe_code(exc))
-            messages = ['Ответ модели не прошёл проверку данных. Повторите заявку, сохраняя каждую позицию отдельной строкой. Активная заявка не изменена.']
-        except Exception as exc:
-            record_error(exc)
-            code=safe_code(exc)
-            LOG.error('processing_error class=%s reason=%s',type(exc).__name__,code)
-            messages = [{'api_connection':'Не удалось подключиться к сервису AI. Повторите сообщение позже.',
-                'api_timeout':'AI не ответил вовремя. Повторите сообщение позже.',
-                'api_authentication':'AI временно недоступен из-за конфигурации доступа. Сообщите администратору.',
-                'api_bad_request':'API отклонил настройки обработки. Сообщите администратору.',
-                'api_model_not_found':'Настроенная модель AI недоступна. Сообщите администратору.',
-                'api_response_length':'Ответ AI оборвался по лимиту длины. Разделите заявку на меньшие части.'}.get(code,
-                'Не удалось завершить обработку. Активная заявка не изменена. Сообщите администратору.')]
-    if not access.allowed(user_id):
-        api.call('sendMessage', chat_id=chat_id, text='Доступ к боту ограничен.')
-        return
-    for text in messages:
-        phase('sending')
-        send_operator_message(api, chat_id, text)
-    LOG.info('message_processed response_parts=%s', len(messages))
-
-
-def send_operator_message(api, chat_id, text):
-    """Only trusted presentation metadata enables markup; all content escapes.
-
-    Retry plain text only on a rejected HTML request (400), never on an
-    uncertain network delivery. Escape expansion is accounted for in chunks.
-    """
-    if not isinstance(text, ClarificationMessage):
-        for part in safe_chunks(text):
-            api.call('sendMessage', chat_id=chat_id, text=part)
-        return
-    for part in safe_chunks(text, limit=600):
-        html = '<b>Уточнение</b>\n' + escape(part)
-        try:
-            api.call('sendMessage', chat_id=chat_id, text=html, parse_mode='HTML')
-        except TelegramError as error:
-            if error.code != 400:
-                raise
-            emit('telegram_plain_text_retry', reason='html_rejected')
-            api.call('sendMessage', chat_id=chat_id, text=part)
-
 
 def main():
     root = Path(__file__).resolve().parent
@@ -223,10 +140,6 @@ def run_bot(root, token):
     try:
         from steel_agent_v2.runtime import selection, connect
         handler_name, v2_database = selection(root)
-        if handler_name == 'legacy' and os.getenv('OPENAI_MODEL', 'gpt-6-luna') == 'gpt-6-luna':
-            # Preserve legacy settings; v2 respects its configured reasoning.
-            os.environ['OPENAI_REASONING_EFFORT'] = 'high'
-            os.environ['OPENAI_FALLBACK_REASONING_EFFORT'] = 'high'
         me = api.call('getMe')
         if api.call('getWebhookInfo').get('url'):
             LOG.error('existing_webhook_requires_review')
@@ -243,57 +156,15 @@ def run_bot(root, token):
         access = TelegramAccess(access_repository)
         if access_repository.admin_id() is None:
             LOG.warning('administrator_not_bound_access_closed')
-        if handler_name == 'v2':
-            service, dispatch = connect(v2_database, access)
-        else:
-            policy = NormalizationPolicyRepository(repository.database, access_repository)
-            ai = AIService()
-            service = TelegramService(ai, AuthorizedRequestRepository(repository, access_repository),
-                                      commercial_view=True, reliable=True, policy_repository=policy,
-                                      assistant=WorkAssistantService(ai.assistant_transport))
-            dispatch = handle_update
+        service, _ = connect(v2_database, access)
         LOG.info('telegram_handler=%s', handler_name)
-        offset = repository.get_offset()
         ready.write_text(str(os.getpid()), encoding='ascii')
-        if handler_name == 'v2':
-            LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(),
-                     getattr(service.transport, 'model', 'gpt-6-luna'),
-                     getattr(service.transport, 'reasoning', 'high'), 'none')
-        else:
-            LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(), os.getenv('OPENAI_MODEL','gpt-6-luna'), os.getenv('OPENAI_REASONING_EFFORT','low'), os.getenv('OPENAI_FALLBACK_REASONING_EFFORT','medium'))
-        failures, connected = 0, False
-        if handler_name == 'v2':
-            from steel_agent_v2.queue_runtime import run_queue
-            return run_queue(root, api, access, repository, v2_database,
-                             api_factory=lambda:TelegramAPI(token))
-        while not maintenance_requested(root):
-            try:
-                updates = api.call('getUpdates', offset=offset, timeout=25,
-                    allowed_updates=['message', 'callback_query'], _attempt=failures+1)
-                if not connected or failures:
-                    LOG.info('polling_connected recovery=%s', bool(failures))
-                connected, failures = True, 0
-                for update in updates:
-                    if maintenance_requested(root):
-                        break  # Leave unprocessed update IDs unacknowledged.
-                    dispatch(update, service, api, access)
-                    offset = update['update_id'] + 1
-                    repository.set_offset(offset)
-            except TelegramError as error:
-                failures += 1
-                LOG.warning('telegram_status=%s category=%s stage=%s exception=%s',
-                    error.code, error.category, error.stage, error.exception_type)
-                if error.code in {401, 403, 407, 409} or error.category in {'configuration', 'proxy'}:
-                    return 5
-                delay = min(5 * 2 ** min(failures-1, 4), 60)
-                LOG.warning('telegram_retry method=getUpdates attempt=%s delay_seconds=%s', failures+1, delay)
-                if wait_or_maintenance(root, delay):
-                    break
-            except Exception as error:
-                LOG.error('polling_error exception=%s category=%s', type(error).__name__, safe_code(error))
-                return 1
-        LOG.info('maintenance_stop request_finished=true')
-        return 0
+        LOG.info('bot_started username=%s pid=%s model=%s reasoning=%s fallback=%s', me['username'], os.getpid(),
+                 getattr(service.transport, 'model', 'gpt-6-luna'),
+                 getattr(service.transport, 'reasoning', 'high'), 'none')
+        from steel_agent_v2.queue_runtime import run_queue
+        return run_queue(root, api, access, repository, v2_database,
+                         api_factory=lambda:TelegramAPI(token))
     except TelegramError as error:
         LOG.error('startup_telegram_status=%s category=%s stage=%s exception=%s',
             error.code, error.category, error.stage, error.exception_type)

@@ -1,4 +1,4 @@
-"""Persistent, local opt-in selection for the existing single worker.
+"""Persistent v2-only selection for the existing single Telegram worker.
 
 Reading configuration does not create clients, open databases or start polling.
 """
@@ -12,13 +12,11 @@ def selection(root):
     root = Path(root).resolve()
     path = root / CONFIG
     if not path.exists():
-        return 'legacy', None
+        raise ValueError('v2_handler_configuration_required')
     config = json.loads(path.read_text(encoding='utf-8-sig'))
     if not isinstance(config, dict) or set(config) - {'handler', 'database'}:
         raise ValueError('invalid_handler_configuration')
     handler = config.get('handler')
-    if handler == 'legacy' and 'database' not in config:
-        return handler, None
     if handler != 'v2' or not isinstance(config.get('database'), str) or not config['database'].strip():
         raise ValueError('invalid_handler_configuration')
     database = Path(config['database'])

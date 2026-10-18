@@ -82,7 +82,7 @@ def test_three_overlap_fourth_waits_and_same_user_fifo(rig):
         assert all(started[k].wait(3) for k in ['A1','B','C'])
         assert not started['A2'].is_set() and not started['D'].is_set()
         release.set()
-        drain(scheduler,lambda:rig.queue.rollback_ready())
+        drain(scheduler,lambda:rig.queue.drained())
     finally:release.set();scheduler.close()
     assert finished_b.is_set() and started['A2'].is_set() and started['D'].is_set()
     sends=[p for m,p in rig.api.calls if m=='sendMessage']
@@ -104,7 +104,7 @@ def test_slow_a_does_not_block_b(rig):
     try:
         scheduler.tick()
         assert entered.wait(3) and done.wait(3) and not release.is_set()
-        release.set();drain(scheduler,lambda:rig.queue.rollback_ready())
+        release.set();drain(scheduler,lambda:rig.queue.drained())
     finally:release.set();scheduler.close()
 
 
@@ -153,7 +153,7 @@ def test_unknown_network_result_no_second_gpt_or_following_message(rig):
     fake=Fake(TimeoutError('lost response'));admit(rig,1);admit(rig,2,text='next')
     Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake).execute(rig.queue.claim())
     assert len(fake.calls)==1 and rig.queue.job(1)['state']=='execution_unknown'
-    assert rig.queue.claim() is None and not rig.queue.rollback_ready()
+    assert rig.queue.claim() is None and not rig.queue.drained()
     assert Repository(rig.queue.database).load(1) is None
     with pytest.raises(QueueConflict):rig.queue.resolve(1,'incorrect confirmation')
     job=rig.queue.job(1)
@@ -197,7 +197,7 @@ def test_unknown_delivery_never_resends_or_repeats_mutation(rig):
     assert rig.queue.job(1)['state']=='delivery_unknown' and len(fake.calls)==1
     calls=len(rig.api.calls)
     reopened=DurableQueue(rig.queue.database);reopened.recover()
-    assert reopened.delivery_candidates()==[] and not reopened.rollback_ready()
+    assert reopened.delivery_candidates()==[] and not reopened.drained()
     assert len(rig.api.calls)==calls and Repository(rig.queue.database).load(1).revision==1
 
 
@@ -313,8 +313,8 @@ def test_readonly_diagnostics_and_rollback_gate_hide_source(rig):
     admit(rig,1,text='PRIVATE_TEST_SOURCE')
     data=inspect(rig.queue.database.path)
     assert 'PRIVATE_TEST_SOURCE' not in json.dumps(data)
-    assert not data['rollback_ready']
-    assert main(['--database',str(rig.queue.database.path),'--guard-rollback'])==2
+    assert not data['queue_drained']
+    assert main(['--database',str(rig.queue.database.path),'--legacy-database',str(rig.legacy.database.path),'--check-forward'])==0
 
 
 def test_completed_queue_payloads_compact_but_replay_still_deduplicated(rig):
@@ -334,25 +334,24 @@ def old_repository_class():
     return module.Repository
 
 
-def test_old_release_cannot_open_queue_schema_and_offline_rollback_preserves_all_core_history(rig,tmp_path):
-    from scripts.v2_queue_status import inspect,prepare_rollback
+def test_old_release_is_unsupported_and_forward_reopen_preserves_every_table(rig,tmp_path):
+    from scripts.v2_queue_status import prepare_rollback
+    from scripts.v2_sqlite_snapshot import metadata,snapshot
     old=old_repository_class()
     admit(rig,1)
     with pytest.raises(ValueError):old(rig.queue.database)
-    with pytest.raises(ValueError):prepare_rollback(rig.queue.database.path,tmp_path/'must-not-exist.sqlite3','rollback:2',legacy_database=rig.legacy.database.path)
-    assert not (tmp_path/'must-not-exist.sqlite3').exists()
+    with pytest.raises(ValueError,match='forward_only'):
+        prepare_rollback(rig.queue.database.path,tmp_path/'refused.sqlite3','rollback:2')
+    assert not (tmp_path/'refused.sqlite3').exists()
     Executor(rig.queue,rig.access,lambda:rig.api,lambda:Fake(proposal())).execute(rig.queue.claim())
-    rig.legacy.set_offset(rig.queue.cursor())  # Poller mirror must be aligned before downgrade.
-    from scripts.v2_sqlite_snapshot import metadata
+    rig.legacy.set_offset(rig.queue.cursor())
     with rig.queue.database.connection() as c:before=metadata(c)
     archive=tmp_path/'verified-queue-archive.sqlite3'
-    prepare_rollback(rig.queue.database.path,archive,inspect(rig.queue.database.path)['rollback_confirmation'],legacy_database=rig.legacy.database.path)
-    with rig.queue.database.connection() as c:after=metadata(c)
-    core={'steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_inflight'}
-    assert set(after['tables'])==core
-    assert {k:before['tables'][k] for k in core}==after['tables']
+    snapshot(rig.queue.database.path,archive,tmp_path/'manifest.json')
+    Repository(rig.queue.database);DurableQueue(rig.queue.database).recover()
+    with rig.queue.database.connection() as c:assert metadata(c)==before
     with sqlite3.connect(archive) as c:assert metadata(c)==before
-    assert old(rig.queue.database).load(1).revision==1
+    assert Repository(rig.queue.database).load(1).revision==1
     assert rig.legacy.get_offset()==2
 
 
@@ -578,7 +577,7 @@ def test_known_http_error_is_not_retried_but_does_not_freeze_next_user_turn(rig)
     admit(rig,1);admit(rig,2,text='next')
     executor=Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake)
     executor.execute(rig.queue.claim());executor.execute(rig.queue.claim())
-    assert len(fake.calls)==2 and rig.queue.rollback_ready()
+    assert len(fake.calls)==2 and rig.queue.drained()
     with rig.queue.database.connection() as c:
         assert c.execute('SELECT count(*) FROM steel_v2_attempt WHERE update_id=1').fetchone()[0]==1
 
@@ -736,7 +735,7 @@ def test_parallel_diagnostic_contexts_are_distinct_and_do_not_log_input(rig,capl
     with caplog.at_level(logging.INFO,logger='operator_diagnostics'):
         try:
             scheduler.tick();assert entered.wait(3);release.set()
-            drain(scheduler,lambda:rig.queue.rollback_ready())
+            drain(scheduler,lambda:rig.queue.drained())
         finally:release.set();scheduler.close()
     assert len(set(contexts))==2
     assert 'PRIVATE_CONTEXT_A' not in caplog.text and 'PRIVATE_CONTEXT_B' not in caplog.text

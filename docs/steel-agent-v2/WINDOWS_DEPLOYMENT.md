@@ -1,351 +1,184 @@
-# Контролируемый выпуск на Windows
+# Windows deployment: forward-only, начиная с №19
 
-**Актуализация №18: REQUIRES DESIGN APPROVAL, deployment не разрешён.**
-Для новой установки durable queue приоритет имеет
-[PERSISTENT_STARTUP_GUARD.md](PERSISTENT_STARTUP_GUARD.md): guard вне checkout,
-baseline → armed → active, обе штатные точки запуска должны быть переведены на
-постоянный путь **до** миграции/активации очереди. Нужна отдельно разрешённая смена
-Action существующей задачи и согласование ручного запуска после возврата старого SHA.
-Изменение Task Scheduler и установка guard в №18 не выполнялись. В новом checkout
-start-telegram.ps1 делегирует постоянному Start-UVM без fallback и без снятия maintenance
-до проверки. В старых SHA прежний start физически остаётся обходом; не считать его
-защищённым или поддерживаемым без отдельного решения о точке запуска.
+> Steel Agent v2 развивается по стратегии forward-only. Откат на устаревший код не является поддерживаемым штатным сценарием. Сохранность данных, очереди и восстановление после аварий остаются обязательными.
 
-**Для версии с очередью №16 обязательно применить раздел «Уточнение №16» в конце
-этого файла. Прежнюю процедуру возврата на legacy нельзя использовать для обхода
-queue rollback gate. Этот этап разработки не разрешает deployment.**
+Это инструкция будущего отдельно разрешённого переключения. В №19 production не
+меняется. Устанавливать полный опубликованный SHA из отчёта №19 после review;
+`3c0d28f` — только исходный кандидат №18, не целевой релиз. Имя ветки не является
+целью установки. Исторические процедуры №15–18 (guard/retirement/rollback) отменены.
 
-**Инструкция для будущего разрешённого этапа. В №2/№3 rollout не выполнялся.**
-Базовый HEAD 6b16c40 не содержит реализацию №1/№2; она включается в публикацию №3.
-SHA публикации №3: `e8f3a04f2164998bff09c40f7dac477e6111d382`.
-Перед каждым выпуском сверять его с origin и фактическим production, а не
-предполагать наличие PR9/10. Переключение требует отдельного разрешения.
+## Сохраняем существующую инфраструктуру
 
-## 1. Входные условия и доставка
+Один UVM_Steel, прежний токен/.env, текущая задача Windows с прежним Action
+`.venv\Scripts\pythonw.exe windows_supervisor.py`, обычная рабочая учётная запись.
+Ручной start-telegram.ps1 запускает тот же supervisor; stop-telegram.ps1 создаёт
+maintenance и кооперативно ждёт. Supervisor/worker имеют прежние два ProcessLock.
+Нет ProgramData, внешнего guard/manifest, ACL-установки, RunAs, службы или нового
+polling. Task Scheduler Action и права задачи не менять.
 
-Политика revoke/reapprove утверждена в №3: история и заявки сохраняются, повторное
-одобрение того же Telegram ID возвращает контекст. Отдельную систему отзыва не строить.
-После публикации feature-ветки отдельно проверить совместимость с фактическим
-production, сохранив имеющиеся права, offset, locks и историю; проверить diff/тесты,
-согласовать commit и публикацию совместимого кандидата. /version и бюджетная
-защита сохраняются, если присутствуют в фактическом production; не переносить
-их из других веток автоматически. V2 не получает денежных/токенных квот.
-При rollback сохранять утверждённую политику исходной установки, не подменять её.
+Живой entrypoint требует явный telegram-handler.json с handler=v2 и прежним
+отдельным путём SQLite v2. Missing/legacy config — startup exit 7, без fallback.
+Не создавать новый конфиг поверх имеющегося и не менять .env.
+Обычная учётная запись должна иметь доступ к каталогу checkout, lock/maintenance,
+SQLite и каталогу backup. DPAPI /claim остаётся привязан к тому же Windows account;
+это существующая защита credential, не требование admin.
 
-№4 (2026-10-17): фактический production `19c9657`, является предком `e8f3a04`.
-Supervisor, windows_runtime, start/stop и requirements.txt не отличаются.
-PR9/10, /version и постоянные квоты отсутствуют в этой установке: возвращать их
-не требуется. Исправление Windows SQLite URI в offline launcher подготовлено
-локально в `fix/steel-agent-v2-windows-stage4`, не закоммичено/не опубликовано.
-Это проверочный кандидат, а не готовый одобренный релиз для установки.
+## 1. Проверки до остановки
 
-№5: Windows-кандидат публикуется отдельно в `fix/steel-agent-v2-windows-stage4`.
-Одобренный полный SHA взять из итогового сообщения №5 и сверить через ls-remote;
-не устанавливать просто текущий HEAD изменяемой feature-ветки. №4 остаётся
-историческим отчётом. Тесты №5: отдельный venv 182 passed / 20 subtests;
-production interpreter на staging-тестах 185 passed / 20 subtests (включая
-три legacy reasoning-регрессии). Предупреждения Git о 51 каталоге воспроизведены
-только sandbox-пользователем: у обычного пользователя status чистый без warning.
-51 каталог с защищённой DACL находится в корне production вне .git; не удалять.
+В production только чтением: HEAD должен совпасть с согласованным исходным,
+чистый Git, отсутствие merge/rebase/cherry-pick, точные PID и пути supervisor/worker,
+один polling, handler=v2, gpt-6-luna/high, все фактические SQLite и свободное место.
+Сравнить Task Scheduler Action с исходным. Не выводить CommandLine с секретами,
+.env, пользовательские IDs, сообщения и payload SQLite.
 
-V2 runtime.connect явно передаёт model=gpt-6-luna, reasoning=high в фабрику
-транспорта. Значения .env low/medium больше не понижают выбранный v2 handler.
-Legacy и переменные окружения не изменяются; startup-лог v2 берёт фактические
-параметры транспорта. Прямой CLI from_environment() без override сохраняет своё
-прежнее поведение; для начальной Telegram-приёмки используется штатный runtime.
-
-На Windows сначала установить фактические каталог, interpreter, способ запуска,
-ветку/SHA, чистоту Git, пути OPERATOR_DB/бюджета и состояние supervisor/worker.
-Не печатать .env, ключи, тела заявок, полные command lines с потенциальными секретами.
-Ожидаемый каталог C:\Users\usoshin\uvm_ai_operator — только гипотеза до проверки.
-Проверить другие каталоги/компьютеры на polling с этим токеном без запуска getUpdates.
-Locks защищают только один каталог, не все компьютеры с одинаковым токеном.
-
-PowerShell, после проверки $Project и присвоения одобренного полного SHA $Target:
+В PowerShell использовать явно проверенные переменные `$projectRoot`, `$approvedSha`
+(ровно 40 hex, получен из опубликованного отчёта после review) и `$releaseBranch`.
 
 ```powershell
-Set-Location -LiteralPath $Project
-$Before = git rev-parse HEAD
-git status --short
-git fetch origin
-if ($LASTEXITCODE -ne 0) { throw 'Fetch failed' }
-# $Target — заранее одобренный полный SHA из отчёта №5, не main/HEAD.
-if ((git rev-parse origin/fix/steel-agent-v2-windows-stage4) -ne $Target) {
-    throw 'Published candidate changed; review required'
-}
-git cat-file -e "$Target^{commit}"
-if ($LASTEXITCODE -ne 0) { throw 'Release commit is unavailable' }
-git merge-base --is-ancestor $Before $Target
-if ($LASTEXITCODE -ne 0) { throw 'Target omits current production; integrate and review first' }
-git diff --name-status $Before $Target
+git -C $projectRoot fetch origin
+git -C $projectRoot rev-parse HEAD
+git -C $projectRoot status --porcelain
+git -C $projectRoot rev-parse "origin/$releaseBranch"
+git -C $projectRoot merge-base --is-ancestor HEAD $approvedSha
+git -C $projectRoot diff --stat HEAD $approvedSha
 ```
 
-При локальных изменениях/другом обслуживании остановиться. Сохранить $Before и
-runtime manifest вне Git. В №4 ancestry проходит для проверенной пары SHA;
-если будущий production отличается, повторить проверку и остановиться при
-несовместимости. Нужен опубликованный одобренный релиз; документ его не создаёт.
+Remote SHA должен точно равняться approvedSha. При расхождении — остановиться.
+Проверить пересечения tracked target файлов с ignored/untracked; не перезаписывать
+их. Никакого reset/clean/force/merge. Production aa11380 является предком кандидата.
+Отдельный staging worktree на точном SHA, без .env/реальных БД, запускает тесты из
+TESTING.md, pip check, импорты и mock wire payload. API/polling из staging запрещены.
 
-## 2. Проверка до остановки
+## 2. Штатная остановка
 
-Доставить $Target в отдельный *проверочный* worktree (`git worktree add --detach
-$Stage $Target`), не копировать туда .env, БД, token, runtime config. Это не место
-запуска бота. Создать там отдельный venv совместимой версии Python, установить requirements-dev.txt,
-проверить pip check и офлайн-команды TESTING.md. Ни main.py, ни Telegram CLI не запускать.
-Убедиться, что B6 Git-объект доступен; если нет — не выдавать skip за приёмку.
-Проверить `scripts/v2_llm_check.py --help`, не --live.
+Зафиксировать SHA/config и агрегатные контрольные показатели прав, offset, истории,
+версий и активных заявок. Выполнить существующий stop-telegram.ps1. Убедиться,
+что оба прежних процесса завершены и оба ProcessLock свободны. Наличие файлов
+.lock само по себе не доказывает владение OS lock. Maintenance оставить до запуска.
 
-Сверить версии production .venv с требованиями: в №3 проверен Python 3.12.14,
-на Windows №4 проверен Python 3.13.15; openai 3.19.2,
-pydantic 2.13.5 и остальные pins requirements*.txt. Не обновлять рабочий venv
-наугад. При несовпадении — остановиться и подготовить отдельный план зависимостей
-с проверенным возвратом; текущий путь rollout предполагает совместимый runtime.
+Timeout 180 секунд не означает право kill. Два plan и search могут занимать дольше;
+ждать и разбирать безопасную диагностику. Пока прежний worker жив, не checkout,
+не мигрировать, не запускать следующий. Task Scheduler не перенастраивать.
 
-Подтвердить права NTFS на OPERATOR_DB, будущую v2 SQLite и backup: только текущий
-оператор/администратор. Не менять токен, endpoint, сеть, прокси, Task Scheduler.
-Проверить наличие нужных env по именам без вывода значений. В staging допустим
-только fake transport и временные SQLite. Не переносить BETA_ROLLOUT.md/квоты из
-PR9, если их нет в фактической исходной установке и пользователь их не разрешил.
+## 3. Согласованный backup после остановки
 
-## 3. Остановка и окончательный backup
-
-Пока проверяется staging, production продолжает работу. Перед переключением:
+Создать НОВЫЙ отдельный каталог вне Git, не заменяя прошлые backup. Для каждой
+фактически используемой SQLite (legacy operator, v2, дополнительные при наличии)
+применить существующий SQLite Backup API инструмент:
 
 ```powershell
-.\stop-telegram.ps1 -TimeoutSeconds 900
+& $python scripts/v2_sqlite_snapshot.py --source $source --destination $copy --manifest $manifest
 ```
 
-Не продолжать до выхода прежнего worker/supervisor и освобождения обеих OS locks.
-Maintenance marker сохранять. При таймауте не убивать процесс и не начинать второй.
-Старые PID/ready-файл не являются доказательством текущего состояния.
-Снять baseline: SHA, branch, права, числа active/history/users, offset, существующий
-выбор handler и пути БД. Не копировать живые WAL/SHM обычным Copy-Item.
+`$python` — проверенный production interpreter; все пути задаются явно.
+Сохранить прежний handler config и полный production SHA отдельными локальными
+файлами в backup, не в Git. .env не менять и не публиковать.
+Каждая копия: повторное открытие, integrity_check=ok; manifest таблиц содержит
+количества и row/schema SHA256. Сравнить с metadata исходника при остановленном
+worker. Дополнительно сохранить файловый SHA256 каждой копии (Get-FileHash).
+Не использовать копирование WAL/SHM вместо Backup API. При живом worker несколько
+SQLite не образуют общую атомарную копию; поэтому установочный backup только после
+остановки всех writers. Ошибка проверки — installation прекращается.
 
-Для каждой фактической SQLite ($OperatorDb, $BudgetDb если существует, $V2Db если
-уже существует), использовать проверенный helper из $Stage; output пути — новые,
-в отдельном backup-каталоге с временем/уникальным суффиксом:
+## 4. Старые inflight и схема
+
+До первой queue-миграции в копии и затем в остановленной v2 проверить
+`SELECT count(*) FROM steel_v2_inflight`. Если есть записи без durable attempt/inbox
+(старые операции aa11380), автоматическая очистка запрещена. Оставить maintenance,
+архивировать, разобрать технические идентификаторы/логи; платный запрос мог состояться.
+Без отдельного подтверждённого решения не удалять их и не повторять GPT.
+
+На новой версии неизвестная/частичная схема, некорректные ключи/metadata, orphan
+attempt/outbox, повреждение SQLite или offset ahead вызывают отказ. Не лечить
+ручным DROP, подменой базы, понижением версии или удалением pending/unknown.
+
+## 5. Установка и аддитивная инициализация
+
+Повторно проверить чистоту Git, отсутствие процессов и свободные locks.
 
 ```powershell
-& "$Stage\.venv\Scripts\python.exe" "$Stage\scripts\v2_sqlite_snapshot.py" --source $OperatorDb --destination "$Backup\operator.sqlite3" --manifest "$Backup\operator.json"
-if ($LASTEXITCODE -ne 0) { throw 'Backup failed; keep maintenance' }
+git -C $projectRoot checkout --detach --no-overwrite-ignore $approvedSha
+git -C $projectRoot rev-parse HEAD
 ```
 
-Повторить с отдельными именами для бюджета и v2. Helper открывает источник read-only,
-применяет Connection.backup, проверяет integrity_check, сохраняет только числа строк,
-schema/row hashes и пути в manifest. Старые копии не перезаписывает. Копия содержит
-персональные данные: не отправлять её в Git/чат. Сохранить предыдущий локальный
-telegram-handler.json отдельно, если он был; .env не копировать. Не обнулять бюджет.
-Проверить manifest и повторное открытие backup. При любой ошибке — maintenance и STOP.
+При отказе checkout не форсировать. Проверить Python/imports/pip check, неизменность
+.env/config/Task Action. Не обновлять зависимости без необходимости. Приостановленную
+новую версию чинить следующим совместимым релизом, не запуском старого обработчика.
 
-## 4. Установка кода и выбор handler
-
-Оставаясь в прежнем production каталоге, с чистым Git и обоими остановленными
-процессами, установить одобренный commit без изменения main ref:
+Из production-каталога запустить ниже только после backup и inflight check, с
+проверенными абсолютными `$v2Database` и `$legacyOffset` (целое неотрицательное
+значение из legacy TelegramRepository). Команда не вызывает API и не запускает polling:
 
 ```powershell
-git switch --no-overwrite-ignore --detach $Target
-if ($LASTEXITCODE -ne 0) { throw 'Checkout failed; keep maintenance' }
-if ((git rev-parse HEAD) -ne $Target) { throw 'Unexpected HEAD' }
+& $python -B -c 'import sys; from database import Database; from steel_agent_v2.repository import Repository; from steel_agent_v2.queue import DurableQueue; d=Database(sys.argv[1]); Repository(d); q=DurableQueue(d); q.align_offset(int(sys.argv[2])); q.recover(); print("queue_schema=1 cursor="+str(q.cursor()))' $v2Database $legacyOffset
+& $python -B scripts/v2_queue_status.py --database $v2Database --legacy-database $legacyDatabase --check-forward
 ```
 
-Так сохраняется исходная ветка для возврата. При будущем разрешённом выпуске
-можно отдельно согласовать fast-forward основной ветки. Не применять reset/clean/stash.
-Для проверенной пары 19c9657 → кандидат №5 история не расходится: production
-является предком. Разные имена веток не означают несовместимую историю.
-При ином фактическом HEAD и провале ancestry не применять этот checkout:
-сохранить maintenance, вернуться к review отдельного staging worktree от
-проверенного SHA и подготовить отдельный совместимый кандидат. Не копировать
-staging поверх production и не запускать бота из второго каталога.
---no-overwrite-ignore дополнительно запрещает перезаписать игнорируемые локальные
-файлы, совпавшие с путями нового кода. Флаг проверен на установленном Windows Git
-в одноразовом репозитории; production checkout в №5 не выполнялся.
-Повторить импорты/оффлайн-тесты в production interpreter; launcher не читает user DB.
-Существующие Windows startup scripts/main.py/supervisor/Task Scheduler не меняются.
-В релизе меняются telegram_bot.py и добавляется пакет v2; runtime выбор задаётся
-отдельным локальным файлом, без правок .env и кода при каждом переключении.
+Создаются только 4 дополнительные queue-таблицы schema=1. Core, оригиналы, active,
+versions/history не преобразуются и не заменяются. Сверить их hash/count с backup.
+Повторная инициализация идемпотентна. Будущая schema>1 требует явной аддитивной
+миграции следующего релиза; текущий код не делает downgrade или auto-repair.
 
-Проверить, что новый путь v2 не совпадает с legacy, budget или их aliases; не
-подменять старую SQLite. Новый v2 стартует без legacy active: участнику нужно вновь
-передать исходник; архив/права остаются в прежней БД. Если найден старый v2-файл,
-сначала проверить его схему/целостность и inflight, не создавать поверх него пустой.
-Для свежей БД допустимо имя `steel-agent-v2.sqlite3` рядом с legacy. Следующий
-конфиг включать только после разрешения переключения:
+При первой миграции adopt существующий legacy offset допустим только для пустой,
+ещё не initialized очереди. Для существующей queue legacy>cursor запрещён. Отставший
+legacy mirror допустим как известное окно inbox-commit→offset; run_queue продвинет
+его только вперёд перед getUpdates. Нельзя вручную откручивать любой cursor назад.
+
+## 6. Запуск и контроль
+
+Оставить прежнюю конфигурацию handler=v2/database и .env. QueueConfig по умолчанию:
+workers=3,max_pending=100,max_pending_per_user=20,max_pending_bytes=8388608.
+Необязательный локальный telegram-queue.json меняет только эти параметры очереди,
+не модель/стоимость API. Исполнять прежний start-telegram.ps1 обычным аккаунтом.
+
+Подтвердить один supervisor, один Telegram-worker, один getUpdates, gpt-6-luna/high,
+права доступа и общий offset. Три execution worker — потоки одного процесса,
+не три polling и не три Python-бота; они создают независимые SDK/API clients.
+Проверить queue schema/cursor/counts, отсутствие 409/auth/import/SQLite ошибок и
+сохранность active/history/versions. Наблюдать минимум 3 минуты.
+Раздельно фиксировать native Python и venv redirector PID, не считать их вторым ботом.
+
+После отдельного разрешения живых испытаний 2–3 пользователя вручную отправляют
+независимые запросы. Проверить перекрытие, FIFO одного пользователя, адресность
+ответов и версии. Mock не подтверждает качество живой GPT/поиска. Самостоятельно
+не отправлять Telegram-сообщения и не инициировать платные запросы.
+
+## 7. Crash, unknown и fix-forward
+
+Read-only `v2_queue_status.py --database ... --legacy-database ...` показывает только
+технические агрегаты/идентификаторы. Не выводить payload, user IDs и переписку.
+queued продолжается; proven claimed без API возвращается в очередь; api_started /
+result_received без commit → execution_unknown; committed → только не начатая
+доставка; delivery_started без receipt → delivery_unknown. Остальные пользователи
+продолжают работать. GPT repair допускается только при известном исходе прошлого
+вызова; внешнее exactly-once не обещается.
+
+Операторское закрытие unknown: штатная остановка, backup, оба свободных locks,
+maintenance, явное подтверждение `update_id:state:input_hash` из локальной диагностики:
 
 ```powershell
-$Pending = Join-Path $Project 'telegram-handler.pending'
-$Config = Join-Path $Project 'telegram-handler.json'
-[IO.File]::WriteAllText($Pending, '{"handler":"v2","database":"steel-agent-v2.sqlite3"}', [Text.UTF8Encoding]::new($false))
-if (Test-Path -LiteralPath $Config) {
-    [IO.File]::Replace($Pending, $Config, $null)
-} else {
-    [IO.File]::Move($Pending, $Config)
-}
+& $python scripts/v2_queue_status.py --database $v2Database --legacy-database $legacyDatabase --root $projectRoot --abandon $updateId --confirm $confirmation
 ```
 
-Путь в JSON относителен к production root, не к staging. До первого запуска
-подтвердить metadata-only `selection(Path(...))`, импорты и явный `handler=v2`;
-они не запускают API. Неправильная конфигурация должна блокировать запуск.
+Это только отказ от продолжения неопределённой операции. Нет GPT replay, resend,
+отмены сохранённой мутации или удаления истории. Credentials в историю не попадают.
+Не выдавать обычному пользователю технический confirmation.
 
-## 5. Один запуск и приёмка
+При критическом сбое: штатно остановить/оставить maintenance, создать свежие Backup
+API snapshots текущих БД, сохранить безопасную диагностику, подготовить следующий
+совместимый SHA, проверить на копии, отдельно согласовать его установку. Не запускать
+legacy/старый код, не восстанавливать старую SQLite поверх новых событий, не двигать
+offset назад. Даже пустая очередь не разрешает downgrade. Отказ миграции оставляет
+систему остановленной до fix-forward; SQL transaction rollback не является возвратом
+версии приложения. Удаление queue schema/retirement больше не поддерживается.
 
-```powershell
-.\start-telegram.ps1
-```
+## Ограничения
 
-Скрипт снимает maintenance и запускает один supervisor; worker использует прежние
-OS locks и offset. Не запускать параллельно main.py или staging checkout.
-Проверить живые PID: один supervisor и один worker, совпадение ready с worker;
-в логе telegram_handler=v2, polling_connected, без новых 409/auth/import/SQLite
-ошибок не менее 3 минут. Показать только безопасные строки диагностики.
-
-Сверить сохранённые права/active/history legacy по hash/count; telegram_state
-меняется только ожидаемым offset, его нельзя сравнивать как полностью неизменный.
-Бюджетный журнал legacy не сбрасывается. V2 schema/PRAGMA integrity_check=ok.
-Если фактическая установка поддерживает /version, сохранить её при сборке
-совместимого релиза. У production №4 команды нет; идентификация выполняется
-полным Git SHA и telegram_handler=v2, новый номер не выдумывать.
-
-Только при отдельном разрешении платных вызовов/приёмки — один согласованный
-участник проверяет сценарии TESTING.md через существующий UVM_Steel. Иначе
-остановиться до живой приёмки и явно сообщить её отсутствие. Проверка 3 минут
-без сообщений подтверждает работу polling, но не качество GPT.
-
-## 6. Откат без потери новых данных
-
-При сбое сохранить maintenance, код выхода, времена/PID и безопасные логи.
-Если процесс ещё жив — штатно stop, без kill. Сделать новые диагностические backup
-ВСЕХ текущих БД тем же helper; не восстанавливать старую operator.sqlite3 поверх
-свежей: это потеряет offset, права и историю после переключения.
-
-При остановленных процессах и чистом Git:
-
-```powershell
-git switch --no-overwrite-ignore --detach $Before
-if ($LASTEXITCODE -ne 0) { throw 'Rollback checkout failed; keep maintenance' }
-```
-
-Вернуть прежний handler config из сохранённого файла (или убрать созданный config,
-если раньше его не было), сохранив неудачный config для диагностики. Если предыдущий
-код содержит selector и нужен legacy, явный JSON `{"handler":"legacy"}` допустим
-только после проверки прежней конфигурации. .env/SQLite/бюджет не восстанавливать
-автоматически. Старый runtime должен иметь прежние зависимости и утверждённые
-настройки legacy AI. Для исходного 19c9657 квоты не добавлять.
-
-V2 active/version/turn сохраняются отдельно, старый код их не читает. В legacy
-снова доступна старая активная заявка; изменения v2 туда автоматически не переносятся.
-Общий offset не откручивать назад: уже обработанные v2 update иначе попадут в legacy
-без его идемпотентности. Перенос результата пользователем — отдельное явное действие.
-Запустить один штатный supervisor, повторить наблюдение и сверку данных.
-
-При повреждении legacy DB, неясном inflight или несовместимости старого runtime
-не запускать ни один handler: BLOCKED, данные сохранены для разбора. `abandon`
-допустим только для точного claim после доказанной смерти worker и сохранения
-исходного сообщения в защищённом локальном отчёте; не снимать все claims массово.
-
-## 7. Итог Windows-оператора
-
-SUCCESS / ROLLBACK / BLOCKED; фактические SHA до/после, Python/deps, выбранный handler,
-пути backup/manifest/отчёта, integrity/hash/count без содержимого, offset до/после,
-права и история, PID/число polling, длительность наблюдения, выполненные живые
-сценарии или явное «не выполнялись». Не объявлять качество GPT по mock-проверкам.
-# Уточнение №16: очередь и обязательный gate отката
-
-Этот раздел имеет приоритет над прежней процедурой rollback ниже, если устанавливается
-версия с durable queue. Разработка №16 не означает разрешения deployment.
-
-Перед будущей установкой: штатно остановить supervisor/worker; удерживать maintenance;
-сделать verified SQLite backups; убедиться в отсутствии старого unresolved inflight.
-Не очищать его автоматически. Проверить целевой полный опубликованный SHA и
-staging-тесты. Сохранить прежний handler=v2 и отдельные пути БД, .env и общий offset.
-Схема queue version=1 создаётся аддитивно в v2; legacy schema не меняется.
-
-Начальная локальная конфигурация `telegram-queue.json` необязательна: без неё
-workers=3, max_pending=100, max_pending_per_user=20, max_pending_bytes=8388608.
-Это admission limits, не API-квоты. Файл не публиковать. Изменения применяются при
-следующем согласованном запуске; production-конфигурация в №16 не создавалась.
-Проверить DPAPI под действительным Windows account запуска, если используется
-существующая bootstrap-команда /claim. Нет новых ключей/пакетов/переменных .env.
-
-Остановка остаётся прежней. Maintenance прекращает admission и планирование,
-даёт active завершиться, queued сохраняет. Две plan-попытки и search с timeout=180
-могут идти дольше stop timeout=180. При timeout не убивать процессы, не выполнять
-checkout и не запускать новый worker. Дождаться выхода обоих процессов/locks.
-
-## Диагностика и unknown
-
-Read-only, из установленной версии, с явно установленным фактическим `$db`:
-
-```powershell
-& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db
-& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --legacy-database $legacyDb --guard-rollback
-```
-
-Вывод содержит состояния/счётчики/update IDs/opaque confirmation, без переписки,
-user IDs и ключей. `$legacyDb` — проверенный фактический путь legacy SQLite.
-guard возвращает 2, если есть незакрытые jobs/claims/outbox, не указан legacy путь
-или его offset не равен durable cursor. `queue_drained` отдельно от `offset_verified`;
-поле `rollback_ready` требует обе проверки и известную версию схемы. Диагностика
-без legacy пути не удостоверяет готовность rollback и ничего не создаёт.
-В логах queue update_id связан с operation ID, далее с безопасной API-диагностикой.
-Не выгружать тела сообщений/ответов для диагностики.
-
-Unknown не означает отсутствие внешнего эффекта. Сверить canonical snapshot/version,
-callback audit/access status и известные receipt. Не повторять GPT/send/approval
-автоматически. Для **закрытия без повторов**, после штатной остановки и backups:
-
-```powershell
-& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --root $root --abandon $updateId --confirm $exactConfirmation
-```
-
-`$root` — фактический production root, `$exactConfirmation` — точное значение для
-этого unknown из read-only вывода. CLI требует maintenance, свободных supervisor
-и worker locks, совпадения handler=v2/database. Активные данные не откатываются;
-обычный исходный текст сохраняется в history перед снятием точного claim.
-Никаких отправок и платных повторов этот инструмент не делает. После закрытия
-queued можно продолжить только согласованным запуском совместимого кода.
-
-## Разрешённый rollback на предыдущий aa11380
-
-1. Не выполнять checkout старого SHA, пока queue gate запрещает возврат.
-2. Дождаться обработки queued совместимым runtime. Если это невозможно, BLOCKED:
-   нужен recovery/fix-forward, а не ручное удаление заданий или изменение offset.
-3. Штатно остановить оба процесса, сохранить maintenance и свежие backups всех БД.
-4. Unknown разрешить явно после сверки результата. Права после неоднозначного
-   approval не отзывать и не выдавать повторно автоматически.
-5. Только если guard успешен, архивировать всю v2 SQLite в **новый защищённый путь
-   вне checkout**, передав текущий rollback_confirmation:
-
-```powershell
-& .\.venv\Scripts\python.exe scripts\v2_queue_status.py --database $db --legacy-database $legacyDb --root $root --prepare-rollback --startup-manifest $guardManifest --startup-guard $guardCode --archive $newArchivePath --confirm $rollbackConfirmation
-```
-
-Инструмент использует SQLite Backup API, integrity_check, hash/count manifest,
-повторное открытие и сравнение с source под write lock. Архивы не перезаписываются.
-После проверки атомарно удаляются **только** четыре operational queue таблицы;
-их история полностью остаётся в архиве. Active/version/turn/inflight и общий legacy
-offset не заменяются. При ошибке backup таблицы не удаляются. Перед архивированием
-и непосредственно перед DROP проверяется равенство legacy offset и durable cursor.
-Если mirror отстал/опередил cursor, rollback запрещён; инструмент не меняет offset.
-Разбирать это состояние нужно совместимым runtime после остановки и сверки backups,
-не ручной коррекцией telegram_state. Процедура требует обоих свободных process locks.
-
-6. Установить согласованный прежний полный SHA безопасным detached checkout
-   `--no-overwrite-ignore`. Сохранить handler=v2 и прежние database paths. Не восстанавливать
-   старые SQLite и не откручивать offset. Проверить импорты и штатно запустить один
-   supervisor; провести согласованное наблюдение и сверку данных.
-
-Старый опубликованный v2 Repository отвергает дополнительные таблицы, поэтому без
-этого downgrade gate он не начнёт polling. **Нельзя** обходить защиту переключением
-handler на legacy, удалением config или ручным DROP. Такой переход требует отдельной
-процедуры и решения пользователя. Исходную процедуру rollback на legacy ниже
-нельзя автоматически применять к версии с очередью.
-
-**Предпусковая проверка №17: REQUIRES DESIGN CHANGES.** Запрет обхода через legacy
-в этом разделе пока процедурный: selector кандидата и aa11380 выбирает legacy
-при отсутствии config либо при явном legacy, не проверяя v2 queue. Прямая смена
-SHA с сохранением v2 блокируется старым Repository, но смена handler обходит его.
-Не считать этот кандидат разрешённым к установке. Нужен согласованный startup gate,
-сохраняющийся вне сменяемого checkout и проверяющий queue независимо от handler;
-подробности и проверенные границы — reports/017-queue-predeployment-validation.md.
-
-Полный проект и границы гарантий: CONCURRENT_QUEUE_DESIGN.md. Абсолютное exactly-once
-внешних API не гарантируется; unknown означает ручное решение без автоматических повторов.
+Backpressure не подтверждает непринятый update. Переполненный первый пользователь
+может задержать общий admission, но уже принятые чужие jobs исполняются независимо.
+Слишком большое одиночное событие также требует вмешательства: не пропускать его
+изменением offset. Unknown блокирует только FIFO своего пользователя. Already-started
+внешний вызов невозможно гарантированно отменить после revoke; разрешение на commit
+и delivery-start проверяется поколением прав под legacy→v2 gate. Сетевые вызовы GPT
+не держат SQLite write transaction. Поддерживаемого возврата старого SHA нет; защита
+от намеренного ручного обхода через старый checkout не заявляется.

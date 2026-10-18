@@ -1,7 +1,7 @@
-"""Independent acceptance: real child crashes and explicit unresolved rollback gate.
+"""Independent child-crash acceptance, updated for owner-approved forward-only policy.
 
-Only synthetic data; formerly red launch tests now exercise the installed external
-boundary, including a checkout of the actual previous published SHA. No skip/xfail.
+Old-SHA restart is unsupported; current entry must refuse missing/legacy config.
+All data-loss, unknown, authorization and crash checks remain active.
 """
 import json
 from pathlib import Path
@@ -18,34 +18,25 @@ from steel_agent_v2 import Repository
 from steel_agent_v2.queue import DurableQueue, QueueConfig, Backpressure, QueueConflict
 from windows_runtime import ProcessLock, AlreadyRunning
 from test_steel_agent_v2_queue import rig, admit, update, API, Fake, proposal, Executor, Scheduler, drain
-from test_steel_agent_v2_guard import guard_install, assert_denied
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD = 'aa11380dfe1ed646fec2355b22880fdb03b0d706'
 
 
-@pytest.mark.parametrize('published', [False, True], ids=['candidate', 'previous-release'])
-@pytest.mark.parametrize('config', [None, {'handler': 'legacy'}], ids=['missing-config', 'legacy'])
-def test_pending_queue_must_prevent_legacy_selector_bypass(rig, tmp_path, published, config, guard_install):
-    """Same pending/offset/handler requirement, at the permanent launch boundary.
-
-    Old selector remains untouched: only a guard surviving the checkout can stop it.
-    A real guard process must reject before importing any checkout/Telegram code.
-    """
-    installed=guard_install
-    from steel_agent_v2 import runtime
-    if published:
-        source = subprocess.run(['git', 'show', OLD+':steel_agent_v2/runtime.py'],
-                                capture_output=True, check=True, encoding='utf-8').stdout
-        runtime = ModuleType('published_runtime')
-        exec(compile(source, 'published_runtime.py', 'exec'), runtime.__dict__)
-        installed.published()
-    admit(rig, 41)
+@pytest.mark.parametrize('state', ['queued','execution_unknown'])
+@pytest.mark.parametrize('config', [None, {'handler':'legacy'}], ids=['missing-config','legacy'])
+def test_pending_queue_must_prevent_legacy_selector_bypass(rig,tmp_path,monkeypatch,state,config):
+    """Forward-only supersedes old-SHA support; current entry refuses any fallback."""
+    import telegram_bot as bot
+    admit(rig,41)
+    if state=='execution_unknown':rig.queue.unknown(41)
     rig.legacy.set_offset(42)
-    assert not rig.queue.rollback_ready()
-    installed.config(config)
-    assert runtime.selection(installed.root)==('legacy',None)
-    assert_denied(installed)
+    if config is not None:(tmp_path/'telegram-handler.json').write_text(json.dumps(config))
+    before=rig.queue.job(41)
+    def forbidden(*args,**kwargs):raise AssertionError('No external call before valid v2 selection')
+    monkeypatch.setattr(bot,'TelegramAPI',lambda _:type('API',(),{'call':forbidden})())
+    assert bot.run_bot(tmp_path,'offline-token')==7
+    assert rig.queue.job(41)==before and rig.legacy.get_offset()==42
 
 
 CRASH = r'''
@@ -253,7 +244,7 @@ def test_overlap_and_both_databases_writable_during_slow_gpt(rig):
                 c.execute('PRAGMA busy_timeout=1'); c.execute('BEGIN IMMEDIATE')
         admit(rig, 2, 3, 'fast'); scheduler.tick()
         assert second.wait(3) and not release.is_set()
-        release.set(); drain(scheduler, rig.queue.rollback_ready)
+        release.set(); drain(scheduler, rig.queue.drained)
     finally:
         release.set(); scheduler.close()
     assert times['a_start'] < times['b_start'] < times['a_end']
@@ -358,7 +349,7 @@ def test_durable_admin_revoke_overlaps_employee_gpt_and_prevents_commit(rig):
         scheduler.tick()
         drain(scheduler, lambda:not rig.access.allowed(2))
         assert not release.is_set()
-        release.set(); drain(scheduler, rig.queue.rollback_ready)
+        release.set(); drain(scheduler, rig.queue.drained)
     finally:
         release.set(); scheduler.close()
     assert rig.queue.job(1)['state'] == 'denied'
@@ -374,47 +365,43 @@ def test_rollback_must_not_drop_inbox_without_checking_legacy_offset(rig, tmp_pa
     from scripts.v2_queue_status import prepare_rollback, inspect
     admit(rig, 41)
     Executor(rig.queue, rig.access, lambda:rig.api, lambda:Fake(proposal())).execute(rig.queue.claim())
-    assert rig.queue.rollback_ready() and rig.legacy.get_offset() == 0 and rig.queue.cursor() == 42
+    assert rig.queue.drained() and rig.legacy.get_offset() == 0 and rig.queue.cursor() == 42
     archive = tmp_path/'must-not-archive-unchecked.sqlite3'
     with pytest.raises(ValueError):
         prepare_rollback(rig.queue.database.path, archive,
-                         inspect(rig.queue.database.path)['rollback_confirmation'])
+                         'unsupported-rollback')
     assert not archive.exists()
     assert rig.queue.job(41)['state'] == 'delivered'
 
 
 @pytest.mark.parametrize('offset', [0, 43], ids=['mirror-behind', 'mirror-ahead'])
-def test_rollback_refuses_mismatched_mirror_without_creating_archive(rig, tmp_path, offset):
+def test_forward_mirror_check_and_unsupported_rollback_preserve_data(rig, tmp_path, offset):
     from scripts.v2_queue_status import prepare_rollback, inspect, main
     admit(rig, 41)
     Executor(rig.queue, rig.access, lambda:rig.api, lambda:Fake(proposal())).execute(rig.queue.claim())
     rig.legacy.set_offset(offset)
     state = inspect(rig.queue.database.path, rig.legacy.database.path)
-    assert state['queue_drained'] and not state['offset_verified'] and not state['rollback_ready']
+    assert state['queue_drained'] and not state['offset_verified'] and not state['offset_verified']
     assert main(['--database',str(rig.queue.database.path),'--legacy-database',str(rig.legacy.database.path),
-                 '--guard-rollback']) == 2
+                 '--check-forward']) == (0 if offset<42 else 2)
     archive = tmp_path/'offset-mismatch.sqlite3'
-    with pytest.raises(ValueError, match='queue_not_safe'):
-        prepare_rollback(rig.queue.database.path, archive, state['rollback_confirmation'],
+    with pytest.raises(ValueError, match='forward_only'):
+        prepare_rollback(rig.queue.database.path, archive, 'unsupported-rollback',
                          legacy_database=rig.legacy.database.path)
     assert not archive.exists() and rig.legacy.get_offset() == offset
 
 
-def test_rollback_rechecks_offset_after_backup_and_leaves_queue_intact(rig, tmp_path, monkeypatch):
-    from scripts.v2_queue_status import prepare_rollback, inspect
-    from scripts import v2_sqlite_snapshot
-    admit(rig, 41)
-    Executor(rig.queue, rig.access, lambda:rig.api, lambda:Fake(proposal())).execute(rig.queue.claim())
+def test_forward_backup_does_not_hide_changed_offset_or_remove_queue(rig,tmp_path):
+    from scripts.v2_queue_status import inspect
+    from scripts.v2_sqlite_snapshot import snapshot
+    admit(rig,41)
+    Executor(rig.queue,rig.access,lambda:rig.api,lambda:Fake(proposal())).execute(rig.queue.claim())
     rig.legacy.set_offset(42)
-    original = v2_sqlite_snapshot.snapshot
-    def moved(*args):
-        result = original(*args); rig.legacy.set_offset(43); return result
-    monkeypatch.setattr(v2_sqlite_snapshot, 'snapshot', moved)
-    archive = tmp_path/'archive-before-concurrent-change.sqlite3'
-    with pytest.raises(ValueError, match='legacy_offset_changed'):
-        prepare_rollback(rig.queue.database.path, archive,
-            inspect(rig.queue.database.path)['rollback_confirmation'], legacy_database=rig.legacy.database.path)
-    assert archive.exists() and rig.queue.job(41)['state'] == 'delivered'
+    archive=tmp_path/'verified.sqlite3'
+    snapshot(rig.queue.database.path,archive,tmp_path/'manifest.json')
+    rig.legacy.set_offset(43)
+    assert not inspect(rig.queue.database.path,rig.legacy.database.path)['forward_compatible']
+    assert archive.exists() and rig.queue.job(41)['state']=='delivered'
 
 
 def test_rollback_readonly_check_never_creates_missing_legacy_database(rig, tmp_path):

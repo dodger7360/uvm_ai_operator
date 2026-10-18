@@ -1,3 +1,9 @@
+Единственный активный ИИ Telegram — Steel Agent v2 / GPT-6 Luna High.
+Старый ИИ и intent router исключены из telegram_bot; их файлы/парсеры/БД
+сохраняются для выборочного использования. Возврата к старому обработчику нет.
+
+> Решение №19: Steel Agent v2 развивается по стратегии forward-only. Откат на устаревший код не является поддерживаемым штатным сценарием. Сохранность данных, очереди и восстановление после аварий остаются обязательными.
+
 # Надёжная очередь — проект №15, реализация №16
 
 Статус: **реализовано в отдельной ветке для review, не развёрнуто**. База
@@ -131,11 +137,11 @@ maintenance сохраняется, второй процесс не запус�
 только доставка. delivery_started без receipt — delivery_unknown.
 Нельзя автоматически освобождать старый inflight и повторять запрос.
 
-Перед включением: backup, версия схемы, dry-run на временной БД, один poller,
-проверка всех записей старого inflight вручную без replay. Откат на нынешний код
-разрешён только после опустошения inbox/outbox и разрешения unknown либо при
-сохранении совместимого queue consumer. Возврат одного Git SHA при опережающем
-offset может потерять обработку уже принятых заданий. SQLite/offset назад не откатывать.
+Перед включением: остановка, согласованные Backup API копии, версия схемы,
+испытание на копии, один poller, разбор старых inflight без replay. Обновления
+только вперёд. Откат SHA, handler=legacy, retirement и DROP queue не поддерживаются.
+При установочном сбое система остаётся остановленной до совместимого fix-forward.
+Offset и текущие SQLite не заменяются старыми копиями автоматически.
 
 ## Обязательная проверка реализации после согласования
 
@@ -220,11 +226,13 @@ Product/unresolved, неверные Unicode offsets, повтор IDs, проп
   без user IDs и переписки. Mutating операции требуют maintenance, свободных обоих
   process locks, совпадения root/handler/database и явного confirm. Разрешение unknown
   — только закрытие без replay/send/отката уже сохранённых данных.
-- Старый опубликованный v2 Repository отвергает queue-таблицы и не начнёт polling.
-  Это проверено на коде aa11380. При полностью закрытой очереди CLI делает полный
-  SQLite backup с integrity/hash manifest вне checkout, сверяет source/backup, затем
-  атомарно убирает только четыре operational queue таблицы. Архив сохраняет аудит;
-  core/history/offset не заменяются. Менять handler на legacy для обхода gate запрещено.
+- Внешний startup guard/manifest/ProgramData исключены решением №19.
+  Данные проверяются в текущем Repository/DurableQueue: schema=1, состав таблиц,
+  columns/primary keys, неотрицательные integer metadata, cursor выше всех inbox IDs,
+  отсутствие orphan attempts/outbox, SQLite quick_check. Legacy offset ahead
+  запрещён; отставший mirror восстанавливается только вперёд от durable cursor.
+  Невыполненные/unknown записи сохраняются при любом обновлении. --check-forward
+  не требует пустой очереди: queued и unknown являются данными, а не основанием DROP.
 - Maintenance прекращает admission/scheduling; active операции кооперативно
   завершаются, queued остаются на диске. Два plan и search с timeout=180 могут
   превысить stop timeout=180. Таймаут stop требует ждать/разбирать, не убивать процесс.

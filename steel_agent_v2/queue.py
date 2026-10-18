@@ -119,9 +119,27 @@ class DurableQueue:
             'steel_v2_attempt':{'update_id','number','kind','state'},
             'steel_v2_outbox':{'update_id','part','method','payload','state','message_id'},
             'steel_v2_queue_meta':{'key','value'}}
+        keys={'steel_v2_inbox':['update_id'],'steel_v2_attempt':['update_id','number'],
+              'steel_v2_outbox':['update_id','part'],'steel_v2_queue_meta':['key']}
         for table,expected in columns.items():
-            if {r[1] for r in c.execute('PRAGMA table_info('+table+')')}!=expected:
+            info=list(c.execute('PRAGMA table_info('+table+')'))
+            primary=[r[1] for r in sorted(info,key=lambda r:r[5]) if r[5]]
+            if {r[1] for r in info}!=expected or primary!=keys[table]:
                 raise ValueError('invalid_queue_schema')
+        values=dict(c.execute('SELECT key,value FROM steel_v2_queue_meta'))
+        if any(type(values.get(k)) is not int or values[k]<0 for k in ('schema','cursor','served')):
+            raise ValueError('invalid_queue_metadata')
+        if 'initialized' in values and values['initialized']!=1:
+            raise ValueError('invalid_queue_metadata')
+        largest=c.execute('SELECT max(update_id) FROM steel_v2_inbox').fetchone()[0]
+        if largest is not None and largest>=values['cursor']:
+            raise ValueError('durable_cursor_behind_inbox')
+        for table in ('steel_v2_attempt','steel_v2_outbox'):
+            if c.execute('SELECT 1 FROM '+table+' t LEFT JOIN steel_v2_inbox i '
+                         'ON t.update_id=i.update_id WHERE i.update_id IS NULL LIMIT 1').fetchone():
+                raise ValueError('orphaned_queue_record')
+        if [r[0] for r in c.execute('PRAGMA quick_check')]!=['ok']:
+            raise ValueError('queue_integrity_failed')
 
     @contextmanager
     def write(self):
@@ -141,6 +159,7 @@ class DurableQueue:
 
     def align_offset(self, legacy_offset):
         """Adopt a pre-queue baseline once; never hide a later offset/inbox inconsistency."""
+        if type(legacy_offset) is not int or legacy_offset<0:raise QueueConflict('invalid_legacy_offset')
         with self.write() as c:
             cursor=c.execute("SELECT value FROM steel_v2_queue_meta WHERE key='cursor'").fetchone()[0]
             initialized=c.execute("SELECT value FROM steel_v2_queue_meta WHERE key='initialized'").fetchone()
@@ -382,7 +401,7 @@ class DurableQueue:
                 ('delivery_unknown' if delivery else 'execution_unknown',number))
             c.execute("UPDATE steel_v2_outbox SET state='delivery_unknown' WHERE update_id=? AND state='delivery_started'",(number,))
 
-    def rollback_ready(self):
+    def drained(self):
         with self.database.connection() as c:
             jobs=c.execute("SELECT count(*) FROM steel_v2_inbox WHERE state NOT IN ('delivered','denied','rejected')").fetchone()[0]
             claims=c.execute('SELECT count(*) FROM steel_v2_inflight').fetchone()[0]

@@ -7,7 +7,7 @@ from database import Database
 from repositories.access_repository import AccessRepository, AuthorizedRequestRepository, AccessNotificationFailed, StaleAccessAction
 from repositories.telegram_repository import TelegramRepository
 from telegram_access import TelegramAccess
-from telegram_bot import handle_update
+from legacy_telegram_adapter import handle_update
 from telegram_service import ActiveRequest, ActiveItem, TelegramService
 from schemas import RequestItem, PurchaseRequest
 
