@@ -111,8 +111,10 @@ telegram-handler.json с handler=v2; fallback отсутствует.
   До GPT фиксируется исходное сообщение в inflight. finish атомарно сохраняет
   version+active+turn и удаляет claim, проверяя sequence и право доступа.
   Повтор user_id/event_id/hash возвращает сохранённый Reply без модели/операции.
-- **presentation.py**: plain text, группы, исходные единицы/количества, отличия,
-  вопросы; суммы считает Python. Оригинал выводится без перезаписи.
+- **presentation.py**: кандидат №27 — краткие plain-text строки с полными фактами
+  каждого участника группы и исходными единицами/количествами; неизвестные/вопросы
+  видимы. Групповой разбор — explanation, суммы Python — totals, оригинал без перезаписи.
+  В production пока прежняя версия formatter; deployment не выполнялся.
 - **telegram.py**: существующие access.route/allowed, TypingIndicator, safe_chunks,
   diagnostics. Разрешены личные сообщения; проверка прав до обработки, при записи
   и между частями ответа. Стабильный event_id — telegram:update_id.

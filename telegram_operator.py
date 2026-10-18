@@ -28,15 +28,20 @@ class ClarificationMessage(str):
 
 
 def safe_chunks(text, limit=3200):
-    """Split even oversized lines, never drop original characters or UTF-16 units."""
+    """Prefer whole lines; split oversized lines without losing UTF-16 characters."""
     chunks, chars, size = [], [], 0
-    for char in text:
-        units = 2 if ord(char) > 0xffff else 1
-        if chars and size + units > limit:
+    for line in text.splitlines(keepends=True):
+        line_size = sum(2 if ord(char) > 0xffff else 1 for char in line)
+        if chars and size + line_size > limit:
             chunks.append(''.join(chars))
             chars, size = [], 0
-        chars.append(char)
-        size += units
+        for char in line:
+            units = 2 if ord(char) > 0xffff else 1
+            if chars and size + units > limit:
+                chunks.append(''.join(chars))
+                chars, size = [], 0
+            chars.append(char)
+            size += units
     if chars:
         chunks.append(''.join(chars))
     return chunks

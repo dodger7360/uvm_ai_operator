@@ -71,7 +71,10 @@ def test_create_decimal_technical_differences_and_originals(rig):
     assert totals(current.items)==({'т':'2.000'},[])
     assert len(current.items)==2
     assert any('grade' in line for line in differences(current.items))
-    assert 'С245' in reply.text and 'Ст3' in reply.text and 'взаимозаменяемость' in reply.text
+    assert 'С245' in reply.text and 'Ст3' in reply.text
+    assert 'взаимозаменяемость' not in reply.text
+    from steel_agent_v2.presentation import render
+    assert 'взаимозаменяемость' in render(current,'explanation')
     assert 'кг' in reply.text and '750' in reply.text
     assert fake.calls[0][0]['message']==SOURCE
 
@@ -164,7 +167,10 @@ def test_incomplete_quantity_asks_question_without_zero_total(rig):
     fake.plans=[p];result=agent.handle(1,SOURCE,event_id='partial')
     assert result.status=='partial'
     assert totals(repo.load(1).items)==({'т':'1.25'},['i2'])
-    assert 'Известная часть' in result.text
+    assert 'количество не уточнено кг' in result.text
+    assert 'Уточните' in result.text
+    from steel_agent_v2.presentation import render
+    assert 'Известная часть' in render(repo.load(1), 'totals')
     fake.plans=[edit(repo.load(1),[set_op('i2','quantity','750',evidence='750')]) | {'remaining_questions':[]}]
     assert agent.handle(1,'750',event_id='clarification').status=='ok'
     assert repo.load(1).items[1].quantity==Decimal(750)

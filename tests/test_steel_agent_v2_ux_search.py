@@ -31,9 +31,11 @@ def test_normal_view_hides_internal_structure_retains_facts(tmp_path):
     assert request.id not in text
     for value in ('[g1]','[i1]','[r1]','Основание предложения GPT','источник:'):
         assert value not in text
-    for value in ('С245','Ст3','1,25','750','кг','взаимозаменяемость'):
+    for value in ('С245','Ст3','1,25','750','кг'):
         assert value in text
-    assert 'версия 1' in text.lower()
+    assert 'версия' not in text.lower()
+    assert 'взаимозаменяемость' not in text
+    assert 'взаимозаменяемость' in render(request,'explanation')
 
 
 @pytest.mark.parametrize('message', ['Дай заявку текстом','Подготовь для отправки поставщику',
