@@ -1,5 +1,10 @@
 # Фактическая архитектура
 
+Сверено с `4f7babf3e9aebee76e582737c2fe31680a1fa528` в №23, 18.10.2026.
+Продукт и целевые изменения — [PRODUCT.md](PRODUCT.md), живые подтверждения
+и ограничения — [PROJECT_STATE.md](PROJECT_STATE.md). Будущие интеграции ниже
+не следует принимать за существующий код.
+
 ## Решение владельца №19: forward-only
 
 > Steel Agent v2 развивается по стратегии forward-only. Откат на устаревший код не является поддерживаемым штатным сценарием. Сохранность данных, очереди и восстановление после аварий остаются обязательными.
@@ -47,7 +52,7 @@ Bootstrap credential `/claim` защищается DPAPI, не хранится 
 
 Обычный обработчик `telegram.handle_update` остаётся доступен для изолированных
 прямых тестов; production poller v2 больше не вызывает его синхронно.
-Legacy poller не меняется. Оригиналы и все прежние версии остаются в core-таблицах;
+Legacy poller не входит в активный маршрут. Оригиналы и версии остаются в core-таблицах;
 техническая очистка source records касается только непересекающихся, нессылаемых
 service whitespace. Все инварианты затем проверяются заново.
 
@@ -62,19 +67,21 @@ WireAgentPlan/Decimal/RequestEngine operations не расширены.
 изменения добавляются миграциями вперёд. При сбое — maintenance, backup, диагностика,
 следующий совместимый коммит. Подробнее — WINDOWS_DEPLOYMENT.md.
 
-Следующие разделы описывают также исходный синхронный путь до №16;
-приоритет у актуализации №19 и CONCURRENT_QUEUE_DESIGN.md.
+Стадии и восстановление уточняет CONCURRENT_QUEUE_DESIGN.md; старые синхронные
+эксплуатационные сценарии сохраняются только в исторических отчётах.
 
 ## Поток
 
-`main.py → telegram_bot.main → ProcessLock → run_bot → TelegramAccess → dispatch`
+`main.py → telegram_bot.main → ProcessLock → run_bot → runtime.selection/connect → queue_runtime.run_queue`
 
-В run_bot сохраняются прежние getUpdates, maintenance, готовность и offset в
-operator.sqlite3. Живой запуск требует telegram-handler.json с handler=v2; fallback отсутствует.
+Run_queue выполняет единственный getUpdates; maintenance и готовность остаются
+в прежнем lifecycle, общий offset — в operator.sqlite3. Живой запуск требует
+telegram-handler.json с handler=v2; fallback отсутствует.
 Явный локальный JSON `{ "handler":"v2", "database":"steel-agent-v2.sqlite3" }`
-выбирает steel_agent_v2.runtime.connect и steel_agent_v2.telegram.handle_update.
+выбирает отдельную БД v2; queue Executor вызывает SteelAgent. Возвращаемый фабрикой
+прямой telegram.handle_update используется в изолированных тестах, не production dispatch.
 Некорректный JSON/режим останавливает запуск кодом 7, без скрытого fallback.
-Файл исключён из Git; в этом этапе он не создавался. Другого polling нет.
+Файл исключён из Git; текущий deployment сохраняет существующий config. Другого polling нет.
 
 ## Компоненты
 
@@ -88,10 +95,11 @@ operator.sqlite3. Живой запуск требует telegram-handler.json �
   Контракт ограничивает операции выбранным intent; expected id/revision для edit.
 - **OpenAITransport (transport.py)**: Responses.parse с WireAgentPlan → AgentPlan,
   Responses.create с web_search. По умолчанию gpt-6-luna/high; модель и reasoning
-  из OPENAI_MODEL/OPENAI_REASONING_EFFORT, v2 не наследует принудительную legacy
-  установку high. SDK retries=0, timeout=180 секунд на вызов, store=False.
+  из OPENAI_MODEL/OPENAI_REASONING_EFFORT только при вызове фабрики без override.
+  SDK retries=0, timeout=180 секунд на вызов, store=False.
   В Telegram runtime №5 явно создаётся gpt-6-luna/high через параметры фабрики,
-  независимо от legacy env; глобальное окружение и legacy не меняются. Вызов
+  независимо от legacy env; глобальное окружение не меняется. Queue Executor
+  создаёт отдельный transport с теми же явными параметрами. Вызов
   фабрики без override (например CLI) сохраняет чтение env.
   Токенных и денежных квот нет. Метрики вызовов/времени/токенов — через diagnostics;
   в памяти хранятся последние 256 метрик. Содержимое сообщений в эти логи не пишется.
@@ -124,10 +132,11 @@ V2 active загружается только из отдельной БД. Ис
 перенесены. Промпт №3 утвердил сохранение данных и возврат контекста тому же
 Telegram ID после повторного одобрения; отдельная система отзыва сейчас не нужна.
 
-При аварии claim сохраняется. Оператор после подтверждения смерти worker и
-защищённого сохранения исходника может вызвать abandon(user,event). Это не
-автоматическая отмена и не повтор GPT. Telegram-ответ может доставиться повторно
-после обрыва; применение операции повторно исключено сохранённым event.
+При аварии действует durable recovery: неизвестный исход GPT/доставки помещается
+в unknown, автоматически не повторяется. Продолжаются лишь доказанно не начатые
+операции/части доставки. Ручное закрытие — через документированную offline CLI
+процедуру с backup, maintenance, обоими locks и точным подтверждением. Прямой
+старый abandon(user,event) не является процедурой эксплуатации очереди.
 
 ## Поиск
 
@@ -139,14 +148,18 @@ Telegram ID после повторного одобрения; отдельна
 Доступность на конкретном аккаунте и сопротивление модели prompt injection в
 последующем диалоге требуют живой проверки; абсолютной гарантии по mock нет.
 
-## Подготовлено, но не проверено вживую
+## Проверка и текущая готовность
 
-Подключение существующего worker и CLI scripts/v2_llm_check.py подготовлены.
-Windows-ветка релиза ещё не собрана на текущем production: здесь отсутствуют PR9/10.
-Живые GPT, web_search и Telegram не запускались. Текущие проверки — TESTING.md.
-Порядок будущего переключения — WINDOWS_DEPLOYMENT.md.
+Очередь развёрнута №20, патч typing №22; конкретные живые результаты и ограничения
+перечислены в PROJECT_STATE.md. Typing подтверждён кодом/офлайн, живая видимость
+ещё не зафиксирована. RequestEngine/контракты не доказывают профессиональной полноты
+характеристик. Проверки — TESTING.md, будущие отдельно разрешённые обновления —
+WINDOWS_DEPLOYMENT.md. Нужды возвращать PR9/10 или старый ИИ в текущий путь нет.
 
 ## Будущие возможности
 
-RAG, постоянная обучаемая память/база знаний, fine-tuning, Bitrix24, Outlook/почта,
-остатки, поставщики, парсеры цен и дополнительные интерфейсы заморожены.
+Документы, остатки и поставщики включены в целевой план №23, но не подключены:
+[ROADMAP.md](ROADMAP.md), [PROCUREMENT_PIPELINE.md](PROCUREMENT_PIPELINE.md).
+Bitrix24/почта — позднее. RAG, fine-tuning и постоянная обучаемая память не являются
+утверждёнными обязательными технологиями. База знаний проекта в GitHub — документация,
+а не новая runtime-память GPT. Второй AI pipeline без отдельного решения не создаётся.

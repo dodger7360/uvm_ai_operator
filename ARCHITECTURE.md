@@ -1,5 +1,12 @@
 # Architecture
 
+Историческая архитектура прежнего контура. Активная архитектура Telegram —
+[Steel Agent v2](docs/steel-agent-v2/ARCHITECTURE.md), продукт —
+[PRODUCT.md](docs/steel-agent-v2/PRODUCT.md), состояние —
+[PROJECT_STATE.md](docs/steel-agent-v2/PROJECT_STATE.md).
+Схемы AIService/InventoryService/MarketService ниже не являются действующим
+маршрутом v2 и не подтверждают подключение источников.
+
 ## 1. Общая схема
 
 Целевая архитектура проекта:
