@@ -20,6 +20,16 @@ ROOT=Path(__file__).resolve().parents[1]
 OLD='aa11380dfe1ed646fec2355b22880fdb03b0d706'
 
 
+def published_agent(repository):
+    # Produce the historical migration fixture with its matching published API,
+    # not a new agent that calls Repository.pending (absent in the old code).
+    from types import ModuleType
+    source=subprocess.check_output(['git','show',OLD+':steel_agent_v2/agent.py'],encoding='utf-8')
+    module=ModuleType('steel_agent_v2._published_agent');module.__package__='steel_agent_v2'
+    exec(compile(source,'published_agent.py','exec'),module.__dict__)
+    return module.SteelAgent(Fake(proposal()),repository)
+
+
 def digest(db):
     with db.connection() as c:return metadata(c)
 
@@ -139,7 +149,7 @@ def test_real_old_core_migrates_additively_and_reopens_without_external_manifest
     db=Database(tmp_path/'old-production-shape.sqlite3')
     old=old_repository_class()(db)
     from test_steel_agent_v2 import SOURCE
-    reply=SteelAgent(Fake(proposal()),old).handle(1,SOURCE,event_id='old-valid-turn')
+    reply=published_agent(old).handle(1,SOURCE,event_id='old-valid-turn')
     assert reply.status=='ok'
     before=digest(db)
     assert len(before['tables'])==4
@@ -150,6 +160,8 @@ def test_real_old_core_migrates_additively_and_reopens_without_external_manifest
     assert set(after['tables'])==set(before['tables'])|set(TABLES)
     for table in before['tables']:assert after['tables'][table]==before['tables'][table]
     assert q.cursor()==1234 and Repository(db).load(1).revision==1
+    shown=SteelAgent(Fake({'intent':'show_request'}),Repository(db)).handle(1,'Покажи',event_id='new-code')
+    assert shown.status=='ok' and Repository(db).load(1).revision==1
 
 
 @pytest.mark.parametrize('source',['corrupt','missing'])
@@ -232,7 +244,7 @@ def test_validation_uses_single_snapshot_during_concurrent_admission(rig,monkeyp
 def test_additive_migration_fault_rolls_back_all_ddl_without_touching_history(tmp_path,monkeypatch):
     from test_steel_agent_v2 import SOURCE
     db=Database(tmp_path/'pre-queue.sqlite3');repo=old_repository_class()(db)
-    assert SteelAgent(Fake(proposal()),repo).handle(1,SOURCE,event_id='one').status=='ok'
+    assert published_agent(repo).handle(1,SOURCE,event_id='one').status=='ok'
     before=digest(db)
     def fail(_):raise RuntimeError('injected before migration commit')
     monkeypatch.setattr(DurableQueue,'_validate_schema',staticmethod(fail))

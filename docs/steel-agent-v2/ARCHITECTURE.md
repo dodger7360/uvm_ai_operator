@@ -93,8 +93,9 @@ telegram-handler.json с handler=v2; fallback отсутствует.
 - **contracts.py**: Pydantic frozen/extra=forbid. AgentPlan, Extraction,
   SourceRecord, Item, CommercialGroup, Operation, RequestSnapshot, Reply.
   Контракт ограничивает операции выбранным intent; expected id/revision для edit.
-- **OpenAITransport (transport.py)**: Responses.parse с WireAgentPlan → AgentPlan,
-  Responses.create с web_search. По умолчанию gpt-6-luna/high; модель и reasoning
+- **OpenAITransport (transport.py)**: кандидат №28 — Responses.create со strict WireAgentPlan
+  schema, затем WireAgentPlan → AgentPlan; в production пока Responses.parse.
+  Web Search — Responses.create с web_search. По умолчанию gpt-6-luna/high; модель и reasoning
   из OPENAI_MODEL/OPENAI_REASONING_EFFORT только при вызове фабрики без override.
   SDK retries=0, timeout=180 секунд на вызов, store=False.
   В Telegram runtime №5 явно создаётся gpt-6-luna/high через параметры фабрики,
@@ -170,3 +171,23 @@ Bitrix24/почта — позднее. RAG, fine-tuning и постоянная
 Её автоматической загрузки в Telegram пока нет. Ближайшая функциональная
 интеграция первой группы должна использовать то же ядро и версионированный
 approved-пакет без второго AI pipeline, новой БД и сетевого GitHub на каждую заявку.
+
+## Кандидат №28: bounded repair и partial recovery
+
+Coordinate использует тот же SDK strict JSON Schema WireAgentPlan через
+Responses.create; завершённый final_answer (или отсутствие phase по совместимому
+контракту SDK) валидируется локально WireAgentPlan → AgentPlan → RequestEngine.
+Commentary не является планом. Это позволяет сохранить отклонённое предложение
+**только в приватной памяти ремонта**, без payload в логах. Максимум два API-вызова
+координации; refusal/incomplete/HTTP/timeout не повторяются этим механизмом.
+
+recovery.py — проверка/реконструкция частичных subplans, не второй нормализатор.
+Выбранные позиции валидируются независимо, затем вместе с unresolved по полному
+исходнику. Совмещения разных предложений в один результат нет. Новая SQLite не нужна:
+исходник/метки pending/неактивный проверенный снимок хранятся в существующем turn/Reply.
+Reply.pending_snapshot исключается из JSON при None: старые receipt остаются совместимы.
+DDL и queue schema=1 не меняются. Finish/outbox используют прежнюю одну транзакцию.
+
+Контракт AgentPlan дополнен pending_event_id для явно выбранного сохранённого
+исходника; Operation — resolve.resolution и set.replace_from. Подробная семантика
+в NORMALIZATION. Работающий production не обновлён, зависимость от formatter №27 сохранена.

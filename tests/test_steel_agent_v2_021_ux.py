@@ -126,7 +126,7 @@ def test_rejected_creation_has_no_append_claim_and_retains_active(rig,caplog):
     bad=proposal();bad['extraction']['items'][0]['characteristics']*=2
     with caplog.at_level(logging.INFO,logger='operator_diagnostics'),operation():
         reply=SteelAgent(Fake(bad,bad),repo).handle(1,SOURCE,event_id='invalid-new-request')
-    assert reply.status=='failed' and reply.diagnostics==['duplicate_characteristic:i1']
+    assert reply.status=='failed' and reply.diagnostics==['duplicate_characteristic:i1','pending_source']
     assert 'Добавление' not in reply.text and 'append' not in reply.text and 'schema:' not in reply.text
     assert repo.load(1).model_dump_json()==before
     events=[json.loads(r.message) for r in caplog.records if r.message.startswith('{')]
@@ -195,12 +195,16 @@ def test_injected_duplicate_characteristic_on_synthetic_six(rig,caplog,prior_sch
     admit(rig,1,text=source)
     with caplog.at_level(logging.INFO,logger='operator_diagnostics'):
         Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake).execute(rig.queue.claim())
-    assert Repository(rig.queue.database).load(1) is None
+    recovered=Repository(rig.queue.database).load(1)
+    assert len(recovered.items)==5 and all(i.id!='i1' for i in recovered.items)
+    assert recovered.original_text==source and any(r.kind=='unresolved' for r in recovered.records)
+    from steel_agent_v2.engine import RequestEngine
+    RequestEngine().validate(recovered)
     with rig.queue.database.connection() as c:
         message,raw=c.execute("SELECT message,reply FROM steel_v2_turn WHERE event_id='telegram:1'").fetchone()
     reply=json.loads(raw)
-    assert message==source and reply['status']=='failed'
-    assert reply['diagnostics']==['duplicate_characteristic:i1']
+    assert message==source and reply['status']=='partial'
+    assert reply['diagnostics']==['duplicate_characteristic:i1','partial_recovered']
     assert 'Добавление' not in reply['text']
     events=[json.loads(r.message) for r in caplog.records if r.message.startswith('{')]
     validation=[e for e in events if e.get('event')=='steel_v2_validation']

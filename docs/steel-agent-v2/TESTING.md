@@ -211,3 +211,24 @@ launcher с сетевым запретом, fake API, временные SQLite
 OpenAI 3.19.2, Pydantic 2.13.5; pip check проходит. Списки команд и ограничения —
 [отчёт №27](reports/027-professional-presentation.md). Качество живой нормализации
 и видимость нового текста в Telegram ещё не проверены.
+
+## №28 — P0 partial/recovery/corrections
+
+Новый tests/test_steel_agent_v2_028_recovery.py проходит через реальные agent,
+RequestEngine, Repository, Executor и установленный SDK c httpx2.MockTransport.
+Сценарии: неполная заявка, поштучная независимая валидация после двух сбоев,
+покрытие всего исходника, unknown/ambiguous/несогласованные характеристики,
+duplicate_characteristic/плохие ranges/quantity/source/группы, pending после reopen
+и за пределами history window, explicit resume, source identity, set по номеру,
+массовая замена, составной размер, resolve+set/undo, атомарный отказ, идемпотентность,
+изоляция, 200 позиций и durable части. HTTP timeout/incomplete/refusal/400 дают один
+вызов без repair/replay; commentary игнорируется как structured plan.
+
+Старые тесты оставляют прямой assert отказа RequestEngine на повреждённом плане и
+дополнительно проверяют реконструированный partial. Skip/xfail не добавлены. Миграционная
+фикстура создаётся опубликованным старым Agent+Repository, затем проверяется новым
+кодом: смешивать новый API pending с историческим Repository неверно. Новых DDL нет.
+Команды, точные результаты и пределы доказательств — [№28](reports/028-partial-normalization-and-corrections.md).
+
+Финал №28: **488 passed за 66,65 с**, отдельно **132 passed / 20 subtests за 5,02 с**;
+44 новых проверки. Live GPT не выполнялся.

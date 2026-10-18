@@ -489,8 +489,12 @@ def test_general_chat_survives_new_request_without_old_technical_context(rig):
 def test_bad_numeric_or_empty_unit_contract_fails_safe(rig,field,value):
     agent,repo,fake=rig;p=proposal();p['extraction']['items'][0][field]=value
     fake.plans=[p,p]
-    assert agent.handle(1,SOURCE,event_id='badcontract').status=='failed'
-    assert repo.load(1) is None
+    reply=agent.handle(1,SOURCE,event_id='badcontract')
+    assert reply.status=='partial' and 'partial_recovered' in reply.diagnostics
+    state=repo.load(1)
+    assert [i.id for i in state.items]==['i2']
+    assert any(r.kind=='unresolved' and 'С245' in state.original_text[r.start:r.end] for r in state.records)
+    RequestEngine().validate(state)
 
 
 def test_readonly_repair_cannot_turn_into_edit(rig):

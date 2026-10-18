@@ -4,8 +4,10 @@
 
 `AgentPlan` is the authoritative Python contract. `WireAgentPlan` inherits its
 fields and validators and adapts only the JSON Schema exposed to the SDK.
-`OpenAITransport.plan()` uses `Responses.parse(text_format=WireAgentPlan)` and
-explicitly converts the parsed object back through `AgentPlan.model_validate`.
+In candidate №28, `OpenAITransport.plan()` sends the SDK-generated strict format
+with `Responses.create`, then validates the completed final text with WireAgentPlan
+and explicitly converts it through `AgentPlan.model_validate`. The production
+version still uses the earlier `Responses.parse(text_format=WireAgentPlan)`.
 The engine continues validating coverage, evidence, identifiers, quantities,
 group membership and mutations before committing state.
 
@@ -50,3 +52,20 @@ not an implementation of OpenAI's server validator. SQLite tests exercise the
 actual engine, persistence, undo, failed validation and replay without network.
 
 No live API calls are part of these tests.
+
+## Изменение границы валидации — №28
+
+SDK Responses.parse валидирует содержимое до возврата Response; при schema-ошибке
+агент не получал предыдущий план. Теперь Responses.create получает тот же
+`type_to_text_format_param(WireAgentPlan)` установленного SDK 3.19.2; строгая схема,
+nullable decimal string, отсутствие default, модель и reasoning сохранены.
+После подтверждённого completed final message выполняются WireAgentPlan и все
+внутренние validators. ValidationError переносит исходное предложение только в
+память одного ремонта; JSON/содержимое в диагностику не пишутся. Refusal, incomplete,
+неизвестный phase и сетевые ошибки не превращаются в автоматический повтор.
+
+Дополнения pending_event_id, resolve.resolution, replace_from проверяются фактическим
+HTTP MockTransport и прежним subset_issues. Snapshot не записывается из wire-ответа
+без проверки. Общие основания: [официальная документация Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses);
+точная phase-семантика дополнительно сверена с установленным SDK, не с предположением
+о живом ответе. Платного теста API в №28 не было.

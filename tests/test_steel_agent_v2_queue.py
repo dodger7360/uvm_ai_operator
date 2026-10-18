@@ -416,9 +416,20 @@ def test_whitespace_cleanup_never_hides_referenced_or_structural_damage(rig,kind
     if kind=='duplicate_id':record['id']='r1'
     if kind=='overlap':records[0]['end']+=1
     if kind=='out_of_bounds':record['end']=len(BEAMS)+1
+    from steel_agent_v2.engine import EngineError
+    with pytest.raises(EngineError):
+        RequestEngine().create(AgentPlan.model_validate(plan).extraction,BEAMS,'strict-original')
     fake=Fake(plan,plan);admit(rig,1,text=BEAMS)
     Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake).execute(rig.queue.claim())
-    assert Repository(rig.queue.database).load(1) is None and len(fake.calls)==2
+    recovered=Repository(rig.queue.database).load(1)
+    assert recovered is not None and len(fake.calls)==2
+    RequestEngine().validate(recovered)
+    assert recovered.original_text==BEAMS
+    assert len({i.source_id for i in recovered.items})==len(recovered.items)
+    with rig.queue.database.connection() as c:
+        reply=Reply.model_validate_json(c.execute("SELECT reply FROM steel_v2_turn WHERE event_id='telegram:1'").fetchone()[0])
+    assert reply.status=='partial' and 'partial_recovered' in reply.diagnostics
+    assert any(c!='partial_recovered' for c in reply.diagnostics)
     assert not any('source_range' in p.get('text','') or 'schema:' in p.get('text','') for m,p in rig.api.calls)
 
 
@@ -433,7 +444,7 @@ def test_queued_beams_cleanup_and_followup_unsupported_add_keep_request(rig):
     executor.execute(rig.queue.claim())
     assert Repository(rig.queue.database).load(1).model_dump_json()==before
     assert fake.calls[1][0]['append_supported'] is False
-    assert fake.calls[1][0]['supported_edit_operations']==['set','regroup','undo']
+    assert fake.calls[1][0]['supported_edit_operations']==['set','regroup','undo','resolve']
 
 
 def test_cached_pre_queue_turn_does_not_mutate_call_gpt_or_resend_unknown_delivery(rig):
