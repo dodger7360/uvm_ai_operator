@@ -29,6 +29,25 @@ def decimal_text(value):
     return result
 
 
+# Exact SI mass scaling only. No geometry, density or product-specific assumptions.
+MASS_UNITS = {
+    'г': ('г', -3), 'грамм': ('г', -3), 'грамма': ('г', -3), 'граммы': ('г', -3), 'граммов': ('г', -3),
+    'кг': ('кг', 0), 'килограмм': ('кг', 0), 'килограмма': ('кг', 0),
+    'килограммы': ('кг', 0), 'килограммов': ('кг', 0),
+    'т': ('т', 3), 'тонна': ('т', 3), 'тонны': ('т', 3), 'тонну': ('т', 3), 'тонн': ('т', 3),
+}
+
+
+def convert_mass(quantity, source, target):
+    require(quantity is not None and source is not None, 'mass_conversion_requires_known_quantity_and_unit')
+    src=MASS_UNITS.get(source.strip().casefold())
+    dst=MASS_UNITS.get(target.strip().casefold()) if target else None
+    require(src is not None and dst is not None, 'unsupported_mass_conversion')
+    # Construct a Decimal tuple: no context-dependent multiplication/rounding.
+    sign,digits,exponent=quantity.as_tuple()
+    return Decimal((sign,digits,exponent+src[1]-dst[1])),dst[0]
+
+
 def totals(items):
     amounts, unknown = {}, []
     for item in items:
@@ -138,6 +157,24 @@ class RequestEngine:
         touched = set()
         regrouped = False
         for op in operations:
+            if op.kind == 'convert_mass':
+                require(op.target_id in by_id and op.field is None and op.name is None
+                        and not op.groups and op.replace_from is None and op.resolution is None,
+                        'invalid_mass_conversion')
+                require(bool(op.evidence) and op.evidence in message, 'edit_evidence_not_in_message')
+                target=MASS_UNITS.get(op.value.strip().casefold()) if op.value else None
+                evidence=MASS_UNITS.get(op.evidence.strip().casefold())
+                require(target is not None and evidence==target, 'mass_conversion_unit_evidence')
+                keys={(op.target_id,'quantity',None),(op.target_id,'unit',None)}
+                require(not touched.intersection(keys), 'contradictory_duplicate_patch')
+                touched.update(keys)
+                item=by_id[op.target_id]
+                quantity,unit=convert_mass(item.quantity,item.unit,op.value)
+                by_id[item.id]=item.model_copy(update={'quantity':quantity,'unit':unit})
+                for field,value in [('quantity',quantity),('unit',unit)]:
+                    changed.changes.append(Change(item_id=item.id,field=field,
+                        before=str(getattr(item,field)),after=str(value),evidence=op.evidence,message=message))
+                continue
             if op.kind == 'resolve':
                 require(op.field is None and op.name is None and op.value is None and op.evidence is None and not op.groups,
                         'unexpected_resolve_fields')

@@ -50,8 +50,27 @@ class Extraction(ContractModel):
     questions: list[str] = Field(default_factory=list)
 
 
+class Clarification(ContractModel):
+    """A proposed value and its candidate addressees, not authorization to edit."""
+    target_ids: list[NonEmpty] = Field(min_length=1)
+    field: Literal['quantity', 'unit', 'characteristic']
+    name: str | None = None
+    value: NonEmpty
+    evidence: NonEmpty
+    alternatives: list[NonEmpty] = Field(min_length=1)
+
+
+class PendingClarification(ContractModel):
+    event_id: str
+    request_id: str
+    revision: int
+    proposal: Clarification
+    source_message: str
+    question: str
+
+
 class Operation(ContractModel):
-    kind: Literal['set', 'regroup', 'undo', 'resolve']
+    kind: Literal['set', 'regroup', 'undo', 'resolve', 'convert_mass']
     target_id: str | None = None
     field: Literal['quantity', 'unit', 'label', 'characteristic'] | None = None
     name: str | None = None
@@ -83,9 +102,15 @@ class AgentPlan(ContractModel):
                   'forward', 'custom', 'search_status'] = 'normalized'
     search_query: str | None = None
     remaining_questions: list[str] | None = None
+    clarification: Clarification | None = None
+    clarification_event_id: str | None = None
 
     @model_validator(mode='after')
     def only_intended_mutation(self):
+        if self.clarification is not None and self.intent != 'clarify':
+            raise ValueError('clarification proposal belongs only to clarify')
+        if self.clarification_event_id is not None and self.intent != 'edit_request':
+            raise ValueError('clarification reference belongs only to edit_request')
         if self.pending_event_id is not None and self.intent != 'create_request':
             raise ValueError('pending source belongs only to explicit create_request recovery')
         if self.view in {'forward','custom','search_status'}:
@@ -150,3 +175,4 @@ class Reply(ContractModel):
     diagnostics: list[str] = Field(default_factory=list)
     calls: int = 0
     pending_snapshot: RequestSnapshot | None = Field(default=None, exclude_if=lambda value: value is None)
+    clarification: PendingClarification | None = Field(default=None, exclude_if=lambda value: value is None)
