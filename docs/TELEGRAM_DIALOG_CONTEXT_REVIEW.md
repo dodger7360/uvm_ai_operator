@@ -1,3 +1,8 @@
+> ИСТОРИЧЕСКИЙ ДОКУМЕНТ ПРЕЖНЕГО КОНТУРА — пометка №24.
+> Не задаёт активные правила или запуск Steel Agent v2. Действующий преемник:
+> [PROJECT_STATE.md](steel-agent-v2/PROJECT_STATE.md); [приоритеты и конфликты](steel-agent-v2/DOCUMENTATION_MAP.md).
+> Исходный текст ниже сохранён как свидетельство; старые процедуры не выполнять.
+
 # Telegram dialogue context: review report
 
 Base: `4dba1730bbb64928e74248c8be83fa9a32c34508`.

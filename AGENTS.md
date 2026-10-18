@@ -1,5 +1,10 @@
 # Instructions for this repository
 
+Start with [DOCUMENTATION_MAP.md](docs/steel-agent-v2/DOCUMENTATION_MAP.md): it
+classifies every tracked Markdown source and defines the reading order. Current
+product requirements live in docs/steel-agent-v2, not in the newest-looking
+filename or an origin/main document. Historical reports are evidence, not policy.
+
 Before every new Codex task, read [PRODUCT.md](docs/steel-agent-v2/PRODUCT.md),
 [DECISIONS.md](docs/steel-agent-v2/DECISIONS.md),
 [PROJECT_STATE.md](docs/steel-agent-v2/PROJECT_STATE.md), and the related domain

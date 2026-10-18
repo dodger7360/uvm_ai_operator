@@ -1,3 +1,8 @@
+> СПРАВОЧНЫЙ МАТЕРИАЛ ПРЕЖНЕГО КОНТУРА — пометка №24.
+> Не задаёт активные правила или запуск Steel Agent v2. Действующий преемник:
+> [PROCUREMENT_PIPELINE.md](steel-agent-v2/PROCUREMENT_PIPELINE.md); [приоритеты и конфликты](steel-agent-v2/DOCUMENTATION_MAP.md).
+> Исходный текст ниже сохранён как свидетельство; старые процедуры не выполнять.
+
 # Metal Reference
 
 ## Назначение

@@ -1,3 +1,8 @@
+> ИСТОРИЧЕСКИЙ ДОКУМЕНТ ПРЕЖНЕГО КОНТУРА — пометка №24.
+> Не задаёт активные правила или запуск Steel Agent v2. Действующий преемник:
+> [WINDOWS_DEPLOYMENT.md](steel-agent-v2/WINDOWS_DEPLOYMENT.md); [приоритеты и конфликты](steel-agent-v2/DOCUMENTATION_MAP.md).
+> Исходный текст ниже сохранён как свидетельство; старые процедуры не выполнять.
+
 # Windows deployment and recovery
 
 Local operational changes on top of `8e39083`; not automatically committed or pushed.
