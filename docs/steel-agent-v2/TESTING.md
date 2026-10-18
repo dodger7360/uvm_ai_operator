@@ -1,3 +1,17 @@
+## Патч №21 (не развёрнут)
+
+Новые проверки: tests/test_steel_agent_v2_021_ux.py и tests/test_typing.py.
+Активный queue route теперь оборачивает GPT обработку TypingIndicator;
+fake API обязаны отличать ephemeral sendChatAction от durable sendMessage.
+Проверяются независимость пользователей, повторы индикатора, остановка/ошибка,
+неизменность очереди и нормальный отказ без ложного append. Explanation repetition
+пока диагностируется, формат не меняется. По решению владельца используются исключительно вымышленные строки из
+steel_v2_021_synthetic_angles_channels.txt. Внедрённый в fake GPT дубликат grade
+воспроизводит duplicate_characteristic:i1; это проверка строгого отказа Python,
+не воспроизведение самостоятельного поведения живой модели. Положительный случай
+сохраняет шесть позиций и Decimal 0,240726 т. Production тексты не копируются.
+Полные результаты и границы доказательств: reports/021-live-test-and-typing.md.
+
 Финал №19: **406 passed** актуального контура; отдельно **132 passed и 20 subtests
 passed** исторических регрессий. Ни skip, ни xfail. Команды запуска — offline
 launcher с явным списком файлов из reports/019-forward-only-deployment.md;

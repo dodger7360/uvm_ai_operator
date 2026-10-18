@@ -137,9 +137,13 @@ def test_rejected_beams_followup_add_can_reproduce_schema_value_error(tmp_path):
     send(3, 'А балки?')
     send(4, 'Добавь')
     assert 'schema:' not in api.call.call_args.kwargs['text']
-    assert 'не поддерживается' in api.call.call_args.kwargs['text']
+    # Two invalid plans do not prove an append intent; no unrelated fallback claim.
+    assert 'не поддерживается' not in api.call.call_args.kwargs['text']
     assert fake.calls[5][1]['diagnostics']==['schema::value_error']
     assert any(row['content'] == BEAMS for row in fake.calls[4][0]['history'])
+    assert repo.load(1).model_dump_json() == before
+    send(5, 'Добавь эти позиции')
+    assert 'не поддерживается' in api.call.call_args.kwargs['text']
     assert repo.load(1).model_dump_json() == before
     # Existing clarify intent CAN express the safe limitation, without adding an operation.
     send(5, 'Как безопасно продолжить?')

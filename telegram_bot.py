@@ -75,8 +75,9 @@ class TelegramAPI:
 
 class TypingIndicator:
     """Keep Telegram's short-lived typing action active during processing."""
-    def __init__(self, api, chat_id, interval=4):
+    def __init__(self, api, chat_id, interval=4, stopping=lambda:False):
         self.api, self.chat_id, self.interval = api, chat_id, interval
+        self.stopping=stopping
         self.stopped=threading.Event()
         self.thread=None
 
@@ -91,11 +92,14 @@ class TypingIndicator:
             emit('typing_action', duration_ms=round((time.monotonic()-started)*1000,3))
 
     def _refresh(self):
+        if self.stopped.is_set() or self.stopping():return
         self._pulse()
         deadline=time.monotonic()+self.interval
-        while not self.stopped.wait(max(0,deadline-time.monotonic())):
-            self._pulse()
-            deadline+=self.interval
+        while not self.stopped.wait(min(0.1,max(0,deadline-time.monotonic()))):
+            if self.stopping():return
+            if time.monotonic()>=deadline:
+                self._pulse()
+                deadline=time.monotonic()+self.interval
 
     def __enter__(self):
         self.thread=threading.Thread(target=self._refresh,daemon=True,name='telegram-typing')

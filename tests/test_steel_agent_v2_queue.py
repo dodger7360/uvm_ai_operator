@@ -26,9 +26,13 @@ def update(number,user=1,text=SOURCE):
 
 
 class API:
-    def __init__(self):self.calls=[];self.lock=Lock();self.fail=False
+    def __init__(self):self.calls=[];self.typing=[];self.lock=Lock();self.fail=False
     def call(self,method,**payload):
         with self.lock:
+            if method=='sendChatAction':
+                self.typing.append(payload)
+                if self.fail:raise TimeoutError('test typing unavailable')
+                return True
             self.calls.append((method,payload))
             number=len(self.calls)
         if self.fail:raise TimeoutError('test network uncertainty')
@@ -685,6 +689,8 @@ def test_actual_runtime_has_one_poller_separate_delivery_clients_and_durable_off
     class WorkerAPI:
         def call(self,method,**payload):
             assert method!='getUpdates'
+            if method=='sendChatAction':return True  # Ephemeral action is not a delivery receipt.
+            assert method=='sendMessage'
             with lock:
                 receipts.append(payload['chat_id'])
                 number=len(receipts)

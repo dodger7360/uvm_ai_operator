@@ -269,6 +269,8 @@ def test_revoke_after_send_marker_cannot_cancel_already_started_external_send(ri
     class RevokeAtNetwork:
         calls = 0
         def call(self, method, **kw):
+            if method=='sendChatAction':return True
+            assert method=='sendMessage'
             self.calls += 1
             assert rig.queue.job(1)['state'] == 'delivery_started'
             rig.permissions.transition(1, 2, 'revoke', rig.permissions.get(2)['revision'])

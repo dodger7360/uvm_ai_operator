@@ -13,6 +13,7 @@ from database import Database
 from diagnostics import operation, emit
 from telegram_access import ADMIN_COMMANDS
 from windows_runtime import maintenance_requested, wait_or_maintenance
+from telegram_bot import TypingIndicator
 from .agent import SteelAgent
 from .repository import Repository
 from .queue import DurableQueue, QueueConfig, Backpressure, QueueConflict, minimal_update
@@ -103,7 +104,10 @@ class Executor:
                     repo=Repository(self.queue.database,authorize=self.access.allowed,
                         commit_guard=lambda _:guard(),finish_hook=self.queue.finish_hook(number))
                     service=SteelAgent(AttemptTransport(delegate,self.queue,number,api_guard=guard),repo)
-                    reply=service.handle(user,text,event_id='telegram:'+str(number))
+                    # Ephemeral chat action, not a durable delivery or transaction.
+                    # Starts only after claim/permission checks, never while queued.
+                    with TypingIndicator(api,user,stopping=self.stopping):
+                        reply=service.handle(user,text,event_id='telegram:'+str(number))
                     if trace.result=='ok' and reply.status!='ok':trace.result=reply.status
                     if not self.queue.job(number)['committed']:
                         # A previously completed pre-queue turn can be replayed without a new finish.

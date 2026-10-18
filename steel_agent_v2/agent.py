@@ -76,6 +76,7 @@ class SteelAgent:
             for attempt in range(2):
                 # A rejected proposal must never leak into a readonly repair.
                 updated=None
+                candidate=None;plan=None;validation_stage='structured_response'
                 try:
                     calls+=1
                     raw=self.transport.plan(context,diagnostics=notes,previous=previous)
@@ -85,7 +86,9 @@ class SteelAgent:
                         intent=candidate.get('intent')
                         if intent in {'create_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}:
                             first_intent=intent
+                    validation_stage='plan_contract'
                     plan=AgentPlan.model_validate_json(raw) if isinstance(raw,str) else AgentPlan.model_validate(raw)
+                    validation_stage='request_validation'
                     if plan.intent in {'create_request','edit_request'} and first_intent != plan.intent:
                         raise EngineError('repair_cannot_change_to_different_mutation_intent')
                     if plan.intent=='create_request':
@@ -134,11 +137,24 @@ class SteelAgent:
                     break
                 except (ValidationError,EngineError,json.JSONDecodeError,ValueError) as error:
                     notes=validation_notes(error)
-                    emit('steel_v2_validation',attempt=attempt+1,reason=type(error).__name__,issue_count=len(notes))
+                    trace=CURRENT.get()
+                    safe_intents={'create_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}
+                    intent=candidate.get('intent') if isinstance(candidate,dict) else None
+                    extraction=candidate.get('extraction') if isinstance(candidate,dict) else None
+                    items=extraction.get('items') if isinstance(extraction,dict) else None
+                    # Strict allowlist: no model IDs, characteristic names, input or error text.
+                    known={'duplicate_characteristic','repair_cannot_change_to_different_mutation_intent',
+                           'groups_must_partition_all_items_once'}
+                    codes=[n.split(':',1)[0] if n.split(':',1)[0] in known else
+                           'schema_validation' if n.startswith('schema:') else 'request_validation' for n in notes[:10]]
+                    emit('steel_v2_validation',operation=trace.operation_id if trace else None,
+                         attempt=attempt+1,reason=type(error).__name__,issue_count=len(notes),
+                         intent=intent if intent in safe_intents else None,
+                         first_intent=first_intent,extracted_count=len(items) if isinstance(items,list) else None,
+                         validation_stage=validation_stage,diagnostic_codes=codes)
                     if attempt:
                         reply=Reply(text='Ответ модели не прошёл проверку структуры или полноты. Активная заявка не изменена. '
-                            'Исходное сообщение сохранено в истории. Уточните действие. '
-                            'Добавление новых позиций к сохранённой заявке пока не поддерживается.',
+                            'Исходное сообщение сохранено в истории. Уточните действие.',
                             status='failed',intent='clarify',request_id=current.id if current else None,
                             revision=current.revision if current else None,diagnostics=notes,calls=calls)
                         updated=None
