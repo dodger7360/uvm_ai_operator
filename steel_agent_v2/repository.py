@@ -115,6 +115,16 @@ class Repository:
                         'verified_partial':reply.pending_snapshot.model_dump(mode='json') if reply.pending_snapshot else None}
         return None
 
+    def clarification(self, user, current):
+        """Only the immediate, revision-bound continuation; never cross requests/users."""
+        self._allowed(user)
+        if current is None:return None
+        with self.database.connection() as c:
+            row=c.execute('SELECT reply FROM steel_v2_turn WHERE user_id=? ORDER BY sequence DESC LIMIT 1',
+                          (user,)).fetchone()
+        value=Reply.model_validate_json(row[0]).clarification if row else None
+        return value if value and (value.request_id,value.revision)==(current.id,current.revision) else None
+
     def last_search(self, user):
         """Bounded technical summary from existing history, never model speculation."""
         self._allowed(user)

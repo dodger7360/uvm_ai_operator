@@ -1,5 +1,15 @@
 # Responses Structured Outputs boundary
 
+## Candidate №31
+
+AgentPlan adds nullable clarification and clarification_event_id; Operation.kind
+adds convert_mass without a model-computed numeric result. The new nested object
+uses the same closed/required/nullable SDK profile. PendingClarification is a
+stored Reply field, not a wire operation or new SQLite schema. Old Reply receipts
+omit clarification when null, retaining byte compatibility. Real installed SDK
+HTTP mock tests inspect the complete strict schema and multi-turn parsing.
+The original literal-evidence set validator remains unchanged.
+
 ## Internal contract and API schema
 
 `AgentPlan` is the authoritative Python contract. `WireAgentPlan` inherits its

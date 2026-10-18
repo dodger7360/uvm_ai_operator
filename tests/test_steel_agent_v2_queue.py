@@ -444,7 +444,7 @@ def test_queued_beams_cleanup_and_followup_unsupported_add_keep_request(rig):
     executor.execute(rig.queue.claim())
     assert Repository(rig.queue.database).load(1).model_dump_json()==before
     assert fake.calls[1][0]['append_supported'] is False
-    assert fake.calls[1][0]['supported_edit_operations']==['set','regroup','undo','resolve']
+    assert fake.calls[1][0]['supported_edit_operations']==['set','regroup','undo','resolve','convert_mass']
 
 
 def test_cached_pre_queue_turn_does_not_mutate_call_gpt_or_resend_unknown_delivery(rig):
