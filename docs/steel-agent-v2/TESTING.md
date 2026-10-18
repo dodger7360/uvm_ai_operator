@@ -186,3 +186,12 @@ SDK и подменённый HTTP. По [модели Luna](https://developers.
 Схема [structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 и [web_search/citations](https://developers.openai.com/api/docs/guides/tools-web-search)
 сверены с реализацией. Это не доказывает доступность инструмента конкретному аккаунту.
+
+## Документационный №26
+
+Проверяются ссылки, только Markdown в diff, статусы/источники/границы утверждений.
+Новых предметных CASE и Python-изменений нет: pytest и платные API не запускаются;
+исторические числа выше не выдаются за новый прогон. Владелец в задании №26
+подтвердил typing в Telegram. Будущий пакет знаний проверять на утверждённых и
+пограничных кейсах, с сохранением полноты/Decimal/истории; успех Python-тестов
+не заменяет предметной приёмки. [Порядок обучения](knowledge/README.md).
