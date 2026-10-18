@@ -62,10 +62,9 @@ def render(request, view='normalized'):
     if request is None:return 'Активной заявки нет.'
     if view=='original':return 'Исходный текст (без изменений):\n'+request.original_text
     if view=='totals':return totals_text(request.items)
-    forward=view=='forward'
     detailed=view=='explanation'
     partial=RequestEngine.partial(request)
-    lines=[] if forward else [f'Заявка, версия {request.revision}.']
+    lines=[f'Заявка, версия {request.revision}.'] if detailed else []
     if partial:lines.append('Заявка требует уточнения.')
     city=_cities(request)
     by_id={item.id:item for item in request.items}
@@ -73,10 +72,10 @@ def render(request, view='normalized'):
     positions={item.id:n for n,item in enumerate(request.items,1)}
     for n,group in enumerate(request.groups,1):
         members=[by_id[key] for key in group.item_ids]
-        if len(members)==1:
-            item=members[0]
-            prefix='' if forward and len(request.items)==1 else f'{positions[item.id]}. '
-            lines.append(prefix+_item_text(item,originals[item.id],city))
+        if not detailed or len(members)==1:
+            for item in members:
+                prefix='' if not detailed and len(request.items)==1 else f'{positions[item.id]}. '
+                lines.append(prefix+_item_text(item,originals[item.id],city))
         else:
             lines.append(f'Группа {n}: '+group.label)
             for item in members:
@@ -94,5 +93,4 @@ def render(request, view='normalized'):
         elif detailed and record.kind!='product':
             lines.append('Дополнительный исходный текст: '+request.original_text[record.start:record.end])
     if request.questions:lines.append('\nУточните: '+'; '.join(_humanize(q,request) for q in request.questions))
-    elif not forward and not partial:lines.append('Не требуется уточнений.')
     return '\n'.join(lines)
