@@ -5,6 +5,7 @@ from .contracts import AgentPlan, Reply
 from .engine import RequestEngine, EngineError, totals
 from .repository import Busy
 from .presentation import render
+from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
 
 
@@ -61,18 +62,25 @@ class SteelAgent:
         if cached is not None:return cached
         calls=0
         try:
-            context={'message':message,'source_lines':source_lines(message),
+            pending=self.repository.pending(user_id)
+            if pending:pending['source_lines']=source_lines(pending['source_text'])
+            context={'pending_request':pending,'unresolved_fragments':[
+                {'number':n,'id':r.id,'start':r.start,'end':r.end,'text':current.original_text[r.start:r.end]}
+                for n,r in enumerate((r for r in current.records if r.kind=='unresolved'),1)] if current else [],
+                'message':message,'source_lines':source_lines(message),
                 'active_request': current.model_dump(mode='json',exclude={'undo_stack','changes','originals'}) if current else None,
                 'recent_changes':[c.model_dump() for c in current.changes[-10:]] if current else [],
                 'can_undo': bool(current and current.undo_stack),
                 'display_numbers':{str(n):item.id for n,item in enumerate(current.items,1)} if current else {},
                 'totals':totals(current.items) if current else ({},[]),
+                'totals_are_partial':bool(current and self.engine.partial(current)),
                 'history':self.repository.history(user_id,current.id if current else None),
                 'last_search':self.repository.last_search(user_id),
                 'previous_operation':self.repository.last_operation(user_id),
-                'supported_edit_operations':['set','regroup','undo'],'append_supported':False}
+                'supported_edit_operations':['set','regroup','undo','resolve'],'append_supported':False}
             context['last_search_explanation']=search_status_text(context['last_search'])
-            notes=[];previous=None;updated=None;reply=None;first_intent=None
+            notes=[];previous=None;updated=None;reply=None;first_intent=None;proposals=[];source_pending=None
+            unselected=object();chosen_source=unselected
             for attempt in range(2):
                 # A rejected proposal must never leak into a readonly repair.
                 updated=None
@@ -92,7 +100,16 @@ class SteelAgent:
                     if plan.intent in {'create_request','edit_request'} and first_intent != plan.intent:
                         raise EngineError('repair_cannot_change_to_different_mutation_intent')
                     if plan.intent=='create_request':
-                        updated=self.engine.create(plan.extraction,message,f'{user_id}:{event}')
+                        if chosen_source is unselected:chosen_source=plan.pending_event_id
+                        if chosen_source!=plan.pending_event_id:
+                            raise EngineError('repair_cannot_change_source')
+                        source=message
+                        if plan.pending_event_id is not None:
+                            if not pending or pending['event_id']!=plan.pending_event_id:
+                                raise EngineError('pending_source_changed_or_unavailable')
+                            source=pending['source_text']
+                            source_pending=plan.pending_event_id
+                        updated=self.engine.create(plan.extraction,source,f'{user_id}:{event}')
                         text=render(updated)
                     elif plan.intent=='edit_request':
                         updated=self.engine.edit(current,plan,message,
@@ -133,10 +150,33 @@ class SteelAgent:
                     request_view=plan.intent=='show_request' or plan.intent=='answer_question' and plan.view in {'original','totals','explanation','forward','custom'}
                     partial=state and self.engine.partial(state) and (updated is not None or request_view)
                     reply=Reply(text=text,status='partial' if partial else 'ok',
-                        intent=plan.intent,request_id=state.id if state else None,revision=state.revision if state else None,calls=calls)
+                        intent=plan.intent,request_id=state.id if state else None,revision=state.revision if state else None,calls=calls,
+                        diagnostics=['pending_resolved:'+source_pending] if updated is not None and source_pending else [])
                     break
                 except (ValidationError,EngineError,json.JSONDecodeError,ValueError) as error:
+                    # A completed HTTP response may have failed wire validation before
+                    # transport.plan returned. Preserve it only in private repair memory.
+                    raw_proposal=getattr(error,'proposal',None)
+                    if raw_proposal is not None:
+                        previous=raw_proposal
+                        try:candidate=json.loads(raw_proposal)
+                        except (ValueError,TypeError):candidate=None
+                    if isinstance(candidate,dict):
+                        if first_intent is None and candidate.get('intent') in {'create_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}:
+                            first_intent=candidate['intent']
+                        if candidate.get('intent')=='create_request' and not candidate.get('operations'):
+                            key=candidate.get('pending_event_id')
+                            if chosen_source is unselected:chosen_source=key
+                            same_source=key==chosen_source
+                            if key is None and same_source:proposals.append((candidate,message))
+                            elif same_source and pending and key==pending['event_id']:
+                                proposals.append((candidate,pending['source_text']))
+                                source_pending=key
                     notes=validation_notes(error)
+                    # Actionable PRIVATE repair details; diagnostics emitted below
+                    # still use only the allowlisted codes, never error messages.
+                    context['validation_repair']=(error.errors(include_input=False,include_context=False)
+                        if isinstance(error,ValidationError) else [{'type':'request_validation','msg':str(error)}])
                     trace=CURRENT.get()
                     safe_intents={'create_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}
                     intent=candidate.get('intent') if isinstance(candidate,dict) else None
@@ -158,6 +198,46 @@ class SteelAgent:
                             status='failed',intent='clarify',request_id=current.id if current else None,
                             revision=current.revision if current else None,diagnostics=notes,calls=calls)
                         updated=None
+            if updated is None and notes and first_intent in {None,'create_request'}:
+                # Only known, completed validation failures reach here. Never applied
+                # after a network/storage exception or an uncertain external outcome.
+                # If both responses are unreadable, the current short continuation
+                # cannot silently supersede an already saved original.
+                if pending and first_intent is None and chosen_source is unselected:
+                    source_pending=pending['event_id']
+                recovered=None
+                for proposal,source in proposals:
+                    candidate_state=partial_from_proposal(proposal,source,f'{user_id}:{event}')
+                    if candidate_state and (recovered is None or len(candidate_state.items)>=len(recovered.items)):
+                        recovered=candidate_state
+                invalid_reference=chosen_source is not unselected and chosen_source is not None and (
+                    not pending or chosen_source!=pending['event_id'])
+                if invalid_reference:
+                    reply=Reply(text='Не удалось однозначно выбрать сохранённый исходник. Уточните, какую заявку продолжить. '
+                        'Действующая заявка не изменена.',status='failed',intent='clarify',
+                        request_id=current.id if current else None,revision=current.revision if current else None,
+                        diagnostics=notes,calls=calls)
+                elif recovered is not None and current is None:
+                    updated=recovered
+                    reply=Reply(text=render(updated),status='partial',intent='create_request',
+                        request_id=updated.id,revision=updated.revision,calls=calls,
+                        diagnostics=notes+['partial_recovered']+(['pending_resolved:'+source_pending] if source_pending else []))
+                else:
+                    source=pending['source_text'] if source_pending and pending else message
+                    prefix='Исходник сохранён и ожидает разбора. '
+                    if current:prefix+='Действующая заявка не изменена. '
+                    if recovered is not None:
+                        text=prefix+'\n\nПроверенная часть новой заявки (ещё не активна):\n'+render(recovered)
+                    else:
+                        text=prefix+('\n\nДействующая заявка:\n'+render(current) if current else '')+'\n\nОжидает разбора:\n'+source
+                    text+='\n\nМожно попросить продолжить разбор сохранённого исходника; отправлять его целиком повторно не нужно.'
+                    reply=Reply(text=text,status='failed',intent='clarify',request_id=current.id if current else None,
+                        revision=current.revision if current else None,calls=calls,
+                        diagnostics=notes+['pending_source'],pending_snapshot=recovered)
+                    # A continuation of the same pending source keeps its original
+                    # durable turn as the source; don't relabel this short message.
+                    if source_pending:
+                        reply=reply.model_copy(update={'diagnostics':notes})
             return self.repository.finish(user_id,event,sequence,message,reply,updated)
         except PermissionError:
             raise

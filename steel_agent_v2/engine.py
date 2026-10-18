@@ -1,5 +1,6 @@
 """Pure validation and transactional proposal building; GPT owns interpretation."""
 from decimal import Decimal, InvalidOperation
+import re
 from uuid import uuid5, NAMESPACE_URL
 from .contracts import RequestSnapshot, Characteristic, Change
 from quantity import normalize_quantity, sum_quantities
@@ -137,6 +138,27 @@ class RequestEngine:
         touched = set()
         regrouped = False
         for op in operations:
+            if op.kind == 'resolve':
+                require(op.field is None and op.name is None and op.value is None and op.evidence is None and not op.groups,
+                        'unexpected_resolve_fields')
+                old = next((r for r in changed.records if r.id == op.target_id and r.kind == 'unresolved'), None)
+                require(old is not None, 'resolve_requires_existing_unresolved')
+                ex = op.resolution
+                require(bool(ex.items) and all(old.start <= r.start < r.end <= old.end for r in ex.records),
+                        'resolution_outside_existing_fragment')
+                # Original facts come ONLY from the previously stored source. A set
+                # operation may subsequently apply an explicit current-message edit.
+                changed = changed.model_copy(update={
+                    'records': [r for r in changed.records if r.id != old.id] + ex.records,
+                    'originals': changed.originals + ex.items,
+                    'items': changed.items + ex.items,
+                    'groups': changed.groups + ex.groups,
+                    'questions': list(dict.fromkeys(changed.questions + ex.questions))})
+                unique([i.id for i in changed.items], 'duplicate_item_id')
+                by_id.update({i.id: i for i in ex.items})
+                changed.changes.append(Change(item_id=old.id, field='resolve', before='unresolved',
+                    after='resolved', evidence=current.original_text[old.start:old.end], message=message))
+                continue
             if op.kind == 'regroup':
                 require(not regrouped and op.target_id is None and op.field is None and op.name is None
                         and op.value is None and op.evidence is None and bool(op.groups), 'invalid_regroup')
@@ -159,6 +181,13 @@ class RequestEngine:
             else:
                 value = op.value
                 require(value is None or bool(value.strip()) and value in op.evidence, 'new_value_missing_from_edit_evidence')
+            if op.replace_from is not None:
+                require(bool(op.replace_from.strip()) and before is not None and value is not None,
+                        'literal_replacement_requires_existing_value')
+                pattern = r'(?<!\w)' + re.escape(op.replace_from) + r'(?!\w)'
+                require(len(re.findall(pattern, before)) == 1, 'literal_replacement_ambiguous_or_missing')
+                replacement = value
+                value = re.sub(pattern, lambda _: replacement, before)
             if op.field == 'characteristic':
                 updated = [c.model_copy(update={'value': value}) if c.name == op.name else c for c in item.characteristics]
                 if not any(c.name == op.name for c in updated):
@@ -171,9 +200,9 @@ class RequestEngine:
             changed.changes.append(Change(item_id=item.id, field=op.field + (':' + op.name if op.name else ''),
                 before=str(before) if before is not None else None, after=str(value) if value is not None else None,
                 evidence=op.evidence, message=message))
-        changed = changed.model_copy(update={'items': [by_id[i.id] for i in current.items],
+        changed = changed.model_copy(update={'items': [by_id[i.id] for i in changed.items],
             'revision': current.revision+1, 'undo_stack': current.undo_stack + [current.revision],
-            'questions': plan.remaining_questions if plan.remaining_questions is not None else current.questions})
+            'questions': plan.remaining_questions if plan.remaining_questions is not None else changed.questions})
         return self.validate(changed)
 
     @staticmethod

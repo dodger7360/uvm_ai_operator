@@ -51,13 +51,23 @@ class Extraction(ContractModel):
 
 
 class Operation(ContractModel):
-    kind: Literal['set', 'regroup', 'undo']
+    kind: Literal['set', 'regroup', 'undo', 'resolve']
     target_id: str | None = None
     field: Literal['quantity', 'unit', 'label', 'characteristic'] | None = None
     name: str | None = None
     value: str | None = None
     evidence: str | None = None
     groups: list[CommercialGroup] = Field(default_factory=list)
+    resolution: Extraction | None = None
+    replace_from: str | None = None
+
+    @model_validator(mode='after')
+    def resolution_only(self):
+        if self.replace_from is not None and (self.kind != 'set' or self.field != 'characteristic'):
+            raise ValueError('literal replacement belongs only to a characteristic set')
+        if (self.kind == 'resolve') != (self.resolution is not None):
+            raise ValueError('resolve requires resolution; other operations cannot carry it')
+        return self
 
 
 class AgentPlan(ContractModel):
@@ -66,6 +76,7 @@ class AgentPlan(ContractModel):
     expected_request_id: str | None = None
     expected_revision: int | None = None
     extraction: Extraction | None = None
+    pending_event_id: str | None = None
     operations: list[Operation] = Field(default_factory=list)
     answer: str = ''
     view: Literal['normalized', 'original', 'totals', 'explanation',
@@ -75,6 +86,8 @@ class AgentPlan(ContractModel):
 
     @model_validator(mode='after')
     def only_intended_mutation(self):
+        if self.pending_event_id is not None and self.intent != 'create_request':
+            raise ValueError('pending source belongs only to explicit create_request recovery')
         if self.view in {'forward','custom','search_status'}:
             if self.intent not in {'show_request','answer_question'}:
                 raise ValueError('readonly presentation requires show_request or answer_question')
@@ -136,3 +149,4 @@ class Reply(ContractModel):
     sources: list[SourceLink] = Field(default_factory=list)
     diagnostics: list[str] = Field(default_factory=list)
     calls: int = 0
+    pending_snapshot: RequestSnapshot | None = Field(default=None, exclude_if=lambda value: value is None)

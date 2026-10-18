@@ -95,6 +95,26 @@ class Repository:
                              {'role':'assistant','content':Reply.model_validate_json(row['reply']).text}])
         return bounded_history(messages)
 
+    def pending(self, user):
+        """Latest unresolved, KNOWN completed validation failure, in existing history.
+
+        It is not active state and does not authorize replacement or API replay.
+        Large originals are read directly, independently of bounded chat history.
+        """
+        self._allowed(user)
+        with self.database.connection() as c:
+            rows=c.execute("SELECT event_id,message,reply FROM steel_v2_turn WHERE user_id=? "
+                "AND EXISTS(SELECT 1 FROM json_each(steel_v2_turn.reply,'$.diagnostics') "
+                "WHERE value='pending_source' OR value LIKE 'pending_resolved:%') ORDER BY sequence DESC", (user,)).fetchall()
+        resolved=set()
+        for row in rows:
+            reply=Reply.model_validate_json(row['reply'])
+            resolved.update(code[len('pending_resolved:'):] for code in reply.diagnostics if code.startswith('pending_resolved:'))
+            if 'pending_source' in reply.diagnostics and row['event_id'] not in resolved:
+                return {'event_id':row['event_id'], 'source_text':row['message'],
+                        'verified_partial':reply.pending_snapshot.model_dump(mode='json') if reply.pending_snapshot else None}
+        return None
+
     def last_search(self, user):
         """Bounded technical summary from existing history, never model speculation."""
         self._allowed(user)

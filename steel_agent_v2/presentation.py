@@ -29,14 +29,25 @@ def _cities(request):
     return next(iter(flat)) if len(flat)==1 and all(values) else None
 
 
-def _item_text(item, original, city):
+def _item_text(item, original, city, changes=()):
     label=item.label
+    # Refresh a redundant label token from explicit, evidence-checked edits only.
+    # No product grammar, guessed dimensions or mutation of the saved snapshot.
+    for change in changes:
+        if change.item_id!=item.id or not change.field.startswith('characteristic:') or not change.before or not change.after:
+            continue
+        name=change.field.split(':',1)[1]
+        shared=any(c.name!=name and c.value==change.before for c in item.characteristics)
+        pattern=r'(?<!\w)'+re.escape(change.before)+r'(?!\w)'
+        if not shared and len(re.findall(pattern,label,re.I))==1:
+            label=re.sub(pattern,lambda _:change.after,label,flags=re.I)
     facts=[]
     for characteristic in item.characteristics:
         if city and characteristic.name.casefold() in {'city','город'}:continue
         value=characteristic.value
         if value is None:
-            facts.append(characteristic.name+': не уточнено')
+            facts.append(characteristic.name+': не уточнено'+
+                         (' (в исходнике: '+characteristic.raw+')' if characteristic.raw else ''))
         elif not re.search(r'(?<!\w)'+re.escape(value)+r'(?!\w)',label,re.I) and value not in facts:
             facts.append(value)
     text=label+(' '+ '; '.join(facts) if facts else '')
@@ -61,7 +72,13 @@ def _humanize(text, request):
 def render(request, view='normalized'):
     if request is None:return 'Активной заявки нет.'
     if view=='original':return 'Исходный текст (без изменений):\n'+request.original_text
-    if view=='totals':return totals_text(request.items)
+    if view=='totals':
+        text=totals_text(request.items)
+        if RequestEngine.partial(request) and text.startswith('Количество:'):
+            text='Известная часть количества:'+text[len('Количество:'):]
+        if any(r.kind=='unresolved' for r in request.records):
+            text+='\nНеразобранные фрагменты в итог не включены.'
+        return text
     detailed=view=='explanation'
     partial=RequestEngine.partial(request)
     lines=[f'Заявка, версия {request.revision}.'] if detailed else []
@@ -75,11 +92,11 @@ def render(request, view='normalized'):
         if not detailed or len(members)==1:
             for item in members:
                 prefix='' if not detailed and len(request.items)==1 else f'{positions[item.id]}. '
-                lines.append(prefix+_item_text(item,originals[item.id],city))
+                lines.append(prefix+_item_text(item,originals[item.id],city,request.changes))
         else:
             lines.append(f'Группа {n}: '+group.label)
             for item in members:
-                lines.append(f'  {positions[item.id]}. '+_item_text(item,originals[item.id],city))
+                lines.append(f'  {positions[item.id]}. '+_item_text(item,originals[item.id],city,request.changes))
             lines.append('  '+totals_text(members,positions).replace('\n',' '))
             if differences(members) or group.differences:
                 lines.append('  В группе есть технические отличия; взаимозаменяемость не подтверждена.')
@@ -87,9 +104,11 @@ def render(request, view='normalized'):
             lines.append('Обоснование группировки: '+_humanize(group.rationale,request))
             lines.extend(_humanize(value,request) for value in differences(members)+group.differences)
     if city:lines.append('\nГород: '+city)
+    fragment_number=0
     for record in request.records:
         if record.kind=='unresolved':
-            lines.append('Не обработано: '+request.original_text[record.start:record.end])
+            fragment_number+=1
+            lines.append(f'Неразобранный фрагмент {fragment_number}. Не обработано: '+request.original_text[record.start:record.end])
         elif detailed and record.kind!='product':
             lines.append('Дополнительный исходный текст: '+request.original_text[record.start:record.end])
     if request.questions:lines.append('\nУточните: '+'; '.join(_humanize(q,request) for q in request.questions))

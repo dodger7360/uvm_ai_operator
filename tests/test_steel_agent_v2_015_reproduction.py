@@ -119,9 +119,18 @@ def test_genuine_source_damage_is_not_silently_removed(tmp_path, damage):
     else:
         record = bad['extraction']['records'][1]
         record.update(start=BEAMS.index('\n'), end=BEAMS.index('\n')+1)
+    from steel_agent_v2 import RequestEngine
+    from steel_agent_v2.contracts import AgentPlan
+    from steel_agent_v2.engine import EngineError
+    with pytest.raises(EngineError):
+        RequestEngine().create(AgentPlan.model_validate(bad).extraction,BEAMS,'strict-original')
     repo, fake, api, send = adapter(tmp_path, [bad, bad])
     send(1, BEAMS)
-    assert repo.load(1) is None and len(fake.calls) == 2
+    recovered=repo.load(1)
+    assert recovered is not None and len(fake.calls) == 2
+    RequestEngine().validate(recovered)
+    assert recovered.original_text==BEAMS and any(r.kind=='unresolved' for r in recovered.records)
+    assert len(recovered.items)<4 and len({i.source_id for i in recovered.items})==len(recovered.items)
     with repo.database.connection() as c:
         assert c.execute('SELECT message FROM steel_v2_turn').fetchone()[0] == BEAMS
 
