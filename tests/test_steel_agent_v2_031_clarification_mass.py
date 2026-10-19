@@ -252,7 +252,9 @@ def test_actual_sdk_payload_contains_nullable_clarification_and_mass_operation(t
     schema=sent[0]['text']['format']['schema']
     assert subset_issues(schema)==[]
     assert 'convert_mass' in schema['$defs']['Operation']['properties']['kind']['enum']
-    assert 'clarification' in schema['properties'] and 'PendingClarification' not in schema['$defs']
+    action=schema['$defs']['WireActionPlan']['properties']
+    assert 'clarification' in action and {'type':'null'} in action['clarification']['anyOf']
+    assert 'PendingClarification' not in schema['$defs']
     assert sent[0]['model']=='gpt-6-luna' and sent[0]['reasoning']=={'effort':'high'}
     assert 'pending_clarification' in INSTRUCTIONS and 'convert_mass' in INSTRUCTIONS
 

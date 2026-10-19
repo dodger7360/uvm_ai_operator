@@ -186,16 +186,24 @@ def _item_text(item, original, city, changes=(), mass=None, compact=False, hint=
         if count is not None and characteristic.name=='declared_quantity':continue
         value=characteristic.value
         if value is None:
+            from .theoretical_mass import STANDARD_NAMES
+            if compact and characteristic.name.casefold() in STANDARD_NAMES:
+                continue  # No universal mandatory standard; unknown stays in audit.
             if (mass and mass.status=='calculated' and mass.reference.status=='owner_indicative'
-                    and characteristic.name==mass.spec.standard_name):
+                    and (characteristic.name==mass.spec.standard_name or characteristic.name.casefold() in STANDARD_NAMES)):
                 continue  # Explicit indicative basis tolerates unknown standard; audit retains it.
-            facts.append(characteristic.name+': не уточнено'+
+            human={'grade':'марка','size':'размер','length':'длина','unit':'единица',
+                   'standard':'норматив','execution':'исполнение'}.get(characteristic.name.casefold())
+            human=human or (characteristic.name if not re.search('[A-Za-z_]',characteristic.name) else 'характеристика')
+            facts.append(human+': не уточнено'+
                          (' (в исходнике: '+characteristic.raw+')' if characteristic.raw else ''))
         else:
             shown=value
             if mass or compact:
                 references=mass.spec.dimensions if mass else hint.dimensions if hint else []
+                from .theoretical_mass import LENGTH_NAMES
                 length_fields={d.name for d in references if d.role=='piece_length' and d.component is None}
+                if mass and mass.status=='calculated':length_fields.update(c.name for c in item.characteristics if c.name.casefold() in LENGTH_NAMES)
                 if characteristic.name in length_fields and dims.get('piece_length') is not None:
                     shown=number(product(dims['piece_length'],exponent=-3))+'м'
                 elif mass and not compact and mass.spec.kind=='solid_carbon_sheet' and characteristic.name==mass.spec.grade_name:
@@ -247,6 +255,32 @@ def literal_fragments(request):
     return values
 
 
+def display_questions(request,layout=None):
+    """Deduplicate presentation only; suppress only an unneeded norm-only ask.
+
+    A mixed question (grade, execution, documents, etc.) is deliberately retained.
+    Stored questions, facts and partial status are never rewritten here.
+    """
+    from .theoretical_mass import STANDARD_NAMES
+    masses={m.spec.item_id:m for m in request.theoretical_mass}
+    indicative=bool(request.items) and all(i.id in masses and masses[i.id].status=='calculated'
+        and masses[i.id].reference.status=='owner_indicative' and i.quantity is not None and i.unit
+        and all(c.value is not None or c.name.casefold() in STANDARD_NAMES for c in i.characteristics)
+        for i in request.items) and not any(r.kind=='unresolved' for r in request.records)
+    words={'уточните','укажите','гост','госты','госта','гостов','standard','стандарт','стандарты',
+           'норматив','нормативы','номера','номер','по','для','позиция','позиции','позиций','всех','всем',
+           'изделий','пожалуйста','и','какой','какие','нужен','нужны','ли','требуются'}
+    result=[]
+    for question in request.questions:
+        text=_humanize(question,request,layout)
+        text=re.sub(r'\bstandard\b','норматив',text,flags=re.I)
+        tokens=set(re.findall(r'[a-zа-яё_]+',text.casefold()))
+        if indicative and tokens.intersection({'гост','госты','госта','гостов','standard','стандарт','стандарты','норматив','нормативы'}) and tokens<=words:
+            continue
+        if text not in result:result.append(text)
+    return result
+
+
 def render(request, view='normalized', *, layout=None, expert=False):
     if request is None:return 'Активной заявки нет.'
     if view=='original':return 'Исходный текст (без изменений):\n'+request.original_text
@@ -263,16 +297,13 @@ def render(request, view='normalized', *, layout=None, expert=False):
             text+='\nНеразобранные фрагменты в итог не включены.'
         return text
     detailed=view=='explanation'
-    partial=RequestEngine.partial(request)
+    questions=display_questions(request,layout)
+    partial=bool(questions or any(r.kind=='unresolved' for r in request.records)
+        or any(i.quantity is None or not i.unit or any(c.value is None and c.name.casefold()
+            not in {'standard','gost','гост','норматив'} for c in i.characteristics) for i in request.items))
     masses={m.spec.item_id:m for m in request.theoretical_mass}
-    # An expressly approved indicative basis can tolerate an unknown standard.
-    # Keep the unknown fact and partial status; do not manufacture a mandatory
-    # clarification in an otherwise approved compact preliminary request.
-    if partial and not request.questions and not any(r.kind=='unresolved' for r in request.records):
-        partial=any(item.quantity is None or not item.unit or any(c.value is None and not (
-            item.id in masses and masses[item.id].status=='calculated'
-            and masses[item.id].reference.status=='owner_indicative'
-            and c.name==masses[item.id].spec.standard_name) for c in item.characteristics) for item in request.items)
+    # Missing standard alone is not a universal professional-completeness gate.
+    # Internal partial status and all raw unknown facts stay unchanged.
     lines=[f'Заявка, версия {request.revision}.'] if detailed else []
     if partial:lines.append('Заявка требует уточнения.')
     city=_cities(request)
@@ -312,5 +343,6 @@ def render(request, view='normalized', *, layout=None, expert=False):
             lines.append(f'Неразобранный фрагмент {fragment_number}. Не обработано: '+request.original_text[record.start:record.end])
         elif detailed and record.kind!='product':
             lines.append('Дополнительный исходный текст: '+request.original_text[record.start:record.end])
-    if request.questions:lines.append('\nУточните: '+'; '.join(_humanize(q,request,layout) for q in request.questions))
+    if questions:
+        lines.append('\nУточните: '+'; '.join(questions))
     return '\n'.join(lines)

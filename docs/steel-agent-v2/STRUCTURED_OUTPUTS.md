@@ -1,5 +1,17 @@
 # Responses Structured Outputs boundary
 
+## P0: compact creation, 19.10.2026
+
+`OpenAITransport.plan()` sends one `WireCoordinatorPlan` object with nested
+`plan: WireCreatePlan | WireActionPlan` (anyOf below the object root).
+Creation requires only intent/extraction/pending_event_id/display_layout/mass_specs;
+the action branch keeps the full operation contract. Both convert to the same
+authoritative `AgentPlan`, then RequestEngine validates evidence and invariants.
+Old flat WireAgentPlan responses remain readable; stored snapshots/receipts and
+SQLite do not change. Known invalid completed replies retain one bounded repair;
+unknown API outcomes are never retried by this change. Actual SDK fake HTTP tests
+inspect the strict schema and create/edit/undo paths. Historical sections follow.
+
 ## Candidate: semantic editing, stage 2
 
 Operation.selection replaces target_id for display/where/all selection. Closed

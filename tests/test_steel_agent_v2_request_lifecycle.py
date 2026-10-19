@@ -206,7 +206,8 @@ def test_lifecycle_contract_reaches_real_sdk_mock_http():
         model=OpenAITransport(OpenAI(api_key='offline-test',http_client=http))
         assert model.plan({'message':'Закрой заявку'}).intent=='close_request'
     schema=captured[0]['text']['format']['schema']
-    assert {'append_request','close_request'}<=set(schema['properties']['intent']['enum'])
+    assert {'append_request','close_request'}<=set(schema['$defs']['WireActionPlan']['properties']['intent']['enum'])
+    assert schema['$defs']['WireCreatePlan']['properties']['intent']['const']=='create_request'
     assert captured[0]['reasoning']=={'effort':'high'} and captured[0]['model']=='gpt-6-luna'
     assert 'awaiting_new_request' in captured[0]['instructions']
 
