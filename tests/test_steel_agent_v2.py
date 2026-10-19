@@ -339,7 +339,7 @@ def test_concurrent_same_user_messages_do_not_duplicate_model_calls(tmp_path):
     assert repo.load(1).revision==1
 
 
-def test_telegram_handler_reuses_access_and_plain_delivery_without_polling(rig):
+def test_telegram_handler_reuses_access_and_native_delivery_without_polling(rig):
     from steel_agent_v2.telegram import handle_update
     agent,repo,fake=rig;api,access=Mock(),Mock()
     access.route.return_value=False;access.allowed.return_value=True
@@ -347,7 +347,8 @@ def test_telegram_handler_reuses_access_and_plain_delivery_without_polling(rig):
     handle_update(update,agent,api,access)
     assert repo.load(1).revision==1
     assert set(c.args[0] for c in api.call.call_args_list)<= {'sendMessage','sendChatAction'}
-    assert all('parse_mode' not in c.kwargs for c in api.call.call_args_list)
+    assert all(c.kwargs.get('parse_mode')=='HTML' for c in api.call.call_args_list if c.args[0]=='sendMessage')
+    assert all('parse_mode' not in c.kwargs for c in api.call.call_args_list if c.args[0]!='sendMessage')
     handle_update(update,agent,api,access)
     assert len(fake.calls)==1 and repo.load(1).revision==1
 

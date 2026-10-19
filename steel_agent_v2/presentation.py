@@ -182,6 +182,17 @@ def _humanize(text, request, layout=None):
     return text
 
 
+def literal_fragments(request):
+    """Data boundaries for the delivery formatter, independent of view ordering."""
+    if request is None:return []
+    city=_cities(request);originals={item.id:item for item in request.originals}
+    values=[request.original_text]
+    for item in request.items:
+        values.extend([item.label,_item_text(item,originals[item.id],city,request.changes)])
+        values.extend(value for c in item.characteristics for value in (c.value,c.raw) if value)
+    return values
+
+
 def render(request, view='normalized', *, layout=None):
     if request is None:return 'Активной заявки нет.'
     if view=='original':return 'Исходный текст (без изменений):\n'+request.original_text

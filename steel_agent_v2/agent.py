@@ -4,7 +4,9 @@ from pydantic import ValidationError
 from .contracts import AgentPlan, Reply, PendingClarification, Clarification, DisplayOrder
 from .engine import RequestEngine, EngineError, SelectionError, totals, unit_evidence_in_message
 from .repository import Busy
-from .presentation import render, display_order, display_layout
+from .presentation import render, display_order, display_layout, literal_fragments
+from .telegram_format import prose, literal
+from .contracts import PresentationRun
 from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
 
@@ -202,6 +204,15 @@ class SteelAgent:
                                 ['Сервис web_search: '+p for p in providers])
                             reply=Reply(text=text,status='ok',intent=plan.intent,request_id=current.id if current else None,
                                 revision=current.revision if current else None,sources=sources,calls=calls)
+                            protected=[message,*literal_fragments(current)]
+                            runs=prose(result.text,protected)+literal('\n\nИсточники:\n')
+                            for n,source in enumerate(sources):
+                                if n:runs+=literal('\n')
+                                runs.append(PresentationRun(text=source.title,url=source.url))
+                            for n,provider in enumerate(providers):
+                                if sources or n:runs+=literal('\n')
+                                runs+=literal('Сервис web_search: '+provider)
+                            reply=reply.model_copy(update={'presentation':runs})
                         except Exception as error:
                             emit('steel_v2_search_unavailable', reason=safe_code(error))
                             reason=error.reason if isinstance(error,SearchUnavailable) else 'unknown'
@@ -359,6 +370,12 @@ class SteelAgent:
             if state and (updated is not None or shown_normalized):
                 reply=reply.model_copy(update={'display':DisplayOrder(
                     request_id=state.id,revision=state.revision,item_ids=display_order(state,used_layout),layout=used_layout)})
+            if reply.presentation is None:
+                protected=[message,*literal_fragments(state),*literal_fragments(reply.pending_snapshot)]
+                if pending:protected.append(pending['source_text'])
+                protected.extend(turn['content'] for turn in context['history'] if turn['role']=='user')
+                original_view=plan is not None and plan.intent in {'show_request','answer_question'} and plan.view=='original'
+                reply=reply.model_copy(update={'presentation':literal(reply.text) if original_view else prose(reply.text,protected)})
             return self.repository.finish(user_id,event,sequence,message,reply,updated)
         except PermissionError:
             raise
