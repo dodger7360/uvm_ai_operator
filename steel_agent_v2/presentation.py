@@ -142,7 +142,20 @@ def _cities(request):
     return next(iter(flat)) if len(flat)==1 and all(values) else None
 
 
-def _item_text(item, original, city, changes=(), mass=None):
+def _declared_count(item):
+    """Additional source count is a fact, not a theoretical conversion of mass."""
+    from .engine import decimal_text, PIECE_UNITS
+    rows=[c for c in item.characteristics if c.name=='declared_quantity']
+    if len(rows)!=1 or set(rows[0].source_ids)!={item.source_id}:return None
+    def parse(text):
+        match=re.fullmatch(r'\s*(\d+(?:[.,]\d+)?)\s*(\w+\.?)\s*',text or '')
+        if not match or match[2].casefold() not in PIECE_UNITS:return None
+        return decimal_text(match[1])
+    value=parse(rows[0].value)
+    return value if value is not None and value==parse(rows[0].raw) else None
+
+
+def _item_text(item, original, city, changes=(), mass=None, compact=False, hint=None):
     label=item.label
     # Refresh a redundant label token from explicit, evidence-checked edits only.
     # No product grammar, guessed dimensions or mutation of the saved snapshot.
@@ -154,17 +167,23 @@ def _item_text(item, original, city, changes=(), mass=None):
         pattern=r'(?<!\w)'+re.escape(change.before)+r'(?!\w)'
         if not shared and len(re.findall(pattern,label,re.I))==1:
             label=re.sub(pattern,lambda _:change.after,label,flags=re.I)
-    if mass and mass.spec.kind=='ibeam':
+    if (mass and mass.spec.kind=='ibeam') or (compact and hint and hint.kind in {'beam','ibeam'}):
         label=re.sub(r'\bдвутавровая\b\s*','',label,flags=re.I).strip()
-    if mass:
+    if mass or compact:
         from .theoretical_mass import dimensions, product
-        dims=dimensions(item,mass.spec)
+        dims=dimensions(item,mass.spec) if mass else dict(value for ref in (hint.dimensions if hint else [])
+                                                          if (value:=_dimension(item,ref)) is not None)
         if dims.get('width') is not None and dims.get('width')==dims.get('height'):
             label=re.sub(r'\bквадратная\b\s*','',label,flags=re.I).strip()
         label=re.sub(r',\s+', ' ',label)
     facts=[]
+    from .engine import measured_unit, convert_mass
+    unit_info=measured_unit(item.unit)
+    count=_declared_count(item) if (compact and unit_info and unit_info[0]=='mass'
+        and item.quantity==original.quantity and item.unit==original.unit) else None
     for characteristic in item.characteristics:
         if city and characteristic.name.casefold() in {'city','город'}:continue
+        if count is not None and characteristic.name=='declared_quantity':continue
         value=characteristic.value
         if value is None:
             if (mass and mass.status=='calculated' and mass.reference.status=='owner_indicative'
@@ -174,21 +193,30 @@ def _item_text(item, original, city, changes=(), mass=None):
                          (' (в исходнике: '+characteristic.raw+')' if characteristic.raw else ''))
         else:
             shown=value
-            if mass:
-                length_fields={d.name for d in mass.spec.dimensions if d.role=='piece_length' and d.component is None}
+            if mass or compact:
+                references=mass.spec.dimensions if mass else hint.dimensions if hint else []
+                length_fields={d.name for d in references if d.role=='piece_length' and d.component is None}
                 if characteristic.name in length_fields and dims.get('piece_length') is not None:
                     shown=number(product(dims['piece_length'],exponent=-3))+'м'
-                elif mass.spec.kind=='solid_carbon_sheet' and characteristic.name==mass.spec.grade_name:
+                elif mass and not compact and mass.spec.kind=='solid_carbon_sheet' and characteristic.name==mass.spec.grade_name:
                     shown='сталь '+value
                 elif value.startswith('допускается '):shown='('+value+')'
             if re.search(r'(?<!\w)'+re.escape(value)+r'(?!\w)',label,re.I):
                 if shown!=value:label=re.sub(r'(?<!\w)'+re.escape(value)+r'(?!\w)',lambda _:shown,label,flags=re.I)
             elif shown not in facts:facts.append(shown)
-    text=label+(' '+ (' ' if mass else '; ').join(facts) if facts else '')
+    text=label+(' '+ (' ' if mass or compact else '; ').join(facts) if facts else '')
     amount=number(item.quantity) if item.quantity is not None else 'количество не уточнено'
     from .theoretical_mass import PIECES
-    unit='шт.' if mass and item.unit and item.unit.strip().casefold() in PIECES else item.unit
-    text+=' — '+amount+(' '+unit if unit else ' (единица не уточнена)')
+    unit='шт.' if (mass or compact) and item.unit and item.unit.strip().casefold() in PIECES else item.unit
+    explicit_unit=any(change.item_id==item.id and change.field=='unit' for change in changes)
+    if compact and not explicit_unit and item.quantity is not None and unit_info and unit_info[0]=='mass':
+        converted,unit=convert_mass(item.quantity,item.unit,'т');amount=number(converted)
+        if unit_info[2]==3 and item.quantity_text:
+            from .engine import decimal_text
+            if re.fullmatch(r'\d+(?:[.,]\d+)?',item.quantity_text) and decimal_text(item.quantity_text)==item.quantity:
+                amount=item.quantity_text.replace('.',',')
+    if count is not None:text+=' — '+number(count)+' шт. ('+amount+' '+unit+')'
+    else:text+=' — '+amount+(' '+unit if unit else ' (единица не уточнена)')
     if original.unit and original.unit!=item.unit:
         original_amount=original.quantity_text or (number(original.quantity) if original.quantity is not None else 'количество не уточнено')
         text+=' (исходно: '+original_amount+' '+original.unit+')'
@@ -212,13 +240,14 @@ def literal_fragments(request):
     values=[request.original_text]
     for item in request.items:
         values.extend([item.label,_item_text(item,originals[item.id],city,request.changes)])
+        values.append(_item_text(item,originals[item.id],city,request.changes,compact=True))
         mass=next((m for m in request.theoretical_mass if m.spec.item_id==item.id),None)
         if mass:values.append(_item_text(item,originals[item.id],city,request.changes,mass))
         values.extend(value for c in item.characteristics for value in (c.value,c.raw) if value)
     return values
 
 
-def render(request, view='normalized', *, layout=None):
+def render(request, view='normalized', *, layout=None, expert=False):
     if request is None:return 'Активной заявки нет.'
     if view=='original':return 'Исходный текст (без изменений):\n'+request.original_text
     if request.theoretical_mass:
@@ -251,8 +280,9 @@ def render(request, view='normalized', *, layout=None):
     originals={item.id:item for item in request.originals}
     if not detailed:
         from .theoretical_mass import display as mass_text
-        lines.extend(_item_text(by_id[key],originals[key],city,request.changes,masses.get(key))+
-                     (mass_text(masses[key]) if key in masses else '') for key in order)
+        hints={hint.item_id:hint for hint in layout.items} if layout else {}
+        lines.extend(_item_text(by_id[key],originals[key],city,request.changes,masses.get(key),expert,hints.get(key))+
+                     (mass_text(masses[key],compact=expert) if key in masses else '') for key in order)
     for n,group in enumerate(request.groups if detailed else [],1):
         members=[by_id[key] for key in group.item_ids]
         if not detailed or len(members)==1:

@@ -74,7 +74,7 @@ def assert_order(reply,state,expected):
     # Each row is identified by its full current facts, not a rendered position number.
     assert lines==[render(state.model_copy(update={'groups':[state.groups[0].model_copy(
         update={'item_ids':[key]})], 'items':[by_id[key]],
-        'originals':[i for i in state.originals if i.id==key]})).splitlines()[0] for key in expected]
+        'originals':[i for i in state.originals if i.id==key]}),expert=True).splitlines()[0] for key in expected]
     assert not any(re.match(r'\d+\. ',line) for line in lines)
     assert all(text not in reply.text for text in ('Количество:','Итого','Группа ',state.id))
 
@@ -83,13 +83,13 @@ def test_owner_seven_sheets_exact_result_original_ids_provenance_and_header_unit
     agent,repo,fake,reply=start(tmp_path);state=repo.load(1)
     assert_order(reply,state,APPROVED_ORDER)
     assert reply.text=='\n'.join([
-        'Лист г/к 10×1500×6000 мм, Ст3 — 40 т',
-        'Лист г/к 16×1500×6000 мм, Ст3 — 40 т',
-        'Лист г/к 8×1500×6000 мм, 09Г2С-15 — 40 т',
-        'Лист г/к 10×1500×6000 мм, 09Г2С-15 — 40 т',
-        'Лист г/к 12×1500×6000 мм, 09Г2С-15 — 40 т',
-        'Лист г/к 16×1500×6000 мм, 09Г2С-15 — 40 т',
-        'Лист г/к 20×1500×6000 мм, 09Г2С-15 — 40 т'])
+        'Лист г/к 10×1500×6000 мм Ст3 — 40 т',
+        'Лист г/к 16×1500×6000 мм Ст3 — 40 т',
+        'Лист г/к 8×1500×6000 мм 09Г2С-15 — 40 т',
+        'Лист г/к 10×1500×6000 мм 09Г2С-15 — 40 т',
+        'Лист г/к 12×1500×6000 мм 09Г2С-15 — 40 т',
+        'Лист г/к 16×1500×6000 мм 09Г2С-15 — 40 т',
+        'Лист г/к 20×1500×6000 мм 09Г2С-15 — 40 т'])
     assert 'ГОСТ' not in reply.text and '280' not in reply.text
     assert state.original_text==APPROVED and [i.id for i in state.items]==[f'i{n}' for n in range(1,8)]
     assert all(i.quantity==Decimal(40) and i.unit=='т' and i.unit_source_id=='header' for i in state.items)
@@ -352,7 +352,7 @@ def test_durable_sorted_receipt_outbox_replay_and_unknown_delivery(rig):
     executor.execute(rig.queue.claim());repo=Repository(rig.queue.database);old=repo.load(1)
     receipt=repo.last_display(1,old);assert receipt.item_ids==APPROVED_ORDER
     sent=[p['text'] for method,p in rig.api.calls if method=='sendMessage']
-    assert len(sent)==1 and sent[0]==render(old,layout=receipt.layout)
+    assert len(sent)==1 and sent[0]==render(old,layout=receipt.layout,expert=True)
     assert admit(rig,100,text=APPROVED)==rig.queue.cursor()
     assert rig.queue.claim() is None and len(fake.calls)==1
     choice=dict(mode='display',positions=[3],cardinality='one',evidence='Позицию 3')

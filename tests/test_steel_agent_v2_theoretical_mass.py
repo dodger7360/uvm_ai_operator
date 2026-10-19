@@ -82,7 +82,7 @@ def test_approved_sheet_exact_value_alternative_grade_original_and_no_total(tmp_
     agent,repo,fake,reply=setup(tmp_path)
     state=repo.load(1);m=mass(repo)
     assert m.tonnes==Decimal('28.6034375') and '≈28,603 т' in reply.text and '583 шт' in reply.text
-    assert reply.text=='Лист г/к 2×1250×2500 мм сталь 08пс (допускается Ст3) — 583 шт. / ≈28,603 т'
+    assert reply.text=='Лист г/к 2×1250×2500 мм 08пс (допускается Ст3) — 583 шт. (≈28,603 т)'
     assert state.original_text==SHEET and state.items[0].quantity==583 and state.items[0].unit=='шт'
     assert state.items[0].id==state.originals[0].id=='i1' and '08пс' in reply.text and 'допускается Ст3' in reply.text
     assert not any(value in reply.text for value in ('ГОСТ','Итого','Суммар','Группа ','версия','1. '))
@@ -287,7 +287,7 @@ def test_outbox_annotation_display_addressing_restart_dedup_and_unknown(rig,monk
     fake=Fake(sheet_plan());admit(rig,100,text=SHEET)
     Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake).execute(rig.queue.claim())
     repo=Repository(rig.queue.database);old=repo.load(1)
-    assert visible([p['text'] for p in messages(rig)])==render(old)
+    assert visible([p['text'] for p in messages(rig)])==render(old,expert=True)
     assert repo.last_display(1,old).item_ids==['i1']
     selected=dict(kind='set_quantity',selection=dict(mode='display',positions=[1],cardinality='one',evidence='позиция 1'),
                   field='quantity',value='600',evidence='600',unit='шт',unit_evidence='шт')
@@ -334,7 +334,7 @@ def test_mixed_profiles_sources_ids_originals_and_unrequested_totals(tmp_path):
     assert len(state.items)==len(state.originals)==len(state.records)==3
     assert state.items==state.originals and state.original_text==source
     assert len(reply.text.splitlines())==3 and reply.text.count('≈')==3
-    assert reply.text.count(' / ≈')==1 and reply.text.count('(≈')==2
+    assert reply.text.count(' / ≈')==0 and reply.text.count('(≈')==3
     assert 'Итого' not in reply.text and '61,301' not in reply.text
     assert all(m.reference.sources for m in state.theoretical_mass)
 
@@ -460,7 +460,7 @@ def test_long_mass_reply_is_saved_as_immutable_multipart_html(rig,monkeypatch):
     saved=[json.loads(row['payload']) for row in stored(rig.queue,300)]
     state=Repository(rig.queue.database).load(1)
     assert len(render(state).encode('utf-16-le'))//2>3200
-    assert len(saved)>1 and len(state.theoretical_mass)==144 and visible([p['text'] for p in saved])==render(state)
+    assert len(saved)>1 and len(state.theoretical_mass)==144 and visible([p['text'] for p in saved])==render(state,expert=True)
     assert all(part['parse_mode']=='HTML' for part in saved) and len(fake.calls)==1
     reopened=DurableQueue(rig.queue.database);reopened.recover();reopened.deliver(300,rig.api,rig.access)
     assert messages(rig)==saved

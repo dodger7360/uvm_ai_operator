@@ -309,7 +309,7 @@ def test_long_partial_fallback_preserves_every_input_character_and_durable_chunk
     assert sum(i.quantity for i in state.items)==sum(Decimal(n) for n in range(1,201) if n!=51)
     assert any(r.kind=='unresolved' and '51 мм' in source[r.start:r.end] for r in state.records)
     parts=[p['text'] for method,p in rig.api.calls if method=='sendMessage']
-    assert len(parts)>1 and ''.join(parts)==render(state)
+    assert len(parts)>1 and ''.join(parts)==render(state,expert=True)
     assert all(len(p.encode('utf-16-le'))//2<=3200 for p in parts)
 
 
@@ -338,7 +338,7 @@ def test_quantity_and_explicit_unit_correction_keep_exact_originals(tmp_path):
     result=repo.load(1)
     assert result.items[2].quantity==Decimal(3) and result.items[2].unit=='тонны'
     assert result.originals==state.originals and result.items[:2]==state.items[:2]
-    assert '3 тонны' in reply.text and 'исходно: 17,625 кг' in reply.text
+    assert '3 т' in reply.text and 'исходно: 17,625 кг' in reply.text
 
 
 def test_unknown_ambiguous_and_conflicting_characteristics_do_not_remove_other_products(tmp_path):

@@ -154,7 +154,7 @@ def test_long_real_queue_response_has_all_lines_and_durable_parts_in_order(rig):
     admit(rig, 101, text=source)
     Executor(rig.queue, rig.access, lambda: rig.api, lambda: fake).execute(rig.queue.claim())
     state = Repository(rig.queue.database).load(1)
-    text = render(state)
+    text = render(state,expert=True)
     parts = [payload['text'] for method, payload in rig.api.calls if method == 'sendMessage']
     assert len(parts) > 1 and ''.join(parts) == text
     assert all(len(p.encode('utf-16-le')) // 2 <= 3200 for p in parts)

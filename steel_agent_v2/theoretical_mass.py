@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import re
 
-from .contracts import MassReference, TheoreticalMass, PendingMass
+from .contracts import MassReference, TheoreticalMass, PendingMass, DisplayDimension
 from .engine import require, unique, decimal_text, measured_unit, PIECE_UNITS, LENGTH_UNITS, EngineError
 from .telegram_format import safe_link
 
@@ -44,6 +44,9 @@ def validate_reference(record):
     require(record.unit=='kg_per_m3' or record.profile or record.dimensions_mm,'unscoped_mass_reference')
     require(record.unit!='kg_per_m3' or record.kind=='solid_carbon_sheet','unsupported_density_method')
     require(all(decimal_text(v)>0 for v in record.dimensions_mm),'invalid_mass_reference_dimension')
+    if record.family is not None:
+        require(record.dimension_roles==sorted(set(record.dimension_roles))
+                and len(record.dimension_roles)==len(record.dimensions_mm),'invalid_mass_reference_roles')
     require(record.piece_length_mm is None or decimal_text(record.piece_length_mm)>0,'invalid_mass_reference_length')
     if record.unit=='kg_per_piece' and long_stock(record):
         require(record.piece_length_mm is not None,'mass_reference_piece_length_required')
@@ -95,6 +98,84 @@ def scope(item,spec):
     return dims,values,fact(item,spec.profile_name),fact(item,spec.standard_name)
 
 
+def _dimension_role(name):
+    """Names of structured dimension fields only; never parse a product/request.
+
+    Wall and thickness are material gauge for this consistency check, not new
+    product classifications or coefficient lookup keys. Original roles stay intact.
+    """
+    name=re.sub(r'[_\-(),\[\]]',' ',name.casefold())
+    name=' '.join(name.split())
+    # Metadata qualifiers only. Unknown qualifiers retain a dimensional signal
+    # below and fail closed; this never interprets user prose or chooses a fact.
+    modifiers={'explicit','specified','declared','actual','measured','of','or','and',
+        'pipe','tube','sheet','profile','product','наружный','внешний','outer','external',
+        'фактическая','фактический','измеренная','указанная','заданная',
+        'трубы','труба','листа','лист','профиля','изделия','или','и'}
+    name=' '.join(token for token in name.split() if token not in modifiers)
+    unit=None
+    match=re.search(r' (mm|cm|m|м|мм|см)$',name)
+    if match:
+        unit={'mm':'мм','cm':'см','m':'м'}.get(match[1],match[1]);name=name[:match.start()]
+    aliases={'width':'width','ширина':'width','height':'height','высота':'height',
+        'diameter':'diameter','outer diameter':'diameter','наружный диаметр':'diameter',
+        'диаметр':'diameter','диаметр наружный':'diameter',
+        'wall':'thickness','thickness':'thickness','wall thickness':'thickness',
+        'thickness of wall':'thickness','толщина':'thickness','стенка':'thickness',
+        'толщина стенки':'thickness','толщина листа':'thickness'}
+    role=aliases.get(name)
+    if role is None:
+        dimensional={'width','height','diameter','wall','thickness',
+            'ширина','высота','диаметр','стенка','стенки','толщина'}
+        if dimensional.intersection(name.split()):role='ambiguous'
+    return role,unit
+
+
+def dimension_consistency(item,spec):
+    """All independently explicit dimensional facts must agree with the basis.
+
+    Reuses the existing strict scalar/component converter. Unreferenced scalar
+    units must be explicit in value, field name or scalar raw; no guessed mm.
+    Unknown compatibility blocks only mass, leaving every source fact unchanged.
+    """
+    from .presentation import _dimension
+    reason='Уточните противоречивые или неразобранные размерные характеристики изделия'
+    primary={};composites={}
+    for reference in spec.dimensions:
+        role,_=_dimension_role(reference.role)
+        if role is None:continue
+        value=_dimension(item,reference)
+        if value is None or value[1]<=0:return reason
+        primary.setdefault(role,set()).add(value[1])
+        if reference.component is not None:composites.setdefault(reference.name,[]).append(reference)
+    values={role:set(numbers) for role,numbers in primary.items()}
+    for characteristic in item.characteristics:
+        role,named_unit=_dimension_role(characteristic.name)
+        if role=='ambiguous':return reason
+        if role is not None:
+            text=characteristic.value or ''
+            suffix=re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*(мм|см|м)\s*',text)
+            if suffix and named_unit and suffix[1]!=named_unit:return reason
+            direct=[r.unit for r in spec.dimensions if r.name==characteristic.name and r.component is None and r.unit]
+            raw_unit=re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*(мм|см|м)\s*',characteristic.raw or '')
+            unit=suffix[1] if suffix else named_unit or (direct[0] if len(set(direct))==1 else None) or (raw_unit[1] if raw_unit else None)
+            parsed=_dimension(item,DisplayDimension(role=role,name=characteristic.name,unit=unit))
+            if parsed is None or parsed[1]<=0 or role not in primary:return reason
+            values.setdefault(role,set()).add(parsed[1])
+        elif characteristic.name.casefold() in {'size','dimensions','размер','размеры','profile','профиль','section','сечение','geometry','геометрия'}:
+            if characteristic.name in composites or characteristic.name==spec.profile_name:continue
+            # A second structured size field cannot be silently ignored. Only an
+            # existing component layout can establish its meaning; no new grammar.
+            if len(composites)!=1:return reason
+            for reference in next(iter(composites.values())):
+                parsed=_dimension(item,reference.model_copy(update={'name':characteristic.name}))
+                role,_=_dimension_role(reference.role)
+                if parsed is None or parsed[1]<=0:return reason
+                values.setdefault(role,set()).add(parsed[1])
+    if any(len(numbers)!=1 for numbers in values.values()):return reason
+    return None
+
+
 def piece_length(item,spec):
     """One length policy shared by catalog, search, confirmation and replay validation."""
     if spec.cutting not in {'none','confirmed_piece_length'}:
@@ -117,9 +198,14 @@ def applicable(reference,item,spec):
     try:validate_reference(reference)
     except (EngineError,ValueError):return False
     if reference.kind!=spec.kind:return False
+    if dimension_consistency(item,spec):return False
+    if reference.family is not None and reference.family!=spec.family:return False
     execution_names={c.name for c in item.characteristics if c.name.casefold() in {'execution','исполнение','coating','покрытие','type','тип'}}
     if execution_names and execution_names!={spec.execution_name}:return False
     dims,values,profile,standard=scope(item,spec)
+    if reference.family is not None and reference.dimension_roles!=sorted(
+            role for role in dims if role not in {'piece_length','total_length'}):return False
+    if reference.unspecified_standard_only and standard is not None:return False
     if reference.profile and reference.profile!=profile:return False
     length,_,reason=piece_length(item,spec) if long_stock(spec) else (dims.get('piece_length'),None,None)
     if long_stock(spec) and item.unit and item.unit.strip().casefold() in PIECES and reason:return False
@@ -140,6 +226,8 @@ def calculate(item,spec,signature,records):
     base=dict(spec=spec,classification=signature,method='not_calculated')
     def unavailable(reason,status='unavailable'):
         return TheoreticalMass(**base,status=status,reason=reason)
+    problem=dimension_consistency(item,spec)
+    if problem:return unavailable(problem)
     if classification(item,spec)!=signature:return unavailable('Характеристики изменены: расчётное основание требует проверки')
     grade_audit={}
     if spec.grade_policy:
@@ -278,10 +366,10 @@ def rounded_tonnes(mass):
     return '≈'+format(rounded,'f').replace('.',',')+' т'
 
 
-def display(mass):
+def display(mass,compact=False):
     if mass.status!='calculated':return ' (расчётная масса не определена: '+mass.reason+')'
     value=rounded_tonnes(mass)
-    return ' / '+value if mass.spec.kind=='solid_carbon_sheet' else ' ('+value+')'
+    return ' / '+value if mass.spec.kind=='solid_carbon_sheet' and not compact else ' ('+value+')'
 
 
 def explanation(item,mass):

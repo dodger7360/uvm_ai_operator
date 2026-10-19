@@ -184,6 +184,7 @@ class MassSpec(ContractModel):
     """Semantic references to current facts; never numeric arithmetic from GPT."""
     item_id: NonEmpty
     kind: Literal['solid_carbon_sheet','round_welded_pipe','ibeam','linear','fixed_unit','other']
+    family: NonEmpty | None = None
     dimensions: list[DisplayDimension] = Field(default_factory=list)
     profile_name: str | None = None
     standard_name: str | None = None
@@ -314,10 +315,13 @@ class MassReference(ContractModel):
     id: NonEmpty
     revision: NonEmpty
     kind: NonEmpty
+    family: NonEmpty | None = None
     profile: str | None = None
     piece_length_mm: str | None = None
     dimensions_mm: list[str] = Field(default_factory=list)
+    dimension_roles: list[str] = Field(default_factory=list)
     standards: list[str] = Field(default_factory=list)
+    unspecified_standard_only: bool = False
     grades: list[str] = Field(default_factory=list)
     value: NonEmpty
     unit: Literal['kg_per_m','kg_per_piece','kg_per_m3']
@@ -366,6 +370,13 @@ class PresentationRun(ContractModel):
     url: str | None = None
 
 
+class KnowledgeContext(ContractModel):
+    """Knowledge supplied to GPT, not a claim that every rule was applied."""
+    version: NonEmpty
+    provided_ids: list[str]
+    sources: dict[str,str]
+
+
 class Reply(ContractModel):
     text: str
     status: Literal['ok', 'partial', 'failed', 'busy']
@@ -384,3 +395,4 @@ class Reply(ContractModel):
     source_event_id: str | None = Field(default=None, exclude_if=lambda value: value is None)
     search_providers: list[str] = Field(default_factory=list,exclude_if=lambda value:not value)
     pending_mass: PendingMass | None = Field(default=None,exclude_if=lambda value:value is None)
+    knowledge: KnowledgeContext | None = Field(default=None,exclude_if=lambda value:value is None)
