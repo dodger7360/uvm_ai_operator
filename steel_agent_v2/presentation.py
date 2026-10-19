@@ -142,7 +142,7 @@ def _cities(request):
     return next(iter(flat)) if len(flat)==1 and all(values) else None
 
 
-def _item_text(item, original, city, changes=()):
+def _item_text(item, original, city, changes=(), mass=None):
     label=item.label
     # Refresh a redundant label token from explicit, evidence-checked edits only.
     # No product grammar, guessed dimensions or mutation of the saved snapshot.
@@ -154,18 +154,41 @@ def _item_text(item, original, city, changes=()):
         pattern=r'(?<!\w)'+re.escape(change.before)+r'(?!\w)'
         if not shared and len(re.findall(pattern,label,re.I))==1:
             label=re.sub(pattern,lambda _:change.after,label,flags=re.I)
+    if mass and mass.spec.kind=='ibeam':
+        label=re.sub(r'\bдвутавровая\b\s*','',label,flags=re.I).strip()
+    if mass:
+        from .theoretical_mass import dimensions, product
+        dims=dimensions(item,mass.spec)
+        if dims.get('width') is not None and dims.get('width')==dims.get('height'):
+            label=re.sub(r'\bквадратная\b\s*','',label,flags=re.I).strip()
+        label=re.sub(r',\s+', ' ',label)
     facts=[]
     for characteristic in item.characteristics:
         if city and characteristic.name.casefold() in {'city','город'}:continue
         value=characteristic.value
         if value is None:
+            if (mass and mass.status=='calculated' and mass.reference.status=='owner_indicative'
+                    and characteristic.name==mass.spec.standard_name):
+                continue  # Explicit indicative basis tolerates unknown standard; audit retains it.
             facts.append(characteristic.name+': не уточнено'+
                          (' (в исходнике: '+characteristic.raw+')' if characteristic.raw else ''))
-        elif not re.search(r'(?<!\w)'+re.escape(value)+r'(?!\w)',label,re.I) and value not in facts:
-            facts.append(value)
-    text=label+(' '+ '; '.join(facts) if facts else '')
+        else:
+            shown=value
+            if mass:
+                length_fields={d.name for d in mass.spec.dimensions if d.role=='piece_length' and d.component is None}
+                if characteristic.name in length_fields and dims.get('piece_length') is not None:
+                    shown=number(product(dims['piece_length'],exponent=-3))+'м'
+                elif mass.spec.kind=='solid_carbon_sheet' and characteristic.name==mass.spec.grade_name:
+                    shown='сталь '+value
+                elif value.startswith('допускается '):shown='('+value+')'
+            if re.search(r'(?<!\w)'+re.escape(value)+r'(?!\w)',label,re.I):
+                if shown!=value:label=re.sub(r'(?<!\w)'+re.escape(value)+r'(?!\w)',lambda _:shown,label,flags=re.I)
+            elif shown not in facts:facts.append(shown)
+    text=label+(' '+ (' ' if mass else '; ').join(facts) if facts else '')
     amount=number(item.quantity) if item.quantity is not None else 'количество не уточнено'
-    text+=' — '+amount+(' '+item.unit if item.unit else ' (единица не уточнена)')
+    from .theoretical_mass import PIECES
+    unit='шт.' if mass and item.unit and item.unit.strip().casefold() in PIECES else item.unit
+    text+=' — '+amount+(' '+unit if unit else ' (единица не уточнена)')
     if original.unit and original.unit!=item.unit:
         original_amount=original.quantity_text or (number(original.quantity) if original.quantity is not None else 'количество не уточнено')
         text+=' (исходно: '+original_amount+' '+original.unit+')'
@@ -189,6 +212,8 @@ def literal_fragments(request):
     values=[request.original_text]
     for item in request.items:
         values.extend([item.label,_item_text(item,originals[item.id],city,request.changes)])
+        mass=next((m for m in request.theoretical_mass if m.spec.item_id==item.id),None)
+        if mass:values.append(_item_text(item,originals[item.id],city,request.changes,mass))
         values.extend(value for c in item.characteristics for value in (c.value,c.raw) if value)
     return values
 
@@ -196,6 +221,9 @@ def literal_fragments(request):
 def render(request, view='normalized', *, layout=None):
     if request is None:return 'Активной заявки нет.'
     if view=='original':return 'Исходный текст (без изменений):\n'+request.original_text
+    if request.theoretical_mass:
+        from .theoretical_mass import validated_for_display
+        request=validated_for_display(request)
     order=display_order(request,layout)
     positions={key:n for n,key in enumerate(order,1)}
     if view=='totals':
@@ -207,13 +235,24 @@ def render(request, view='normalized', *, layout=None):
         return text
     detailed=view=='explanation'
     partial=RequestEngine.partial(request)
+    masses={m.spec.item_id:m for m in request.theoretical_mass}
+    # An expressly approved indicative basis can tolerate an unknown standard.
+    # Keep the unknown fact and partial status; do not manufacture a mandatory
+    # clarification in an otherwise approved compact preliminary request.
+    if partial and not request.questions and not any(r.kind=='unresolved' for r in request.records):
+        partial=any(item.quantity is None or not item.unit or any(c.value is None and not (
+            item.id in masses and masses[item.id].status=='calculated'
+            and masses[item.id].reference.status=='owner_indicative'
+            and c.name==masses[item.id].spec.standard_name) for c in item.characteristics) for item in request.items)
     lines=[f'Заявка, версия {request.revision}.'] if detailed else []
     if partial:lines.append('Заявка требует уточнения.')
     city=_cities(request)
     by_id={item.id:item for item in request.items}
     originals={item.id:item for item in request.originals}
     if not detailed:
-        lines.extend(_item_text(by_id[key],originals[key],city,request.changes) for key in order)
+        from .theoretical_mass import display as mass_text
+        lines.extend(_item_text(by_id[key],originals[key],city,request.changes,masses.get(key))+
+                     (mass_text(masses[key]) if key in masses else '') for key in order)
     for n,group in enumerate(request.groups if detailed else [],1):
         members=[by_id[key] for key in group.item_ids]
         if not detailed or len(members)==1:
@@ -230,6 +269,11 @@ def render(request, view='normalized', *, layout=None):
         if detailed:
             lines.append('Обоснование группировки: '+_humanize(group.rationale,request,layout))
             lines.extend(_humanize(value,request,layout) for value in differences(members)+group.differences)
+    if detailed and masses:
+        from .theoretical_mass import explanation
+        for key in order:
+            if key in masses:
+                lines.append(f'Расчёт позиции {positions[key]}:\n'+explanation(by_id[key],masses[key]))
     if city:lines.append('\nГород: '+city)
     fragment_number=0
     for record in request.records:

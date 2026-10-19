@@ -57,12 +57,14 @@ def convert_mass(quantity, source, target):
 LENGTH_UNITS={'мм':('мм',0),'миллиметр':('мм',0),'миллиметра':('мм',0),'миллиметров':('мм',0),
               'см':('см',1),'сантиметр':('см',1),'сантиметра':('см',1),'сантиметров':('см',1),'м':('м',3),
               'метр':('м',3),'метра':('м',3),'метры':('м',3),'метров':('м',3)}
+PIECE_UNITS={key:('шт',0) for key in ('шт','шт.','штука','штуки','штук','хлыст','хлыста','хлыстов')}
 
 
 def measured_unit(value):
     key=value.strip().casefold() if value else ''
     return ('mass',*MASS_UNITS[key]) if key in MASS_UNITS else (
-           ('length',*LENGTH_UNITS[key]) if key in LENGTH_UNITS else None)
+           ('length',*LENGTH_UNITS[key]) if key in LENGTH_UNITS else (
+           ('count',*PIECE_UNITS[key]) if key in PIECE_UNITS else None))
 
 
 def unit_evidence_in_message(message, evidence):
@@ -147,6 +149,9 @@ def differences(items):
 
 
 class RequestEngine:
+    def __init__(self,mass_catalog=None):
+        self.mass_catalog=mass_catalog
+
     def resolve_plan(self, current, plan, message, display_ids=None):
         require(current is not None,'no_active_request')
         require((plan.expected_request_id,plan.expected_revision)==(current.id,current.revision),'stale_request_revision')
@@ -214,9 +219,12 @@ class RequestEngine:
         members = [key for group in request.groups for key in group.item_ids]
         require(sorted(members) == sorted(i.id for i in items), 'groups_must_partition_all_items_once')
         require(all(g.item_ids for g in request.groups), 'empty_group')
+        if request.theoretical_mass:
+            from .theoretical_mass import validate_annotations
+            validate_annotations(request)
         return request
 
-    def create(self, extraction, source, event_key):
+    def create(self, extraction, source, event_key, mass_specs=()):
         # Only disjoint, unreferenced *service* whitespace records can be discarded.
         # Validate identity and geometry BEFORE filtering, so this cannot hide damage.
         records=extraction.records
@@ -231,12 +239,17 @@ class RequestEngine:
         request = RequestSnapshot(id=str(uuid5(NAMESPACE_URL, event_key)), revision=1,
             original_text=source, records=records, originals=[i.model_copy(deep=True) for i in extraction.items],
             items=[i.model_copy(deep=True) for i in extraction.items], groups=extraction.groups, questions=extraction.questions)
-        return self.validate(request)
+        self.validate(request)
+        from .theoretical_mass import refresh
+        return self.validate(refresh(request,mass_specs,self.mass_catalog))
 
-    def edit(self, current, plan, message, read_version, display_ids=None):
+    def edit(self, current, plan, message, read_version, display_ids=None, mass_approved=()):
         require(current is not None, 'no_active_request')
         require((plan.expected_request_id, plan.expected_revision) == (current.id, current.revision), 'stale_request_revision')
         operations = self.resolve_plan(current,plan,message,display_ids).operations
+        mass_targets={op.target_id for op in operations if op.target_id}
+        mass_targets.update(i.id for op in operations if op.resolution for i in op.resolution.items)
+        require({s.item_id for s in plan.mass_specs}<=mass_targets,'mass_spec_outside_edit_scope')
         if any(op.kind == 'undo' for op in operations):
             require(len(operations) == 1, 'undo_must_be_standalone')
             require(plan.remaining_questions is None, 'undo_restores_questions_without_override')
@@ -246,13 +259,23 @@ class RequestEngine:
             require(bool(current.undo_stack), 'nothing_to_undo')
             old = read_version(current.id, current.undo_stack[-1])
             require(old is not None, 'undo_version_missing')
-            return self.validate(old.model_copy(deep=True, update={'revision': current.revision+1,
-                'undo_stack': current.undo_stack[:-1]}))
+            from .theoretical_mass import revalidate_historical
+            restored=old.model_copy(deep=True, update={'revision': current.revision+1,
+                'undo_stack': current.undo_stack[:-1]})
+            return self.validate(revalidate_historical(restored))
         changed = current.model_copy(deep=True)
         by_id = {item.id: item for item in changed.items}
         touched = set()
         regrouped = False
         for op in operations:
+            if op.kind=='calculate_mass':
+                require(op.target_id in by_id and op.field is None and op.name is None and op.value is None
+                        and not op.groups and op.evidence and op.evidence in message,'invalid_calculate_mass')
+                require((op.target_id,'theoretical_mass',None) not in touched,'contradictory_duplicate_patch')
+                touched.add((op.target_id,'theoretical_mass',None))
+                changed.changes.append(Change(item_id=op.target_id,field='theoretical_mass',before=None,
+                    after='recalculate',evidence=op.evidence,message=message))
+                continue
             if op.kind in {'set_quantity','add_quantity','set_length'}:
                 length=op.kind=='set_length'
                 require(op.target_id in by_id and not op.groups and op.replace_from is None
@@ -384,6 +407,18 @@ class RequestEngine:
         changed = changed.model_copy(update={'items': [by_id[i.id] for i in changed.items],
             'revision': current.revision+1, 'undo_stack': current.undo_stack + [current.revision],
             'questions': plan.remaining_questions if plan.remaining_questions is not None else changed.questions})
+        from .theoretical_mass import refresh
+        changed=refresh(changed,plan.mass_specs,self.mass_catalog,mass_approved)
+        for op in operations:
+            if op.kind=='calculate_mass':require(any(m.spec.item_id==op.target_id for m in changed.theoretical_mass),'mass_spec_required')
+        before_mass={m.spec.item_id:m.tonnes for m in current.theoretical_mass}
+        after_mass={m.spec.item_id:m.tonnes for m in changed.theoretical_mass}
+        changed=changed.model_copy(update={'changes':[
+            c.model_copy(update={
+                'before':str(before_mass[c.item_id]) if before_mass.get(c.item_id) is not None else None,
+                'after':str(after_mass[c.item_id]) if after_mass.get(c.item_id) is not None else None})
+            if n>=len(current.changes) and c.field=='theoretical_mass' else c
+            for n,c in enumerate(changed.changes)]})
         return self.validate(changed)
 
     @staticmethod

@@ -191,6 +191,21 @@ class Repository:
                 if job is not None and job['state']!='delivered':return None
         return {'event_id':row['event_id'],'reply':reply}
 
+    def mass_pending(self,user,current):
+        self._allowed(user)
+        if current is None:return None
+        with self.database.connection() as c:
+            row=c.execute("SELECT event_id,reply FROM steel_v2_turn WHERE user_id=? AND request_id=? "
+                          "AND json_extract(reply,'$.intent')='web_search' ORDER BY sequence DESC LIMIT 1",
+                          (user,current.id)).fetchone()
+            if row is None:return None
+            pending=Reply.model_validate_json(row['reply']).pending_mass
+            if pending is None or pending.revision!=current.revision:return None
+            if c.execute("SELECT 1 FROM sqlite_master WHERE name='steel_v2_inbox'").fetchone():
+                job=c.execute("SELECT state FROM steel_v2_inbox WHERE 'telegram:'||update_id=?",(row['event_id'],)).fetchone()
+                if job and job[0]!='delivered':return None
+        return pending
+
     def finish(self, user, event, sequence, message, reply, updated=None):
         with self.commit_guard(user):
             return self._finish(user, event, sequence, message, reply, updated)
