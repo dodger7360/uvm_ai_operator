@@ -1,5 +1,6 @@
 """Reproducible local approved context; retrieval only, never a product parser."""
 from copy import deepcopy
+from decimal import Decimal
 from functools import lru_cache
 from hashlib import sha256
 import json
@@ -32,6 +33,104 @@ def fenced(text):
     match=re.search(r'```text\n([\s\S]*?)\n```',text)
     if not match:raise ValueError('knowledge_approved_text_missing')
     return match[1]
+
+
+def _mass_error():
+    raise ValueError('knowledge_mass_source_evidence')
+
+
+def _table(text,headers):
+    """Read the named approval table, retaining its original row for provenance."""
+    lines=text.splitlines()
+    cells=lambda line:[cell.strip() for cell in line.strip().strip('|').split('|')]
+    starts=[n for n,line in enumerate(lines) if line.startswith('|') and cells(line)==headers]
+    if len(starts)!=1:_mass_error()
+    start=starts[0]
+    if start+1>=len(lines):_mass_error()
+    separator=cells(lines[start+1])
+    if len(separator)!=len(headers) or any(not re.fullmatch(r':?-+:?',c) for c in separator):_mass_error()
+    rows=[]
+    for line in lines[start+2:]:
+        if not line.startswith('|'):break
+        values=cells(line)
+        if len(values)!=len(headers):_mass_error()
+        rows.append((line,values))
+    return rows
+
+
+def _exact_coefficient(value):
+    if not re.fullmatch(r'\d+(?:[.,]\d+)?',value):_mass_error()
+    return Decimal(value.replace(',','.'))
+
+
+def _grade_cell(prefix,row,flags=0,*,table_comma=False):
+    match=re.match(prefix+(r'([^\s,]+)' if table_comma else r'([^\s]+)'),row,flags)
+    if not match:_mass_error()
+    return match[1]
+
+
+def _mass_evidence(doc,entry,record):
+    """Validate these approved table cells, not arbitrary product prose/substrings.
+
+    CASE approval is deliberately narrow. A new table layout/revision needs an
+    explicit build-time review rather than silently inheriting an older approval.
+    """
+    family=record['family'];profile=record['profile']
+    labels={'profile_pipe':'Труба профильная','angle':'Уголок','beam':'Балка','channel':'Швеллер'}
+    if family not in labels or record['kind']!=('ibeam' if family=='beam' else 'linear'):_mass_error()
+    if entry['id']=='CASE-20261019-002' and entry['revision']==3 and record['evidence_section']==8:
+        headers=['Позиция','Количество','Принято кг/м','Расчётная масса','Подтверждение сорта / предел']
+        label='Труба' if family=='profile_pipe' else labels[family]
+        rows=_table(section(doc,8),headers)
+        matching=[(line,c) for line,c in rows if c[0]==label+' '+profile]
+        coefficient_column=2
+    elif entry['id']=='CASE-20261019-006' and entry['revision']==1 and record['evidence_section']==4:
+        headers=['Источник','Характеристики и количество','Справочная масса 1м','Расчёт','Нормализованная позиция']
+        label=labels[family]
+        rows=_table(section(doc,4),headers)
+        prefix=re.escape(label+' '+profile)+r'\s+'
+        matching=[(line,c) for line,c in rows if re.match(prefix,c[1])]
+        coefficient_column=2
+    else:_mass_error()
+    if len(matching)!=1:_mass_error()
+    line,cells=matching[0]
+    coefficient=cells[coefficient_column]
+    if entry['id'].endswith('006'):
+        match=re.fullmatch(r'(\d+(?:[.,]\d+)?) кг/м',coefficient)
+        if not match:_mass_error()
+        coefficient=match[1]
+    if _exact_coefficient(coefficient)!=_exact_coefficient(record['value_text']):_mass_error()
+    if record['source_url'] not in (line if entry['id'].endswith('002') else section(doc,6)):_mass_error()
+
+    # Bind a single grade to the corresponding approved row and original row.
+    # This is validation of selected known CASE cells, never runtime extraction.
+    approved=fenced(section(doc,5)).splitlines()
+    approved_prefix=re.escape(labels[family]+' '+profile)+r'\s+'
+    approved_rows=[row for row in approved if re.match(approved_prefix,row)]
+    if len(approved_rows)!=1:_mass_error()
+    grade=_grade_cell(approved_prefix,approved_rows[0])
+    if len(record['grades'])!=1 or record['grades'][0].casefold()!=grade.casefold():_mass_error()
+    raw_profile=re.escape(profile).replace('×',r'[×хx*]')
+    original_prefix=re.escape(label)+r' '+raw_profile+r'\s+'
+    originals=[row for row in fenced(section(doc,1)).splitlines() if re.match(original_prefix,row,re.I)]
+    if len(originals)!=1:_mass_error()
+    if entry['id'].endswith('002'):
+        # Validate the actual grade slot in these four approved source rows.
+        # A later note or slash-separated alternative cannot supply that slot.
+        placeholder=r'(?:гост\s+)?' if family=='angle' else ''
+        source_grade=re.match(original_prefix+placeholder+r'([^\s]+)(?=\s+(?:гост\s+)?-)',originals[0],re.I)
+        if not source_grade or source_grade[1].casefold()!=grade.casefold():_mass_error()
+    else:
+        if cells[4]!=approved_rows[0]:_mass_error()
+        source_grade=_grade_cell(original_prefix,originals[0],re.I)
+        table_grade=_grade_cell(re.escape(label+' '+profile)+r'\s+',cells[1],table_comma=True)
+        if source_grade.casefold()!=table_grade.casefold():_mass_error()
+        if source_grade.casefold()!=grade.casefold():
+            allowed=(family=='beam' and record['kind']=='ibeam' and profile=='30Б1'
+                     and source_grade.casefold()=='ст3' and grade=='С255'
+                     and 'Ст3 → С255' in section(doc,3))
+            if not allowed:_mass_error()
+    return line
 
 
 def build(root=ROOT):
@@ -71,11 +170,7 @@ def build(root=ROOT):
             topics=entry['topics'],source=path,source_section=5,original=fenced(section(doc,1)),
             approved=fenced(current),limitations=boundaries,position_count=entry['position_count']))
         for record in entry.get('mass_records',[]):
-            evidence=section(doc,record['evidence_section'])
-            rows=[line for line in evidence.splitlines() if line.startswith('|') and record['profile'] in line
-                  and record['value_text'] in line]
-            if len(rows)!=1 or record['source_url'] not in doc:
-                raise ValueError('knowledge_mass_source_evidence')
+            evidence=_mass_evidence(doc,entry,record)
             references.append(dict(id=entry['id']+':'+record['profile'],revision=str(entry['revision']),
                 kind=record['kind'],family=record['family'],profile=record['profile'],piece_length_mm=record['piece_length_mm'],
                 dimension_roles=sorted(record['dimension_scope']),
@@ -87,7 +182,7 @@ def build(root=ROOT):
                 sources=[dict(url=record['source_url'],title=record['source_title'])],
                 checked_at='owner approval 2026-10-19; repository evidence, no new network verification',
                 limitation=record['limitation']+'; '+path+'#'+str(record['evidence_section']),
-                evidence=rows[0],knowledge_case=entry['id']))
+                evidence=evidence,knowledge_case=entry['id']))
     facts=[]
     for entry in recipe['facts']:
         text=read(entry['source']);match=re.search(entry['pattern'],text,re.M)
