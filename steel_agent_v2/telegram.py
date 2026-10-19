@@ -2,7 +2,7 @@
 from pathlib import Path
 from database import Database
 from telegram_bot import TypingIndicator
-from telegram_operator import safe_chunks
+from .telegram_format import payloads
 from diagnostics import operation, emit, safe_code
 from .agent import SteelAgent
 from .repository import Repository
@@ -42,6 +42,6 @@ def handle_update(update, service, api, access):
             if access.allowed(user):api.call('sendMessage',chat_id=user,text='Обработка недоступна. Сохраните исходный текст.')
             return
         # Recheck between chunks if permission is revoked while delivering.
-        for part in safe_chunks(reply.text):
+        for payload in payloads(reply,user):
             if not access.allowed(user):return
-            api.call('sendMessage',chat_id=user,text=part)
+            api.call('sendMessage',**payload)

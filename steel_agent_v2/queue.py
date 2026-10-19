@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
-from telegram_operator import safe_chunks
+from .telegram_format import payloads
 
 
 TERMINAL = ('delivered', 'denied', 'rejected')
@@ -251,9 +251,9 @@ class DurableQueue:
             if row is None or row['user_id']!=user or event!='telegram:'+str(number):raise QueueConflict('job_identity_conflict')
             if row['state'] not in {'claimed','result_received','execution_unknown'}:raise QueueConflict('unconfirmed_execution')
             if row['state']=='execution_unknown' and updated is not None:raise QueueConflict('unknown_cannot_mutate')
-            for n,part in enumerate(safe_chunks(reply.text)):
+            for n,payload in enumerate(payloads(reply,user)):
                 c.execute('INSERT INTO steel_v2_outbox VALUES(?,?,?,?,?,NULL)',
-                    (number,n,'sendMessage',json.dumps({'chat_id':user,'text':part},ensure_ascii=False),'delivery_pending'))
+                    (number,n,'sendMessage',json.dumps(payload,ensure_ascii=False),'delivery_pending'))
             c.execute("UPDATE steel_v2_inbox SET committed=1,state='committed',uncertain=? WHERE update_id=?",
                 (int(row['state']=='execution_unknown'),number))
         return hook

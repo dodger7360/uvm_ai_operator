@@ -257,6 +257,13 @@ class SourceLink(ContractModel):
     title: str
 
 
+class PresentationRun(ContractModel):
+    """Application-owned visible text and allowlisted marks, never raw HTML."""
+    text: str
+    marks: list[Literal['b', 'i', 'code', 'pre']] = Field(default_factory=list)
+    url: str | None = None
+
+
 class Reply(ContractModel):
     text: str
     status: Literal['ok', 'partial', 'failed', 'busy']
@@ -269,3 +276,4 @@ class Reply(ContractModel):
     pending_snapshot: RequestSnapshot | None = Field(default=None, exclude_if=lambda value: value is None)
     clarification: PendingClarification | None = Field(default=None, exclude_if=lambda value: value is None)
     display: DisplayOrder | None = Field(default=None, exclude_if=lambda value: value is None)
+    presentation: list[PresentationRun] | None = Field(default=None, exclude_if=lambda value: value is None)
