@@ -1,4 +1,21 @@
-## Этап 4: нативный HTML и прежний durable outbox
+## Этап 5: компактные и полные сохранённые источники
+
+tests/test_steel_agent_v2_compact_sources.py проверяет BR-007 через SteelAgent,
+Repository, настоящий SDK с mock HTTP и прежний durable outbox. Синтетика:
+1/2/10 источников, приоритет цитирований, дедупликация с сохранением разных titles,
+Markdown/HTML/bare URL, фактические anchors, API markers/диапазоны, отсутствие URL,
+unsafe targets, provider-only без выдуманного сайта, отсутствие нового search.
+Полные списки читаются после restart и после выхода за bounded history;
+проверены пользователь/request/revision isolation, барьер неудачного поиска,
+длинные Unicode/HTML labels, multipart, повтор event_id, delivery_unknown,
+неизменность snapshot/version/display и прежней SQL-схемы, старые receipts.
+Естественные команды представлены mock-планами существующего координатора;
+это не доказательство качества живого распознавания намерений или сайтов.
+Три прежних UX-assertions обновлены для коротких ссылок и скрытого provider;
+проверки provenance/readonly не удалены, skip/xfail не добавлены.
+Результаты — [отчёт этапа 5](reports/stage-5-compact-sources.md).
+
+## Исторический этап 4: нативный HTML и прежний durable outbox
 
 tests/test_steel_agent_v2_telegram_html.py проверяет безопасные нативные payload,
 неизменность буквальных технических символов, утверждённые семь листов, смешанные

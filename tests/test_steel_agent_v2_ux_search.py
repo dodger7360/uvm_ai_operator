@@ -221,7 +221,8 @@ def test_feeds_readonly_search_and_explanation_isolated_by_user(tmp_path):
     fake.plans=[dict(intent='web_search',search_query='synthetic')]
     fake.search_result=SearchAnswer('Synthetic weather',(),('oai-weather',))
     result=agent.handle(1,'Какая погода?',event_id='weather')
-    assert result.status=='ok' and 'oai-weather' in result.text and not result.sources
+    assert result.status=='ok' and 'oai-weather' not in result.text and not result.sources
+    assert result.search_providers==['oai-weather'] and 'ссылки не предоставлены' in result.text
     assert repo.load(1).model_dump_json()==before
     assert repo.last_search(2) is None
 

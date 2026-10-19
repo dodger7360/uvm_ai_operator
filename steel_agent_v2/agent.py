@@ -6,7 +6,7 @@ from .engine import RequestEngine, EngineError, SelectionError, totals, unit_evi
 from .repository import Busy
 from .presentation import render, display_order, display_layout, literal_fragments
 from .telegram_format import prose, literal
-from .contracts import PresentationRun
+from .search_sources import compact as compact_sources, full as full_sources
 from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
 
@@ -67,6 +67,7 @@ class SteelAgent:
             pending=self.repository.pending(user_id)
             clarification=self.repository.clarification(user_id,current)
             displayed=self.repository.last_display(user_id,current)
+            saved_sources=self.repository.source_search(user_id,current)
             display_ids=displayed.item_ids if displayed else None
             used_layout=None
             def present(state, view='normalized', proposed=None):
@@ -89,6 +90,8 @@ class SteelAgent:
                 'totals_are_partial':bool(current and self.engine.partial(current)),
                 'history':self.repository.history(user_id,current.id if current else None),
                 'last_search':self.repository.last_search(user_id),
+                'saved_search_sources':{'available':bool(saved_sources and saved_sources['reply'].sources),
+                                        'count':len(saved_sources['reply'].sources) if saved_sources else 0},
                 'previous_operation':self.repository.last_operation(user_id),
                 'pending_clarification':clarification.model_dump(mode='json') if clarification else None,
                 'supported_edit_operations':['set','regroup','undo','resolve','convert_mass',
@@ -183,6 +186,12 @@ class SteelAgent:
                                 change.model_copy(update={'message':message})
                                 for change in updated.changes[len(current.changes):]]})
                         text=present(updated,proposed=plan.display_layout)
+                    elif plan.view=='sources':
+                        sources,text,runs=full_sources(saved_sources)
+                        reply=Reply(text=text,status='ok',intent=plan.intent,request_id=current.id if current else None,
+                                    revision=current.revision if current else None,sources=sources,calls=calls,
+                                    presentation=runs,source_event_id=saved_sources['event_id'] if saved_sources else None)
+                        break
                     elif plan.view=='search_status':
                         text=search_status_text(context['last_search'])
                     elif plan.view=='custom':
@@ -199,20 +208,10 @@ class SteelAgent:
                             if (not sources and not providers or any(not safe_source(s.url) for s in sources)
                                     or any(p not in SEARCH_PROVIDERS for p in providers)):
                                 raise SearchUnavailable('no_sources')
-                            text=result.text+'\n\nИсточники:\n'+'\n'.join(
-                                [s.title+' — '+s.url if s.title!=s.url else s.url for s in sources]+
-                                ['Сервис web_search: '+p for p in providers])
+                            sources,text,runs=compact_sources(result.text,sources,[message,*literal_fragments(current)],providers)
                             reply=Reply(text=text,status='ok',intent=plan.intent,request_id=current.id if current else None,
-                                revision=current.revision if current else None,sources=sources,calls=calls)
-                            protected=[message,*literal_fragments(current)]
-                            runs=prose(result.text,protected)+literal('\n\nИсточники:\n')
-                            for n,source in enumerate(sources):
-                                if n:runs+=literal('\n')
-                                runs.append(PresentationRun(text=source.title,url=source.url))
-                            for n,provider in enumerate(providers):
-                                if sources or n:runs+=literal('\n')
-                                runs+=literal('Сервис web_search: '+provider)
-                            reply=reply.model_copy(update={'presentation':runs})
+                                revision=current.revision if current else None,sources=sources,calls=calls,presentation=runs,
+                                search_query=plan.search_query,search_text=result.text,search_providers=list(providers))
                         except Exception as error:
                             emit('steel_v2_search_unavailable', reason=safe_code(error))
                             reason=error.reason if isinstance(error,SearchUnavailable) else 'unknown'

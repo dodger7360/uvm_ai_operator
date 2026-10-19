@@ -168,6 +168,29 @@ class Repository:
         reply=Reply.model_validate_json(row[0])
         return {'intent':reply.intent,'status':reply.status}
 
+    def source_search(self, user, current):
+        """Latest search in this request/revision, never silently substitute an older query.
+
+        A failed or undelivered latest search is a barrier. Global chat searches
+        are available only without an active request. Uses existing turn JSON.
+        """
+        self._allowed(user)
+        with self.database.connection() as c:
+            c.execute('BEGIN')
+            row=c.execute("SELECT event_id,reply FROM steel_v2_turn WHERE user_id=? "
+                          "AND request_id IS ? AND json_extract(reply,'$.intent')='web_search' "
+                          "ORDER BY sequence DESC LIMIT 1",(user,current.id if current else None)).fetchone()
+            if row is None:return None
+            reply=Reply.model_validate_json(row['reply'])
+            if (reply.status!='ok' or (reply.request_id,reply.revision)!=
+                    ((current.id,current.revision) if current else (None,None))):return None
+            has_queue=c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='steel_v2_inbox'").fetchone()
+            if has_queue:
+                job=c.execute("SELECT state FROM steel_v2_inbox WHERE 'telegram:'||update_id=?",
+                              (row['event_id'],)).fetchone()
+                if job is not None and job['state']!='delivered':return None
+        return {'event_id':row['event_id'],'reply':reply}
+
     def finish(self, user, event, sequence, message, reply, updated=None):
         with self.commit_guard(user):
             return self._finish(user, event, sequence, message, reply, updated)
