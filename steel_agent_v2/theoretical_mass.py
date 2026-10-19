@@ -15,6 +15,29 @@ from .telegram_format import safe_link
 
 
 PIECES=set(PIECE_UNITS)
+STANDARD_NAMES={'standard','gost','гост','норматив'}
+LENGTH_NAMES={'length','length_mm','длина','piece_length','cut_length'}
+
+
+def standard_values(item,spec):
+    # Null facts are unknown, not an explicit constraint. Inspect actual facts
+    # independently of GPT's optional pointer so it cannot hide an explicit norm.
+    return {c.value for c in item.characteristics if c.value is not None
+            and (c.name.casefold() in STANDARD_NAMES or c.name==spec.standard_name)}
+
+
+def explicit_piece_length(item,spec):
+    from .presentation import _dimension
+    fields=[c for c in item.characteristics if c.name.casefold() in LENGTH_NAMES]
+    if len(fields)!=1:return None
+    field=fields[0]
+    if any(d.name==field.name for d in spec.dimensions):return None  # Never reinterpret a total/other semantic length.
+    if field.name.casefold()=='cut_length' and spec.cutting!='confirmed_piece_length':return None
+    # Only a structured length with an explicit unit (or explicitly named mm).
+    ref=DisplayDimension(role='piece_length',name=field.name,
+                         unit='мм' if field.name.casefold()=='length_mm' else None)
+    value=_dimension(item,ref)
+    return value[1] if value and value[1]>0 else None
 
 
 def product(*values, exponent=0):
@@ -87,6 +110,9 @@ def dimensions(item,spec):
         value=_dimension(item,reference)
         if value is not None and value[1]>0:values[reference.role]=value[1]
         else:values[reference.role]=None
+    if 'piece_length' not in values:
+        length=explicit_piece_length(item,spec)
+        if length is not None:values['piece_length']=length
     return values
 
 
@@ -95,7 +121,8 @@ def scope(item,spec):
     roles={'solid_carbon_sheet':['thickness','width','length'],
            'round_welded_pipe':['diameter','wall']}.get(spec.kind,sorted(r for r in dims if r not in {'piece_length','total_length'}))
     values=[dims.get(role) for role in roles]
-    return dims,values,fact(item,spec.profile_name),fact(item,spec.standard_name)
+    standards=standard_values(item,spec)
+    return dims,values,fact(item,spec.profile_name),next(iter(standards)) if len(standards)==1 else None
 
 
 def _dimension_role(name):
@@ -176,15 +203,15 @@ def dimension_consistency(item,spec):
     return None
 
 
-def piece_length(item,spec):
+def piece_length(item,spec,*,allow_structured=False):
     """One length policy shared by catalog, search, confirmation and replay validation."""
     if spec.cutting not in {'none','confirmed_piece_length'}:
         return None,None,'Для резки подтвердите длину готовой детали и схему поставки'
     dims=dimensions(item,spec)
     references={d.name for d in spec.dimensions if d.role=='piece_length'}
     explicit={c.name for c in item.characteristics
-              if c.name.casefold() in {'length','length_mm','длина','piece_length','cut_length'}}
-    if explicit-references:
+              if c.name.casefold() in LENGTH_NAMES}
+    if explicit-references and not (allow_structured and not references and len(explicit)==1 and explicit_piece_length(item,spec) is not None):
         return None,None,'Уточните противоречивую или неразобранную длину одного изделия'
     length=dims.get('piece_length')
     if length is not None:return length,'user',None
@@ -198,6 +225,9 @@ def applicable(reference,item,spec):
     try:validate_reference(reference)
     except (EngineError,ValueError):return False
     if reference.kind!=spec.kind:return False
+    if len(standard_values(item,spec))>1:return False
+    explicit_norms={c.name for c in item.characteristics if c.value is not None and c.name.casefold() in STANDARD_NAMES}
+    if reference.status!='owner_indicative' and explicit_norms and explicit_norms!={spec.standard_name}:return False
     if dimension_consistency(item,spec):return False
     if reference.family is not None and reference.family!=spec.family:return False
     execution_names={c.name for c in item.characteristics if c.name.casefold() in {'execution','исполнение','coating','покрытие','type','тип'}}
@@ -207,7 +237,7 @@ def applicable(reference,item,spec):
             role for role in dims if role not in {'piece_length','total_length'}):return False
     if reference.unspecified_standard_only and standard is not None:return False
     if reference.profile and reference.profile!=profile:return False
-    length,_,reason=piece_length(item,spec) if long_stock(spec) else (dims.get('piece_length'),None,None)
+    length,_,reason=piece_length(item,spec,allow_structured=reference.status=='owner_indicative') if long_stock(spec) else (dims.get('piece_length'),None,None)
     if long_stock(spec) and item.unit and item.unit.strip().casefold() in PIECES and reason:return False
     if reference.piece_length_mm is not None and (reason or length!=decimal_text(reference.piece_length_mm)):return False
     if reference.unit=='kg_per_piece' and ((dims.get('piece_length') is not None and reference.piece_length_mm is None)
@@ -238,8 +268,7 @@ def calculate(item,spec,signature,records):
             return unavailable('Коммерческая марка балки требует подтверждённого основания UVM')
         grade_audit=dict(source_grade=grade.raw,grade_policy=spec.grade_policy)
     # A missing semantic pointer must not silently bypass an explicit standard.
-    norm_names={c.name for c in item.characteristics if c.name.casefold() in {'standard','gost','гост','норматив'}}
-    if norm_names and norm_names!={spec.standard_name}:return unavailable('Уточните применимый норматив для расчёта')
+    if len(standard_values(item,spec))>1:return unavailable('Уточните применимый норматив для расчёта')
     execution_names={c.name for c in item.characteristics if c.name.casefold() in {'execution','исполнение','coating','покрытие','type','тип'}}
     if execution_names and execution_names!={spec.execution_name}:
         return unavailable('Уточните применимость коэффициента к указанному исполнению')
@@ -249,7 +278,7 @@ def calculate(item,spec,signature,records):
     if not piece and (not unit or unit[0]!='length'):return unavailable('Для расчёта нужны метры или штуки')
     length=None;origin=None
     if piece and long_stock(spec):
-        length,origin,reason=piece_length(item,spec)
+        length,origin,reason=piece_length(item,spec,allow_structured=any(r.status=='owner_indicative' for r in records))
         if reason:return unavailable(reason)
     candidates=[r for r in records if r.status in {'reviewed','owner_confirmed','owner_indicative'} and applicable(r,item,spec)]
     if not candidates:return unavailable('Нет проверенного коэффициента для этих характеристик')
