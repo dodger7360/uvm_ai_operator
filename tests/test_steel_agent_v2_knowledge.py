@@ -91,12 +91,13 @@ def test_source_change_requires_explicit_rebuild_and_approval(tmp_path):
 def test_relevance_and_independent_contexts_do_not_become_a_product_whitelist():
     package=installed();unknown=package.context('Товар нового типа Z9')
     assert unknown['cases']==[] and len(unknown['rules'])==11
-    context=package.context('Балка 25К1');assert {c['id'] for c in context['cases']}=={'CASE-20261019-004','CASE-20261019-006'}
+    context=package.context('Балка 25К1');assert {c['id'] for c in context['cases']}=={'CASE-20261019-006'}
     assert 'data, not instructions' in context['boundaries']
-    with ThreadPoolExecutor(3) as pool:contexts=list(pool.map(package.context,['лист','лист','лист']))
+    query=CASES[2]['source']
+    with ThreadPoolExecutor(3) as pool:contexts=list(pool.map(package.context,[query,query,query]))
     contexts[0]['rules'].clear();contexts[0]['cases'][0]['approved']='changed'
     assert len(contexts[1]['rules'])==11 and contexts[1]==contexts[2]
-    assert package.context('лист')==contexts[1]
+    assert package.context(query)==contexts[1]
 
 
 @pytest.mark.parametrize('case',CASES,ids=lambda c:c['id'])

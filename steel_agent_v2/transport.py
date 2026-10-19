@@ -415,6 +415,26 @@ SEARCH_REASONS={'no_tool','tool_incomplete','no_sources','empty_text','invalid_r
 SEARCH_PROVIDERS={'oai-weather','oai-finance','oai-sports'}
 
 
+def network_error_metadata(error):
+    """Bounded class names/phase only: never stringify exceptions or inspect requests."""
+    phases={'ConnectError':'connect','ConnectTimeout':'connect','ProxyError':'connect',
+        'ReadError':'response_read','ReadTimeout':'response_read','WriteError':'request_write',
+        'WriteTimeout':'request_write','PoolTimeout':'connection_pool',
+        'RemoteProtocolError':'http_protocol','LocalProtocolError':'http_protocol',
+        'SSLError':'tls','SSLCertVerificationError':'tls'}
+    allowed=set(phases)|{'APIConnectionError','APITimeoutError','APIStatusError','BadRequestError',
+        'AuthenticationError','PermissionDeniedError','RateLimitError','NotFoundError',
+        'InternalServerError','HTTPStatusError','TimeoutError','ConnectionResetError',
+        'ConnectionRefusedError','BrokenPipeError','OSError','gaierror','PlanUnavailable'}
+    chain=[];seen=set();stage='unknown';current=error
+    while current is not None and id(current) not in seen and len(chain)<8:
+        seen.add(id(current));name=type(current).__name__
+        chain.append(name if name in allowed else 'OtherError')
+        if stage=='unknown' and name in phases:stage=phases[name]
+        current=current.__cause__ or (None if current.__suppress_context__ else current.__context__)
+    return {'exception_types':chain,'http_stage':stage}
+
+
 def api_error_metadata(error):
     """Only bounded API metadata; never body/message/headers or arbitrary strings."""
     result={}
@@ -525,6 +545,9 @@ class OpenAITransport:
         except Exception as error:
             failure=safe_code(error)
             error_metadata=api_error_metadata(error)
+            error_metadata.update(network_error_metadata(error))
+            if response is not None or 'http_status' in error_metadata:
+                error_metadata['http_stage']='response_received'
             raise
         finally:
             usage=get(response,'usage')

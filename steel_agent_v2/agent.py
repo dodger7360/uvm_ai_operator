@@ -88,8 +88,8 @@ class SteelAgent:
                 used_layout=display_layout(state,prior,proposed)
                 return render(state,view,layout=used_layout,expert=True)
             if pending:pending['source_lines']=source_lines(pending['source_text'])
-            knowledge_input=message+('\n'+pending['source_text'] if pending else '')
-            expert=self.knowledge.context(knowledge_input,current)
+            pending_text=pending['source_text'] if pending else None
+            expert=self.knowledge.context(message,current,pending_text=pending_text)
             knowledge_use=KnowledgeContext.model_validate(self.knowledge.provenance(expert))
             selected_cases={case['id'] for case in expert['cases']}
             trace=CURRENT.get()
@@ -114,8 +114,8 @@ class SteelAgent:
                 'pending_clarification':clarification.model_dump(mode='json') if clarification else None,
                 'pending_mass':mass_pending.model_dump(mode='json') if mass_pending else None,
                 'expert_knowledge':expert,
-                'mass_reference_records':[r.model_dump(mode='json') for r in self.engine.mass_catalog.records
-                                          if not r.id.startswith('CASE-') or r.id.split(':')[0] in selected_cases],
+                'mass_reference_records':self.knowledge.context_records(self.engine.mass_catalog.records,
+                    message,current,pending_text=pending_text,selected_cases=selected_cases),
                 'supported_edit_operations':['set','regroup','undo','resolve','convert_mass',
                                              'set_quantity','add_quantity','set_length','calculate_mass'],'append_supported':True}
             context['last_search_explanation']=search_status_text(context['last_search'])
