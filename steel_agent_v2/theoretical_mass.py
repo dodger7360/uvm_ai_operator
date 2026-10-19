@@ -106,7 +106,13 @@ def _dimension_role(name):
     """
     name=re.sub(r'[_\-(),\[\]]',' ',name.casefold())
     name=' '.join(name.split())
-    name=re.sub(r'^(explicit|specified|declared|actual) ','',name)
+    # Metadata qualifiers only. Unknown qualifiers retain a dimensional signal
+    # below and fail closed; this never interprets user prose or chooses a fact.
+    modifiers={'explicit','specified','declared','actual','measured','of','or','and',
+        'pipe','tube','sheet','profile','product','наружный','внешний','outer','external',
+        'фактическая','фактический','измеренная','указанная','заданная',
+        'трубы','труба','листа','лист','профиля','изделия','или','и'}
+    name=' '.join(token for token in name.split() if token not in modifiers)
     unit=None
     match=re.search(r' (mm|cm|m|м|мм|см)$',name)
     if match:
@@ -117,7 +123,12 @@ def _dimension_role(name):
         'wall':'thickness','thickness':'thickness','wall thickness':'thickness',
         'thickness of wall':'thickness','толщина':'thickness','стенка':'thickness',
         'толщина стенки':'thickness','толщина листа':'thickness'}
-    return aliases.get(name),unit
+    role=aliases.get(name)
+    if role is None:
+        dimensional={'width','height','diameter','wall','thickness',
+            'ширина','высота','диаметр','стенка','стенки','толщина'}
+        if dimensional.intersection(name.split()):role='ambiguous'
+    return role,unit
 
 
 def dimension_consistency(item,spec):
@@ -140,6 +151,7 @@ def dimension_consistency(item,spec):
     values={role:set(numbers) for role,numbers in primary.items()}
     for characteristic in item.characteristics:
         role,named_unit=_dimension_role(characteristic.name)
+        if role=='ambiguous':return reason
         if role is not None:
             text=characteristic.value or ''
             suffix=re.fullmatch(r'\s*\d+(?:[.,]\d+)?\s*(мм|см|м)\s*',text)

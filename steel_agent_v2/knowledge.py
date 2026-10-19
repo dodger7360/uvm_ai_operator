@@ -59,8 +59,69 @@ def _table(text,headers):
 
 
 def _exact_coefficient(value):
-    if not re.fullmatch(r'\d+(?:[.,]\d+)?',value):_mass_error()
+    if not isinstance(value,str) or not re.fullmatch(r'\d+(?:[.,]\d+)?',value):_mass_error()
     return Decimal(value.replace(',','.'))
+
+
+_NUMBER=r'\d+(?:[.,]\d+)?'
+_UNIT=r'мм|см|м'
+_LINK=re.compile(r'\[([^\]\n]+)\]\((https?://[^\s()]+)\)')
+
+
+def _source_url(doc,entry,record,cells):
+    """Bind a complete Markdown destination to this CASE coefficient statement."""
+    if entry['id'].endswith('002'):
+        links=list(_LINK.finditer(cells[4]))
+        if len(links)!=1 or links[0].start()!=0 or links[0][2]!=record['source_url']:_mass_error()
+        return
+    lines=section(doc,6).splitlines();profile=re.escape(record['profile'])
+    if record['family']=='beam':
+        # The first link backs the shared three-profile table. A separately named
+        # link backs only its own profile (currently the additional 60Б2 source).
+        rows=[line for line in lines if line.startswith('- Вес балки ') and
+              re.search(r'(?<!\w)'+profile+r'(?=\s*\()',line.split(': ',1)[0])]
+        if len(rows)!=1 or ': ' not in rows[0]:_mass_error()
+        head,body=rows[0].split(': ',1)
+        amounts=re.findall(r'(?<!\w)'+profile+r' \(('+_NUMBER+r') кг/м\)',head)
+        if len(amounts)!=1 or _exact_coefficient(amounts[0])!=_exact_coefficient(record['value_text']):_mass_error()
+        links=list(_LINK.finditer(body))
+        if not links or links[0].start()!=0:_mass_error()
+        allowed=[links[0][2]]
+        for previous,link in zip(links,links[1:]):
+            if link[1]==record['profile'] and body[previous.end():link.start()].strip()==', отдельно':
+                allowed.append(link[2])
+    else:
+        label={'channel':'Швеллер','profile_pipe':'Профильная труба'}.get(record['family'])
+        if label is None:_mass_error()
+        prefix='- '+label+' '+record['profile']+': '
+        rows=[line for line in lines if line.startswith(prefix)]
+        if len(rows)!=1:_mass_error()
+        match=re.fullmatch(re.escape(prefix)+r'≈?('+_NUMBER+r') кг/м по (.+)',rows[0])
+        if not match or _exact_coefficient(match[1])!=_exact_coefficient(record['value_text']):_mass_error()
+        links=list(_LINK.finditer(match[2]))
+        if len(links)!=1 or links[0].start()!=0:_mass_error()
+        allowed=[links[0][2]]
+    if allowed.count(record['source_url'])!=1:_mass_error()
+
+
+def _length_mm(value,unit):
+    parsed=_exact_coefficient(value)
+    if parsed<=0:_mass_error()
+    sign,digits,exponent=parsed.as_tuple()
+    return Decimal((sign,digits,exponent+{'мм':0,'см':1,'м':3}[unit]))
+
+
+def _piece_length(entry,record,cells,approved_row,approved_prefix,grade):
+    """The approved row and the same table row must prove the stored stock length."""
+    approved=re.fullmatch(approved_prefix+re.escape(grade)+r' ('+_NUMBER+r')\s*('+_UNIT+r') — .+',approved_row)
+    if entry['id'].endswith('002'):
+        table=re.fullmatch(_NUMBER+r'×('+_NUMBER+r')\s*('+_UNIT+r')',cells[1])
+    else:
+        table=re.fullmatch(re.escape({'beam':'Балка','channel':'Швеллер','profile_pipe':'Труба профильная'}[record['family']]
+                                     +' '+record['profile'])+r' [^,\s]+, ('+_NUMBER+r')\s*('+_UNIT+r'), .+',cells[1])
+    if not approved or not table:_mass_error()
+    length=_exact_coefficient(record['piece_length_mm'])
+    if length<=0 or length!=_length_mm(approved[1],approved[2]) or length!=_length_mm(table[1],table[2]):_mass_error()
 
 
 def _grade_cell(prefix,row,flags=0,*,table_comma=False):
@@ -100,7 +161,7 @@ def _mass_evidence(doc,entry,record):
         if not match:_mass_error()
         coefficient=match[1]
     if _exact_coefficient(coefficient)!=_exact_coefficient(record['value_text']):_mass_error()
-    if record['source_url'] not in (line if entry['id'].endswith('002') else section(doc,6)):_mass_error()
+    _source_url(doc,entry,record,cells)
 
     # Bind a single grade to the corresponding approved row and original row.
     # This is validation of selected known CASE cells, never runtime extraction.
@@ -130,6 +191,7 @@ def _mass_evidence(doc,entry,record):
                      and source_grade.casefold()=='ст3' and grade=='С255'
                      and 'Ст3 → С255' in section(doc,3))
             if not allowed:_mass_error()
+    _piece_length(entry,record,cells,approved_rows[0],approved_prefix,grade)
     return line
 
 
