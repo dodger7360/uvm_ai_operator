@@ -433,9 +433,9 @@ def test_whitespace_cleanup_never_hides_referenced_or_structural_damage(rig,kind
     assert not any('source_range' in p.get('text','') or 'schema:' in p.get('text','') for m,p in rig.api.calls)
 
 
-def test_queued_beams_cleanup_and_followup_unsupported_add_keep_request(rig):
+def test_queued_beams_cleanup_and_ambiguous_followup_add_keep_request(rig):
     from test_steel_agent_v2_015_reproduction import whitespace_plan
-    fake=Fake(whitespace_plan(),dict(intent='clarify',answer='Добавление новых позиций пока не поддерживается. Сохраните исходный список.'))
+    fake=Fake(whitespace_plan(),dict(intent='clarify',answer='Уточните, какие новые позиции добавить, чтобы не учесть прежние дважды.'))
     admit(rig,1,text=BEAMS)
     executor=Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake)
     executor.execute(rig.queue.claim())
@@ -443,7 +443,7 @@ def test_queued_beams_cleanup_and_followup_unsupported_add_keep_request(rig):
     admit(rig,2,text='Добавь ещё балки из предыдущего списка')
     executor.execute(rig.queue.claim())
     assert Repository(rig.queue.database).load(1).model_dump_json()==before
-    assert fake.calls[1][0]['append_supported'] is False
+    assert fake.calls[1][0]['append_supported'] is True
     assert fake.calls[1][0]['supported_edit_operations']==['set','regroup','undo','resolve','convert_mass',
                                                           'set_quantity','add_quantity','set_length','calculate_mass']
 

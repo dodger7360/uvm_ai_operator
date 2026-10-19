@@ -139,7 +139,7 @@ def test_rejected_beams_followup_add_can_reproduce_schema_value_error(tmp_path):
     invalid_add = dict(intent='edit_request', operations=[])
     repo, fake, api, send = adapter(tmp_path, [proposal(), unsafe_plan(), unsafe_plan(),
         dict(intent='answer_question', answer='Список балок не вошёл в заявку.'), invalid_add, invalid_add,
-        dict(intent='clarify', answer='Добавление новых позиций к текущей заявке пока не поддерживается. Сохраните список отдельно.')])
+        dict(intent='clarify', answer='Уточните, какой сохранённый список добавить.')])
     send(1, SOURCE)
     before = repo.load(1).model_dump_json()
     send(2, BEAMS)
@@ -152,9 +152,9 @@ def test_rejected_beams_followup_add_can_reproduce_schema_value_error(tmp_path):
     assert any(row['content'] == BEAMS for row in fake.calls[4][0]['history'])
     assert repo.load(1).model_dump_json() == before
     send(5, 'Добавь эти позиции')
-    assert 'не поддерживается' in api.call.call_args.kwargs['text']
+    assert 'какой сохранённый список добавить' in api.call.call_args.kwargs['text']
     assert repo.load(1).model_dump_json() == before
-    # Existing clarify intent CAN express the safe limitation, without adding an operation.
+    # Ambiguous historical references still clarify; unsupported-append policy is superseded.
     send(5, 'Как безопасно продолжить?')
     assert 'schema:' not in api.call.call_args.kwargs['text']
     assert repo.load(1).model_dump_json() == before

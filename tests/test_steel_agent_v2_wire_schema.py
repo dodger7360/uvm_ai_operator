@@ -95,7 +95,8 @@ def test_final_quantity_is_exact_nullable_string():
 def test_original_sdk_schema_exposes_concrete_defaults():
     from openai.lib._parsing._responses import type_to_text_format_param
     original=type_to_text_format_param(AgentPlan)['schema']
-    assert subset_issues(original)==['$/properties/answer/default', '$/properties/view/default']
+    assert subset_issues(original)==['$/properties/awaiting_new_request/default',
+                                    '$/properties/answer/default', '$/properties/view/default']
     # SDK already handles required, nullable, refs and additionalProperties.
     assert original['properties']['answer']['default']==''
     assert original['properties']['view']['default']=='normalized'

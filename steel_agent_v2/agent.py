@@ -68,6 +68,13 @@ class SteelAgent:
         if cached is not None:return cached
         calls=0;clarification=None;knowledge_use=None
         try:
+            def close_reply(count=0):
+                reply=Reply(text='Заявка закрыта. История сохранена. Можно начать новую заявку или продолжить общение.'
+                    if current else 'Активной заявки нет. Можно продолжить общение.',
+                    status='ok',intent='close_request',calls=count,
+                    request_id=current.id if current else None,revision=current.revision if current else None)
+                return self.repository.finish(user_id,event,sequence,message,reply)
+            if message.strip()=='/close':return close_reply()
             pending=self.repository.pending(user_id)
             clarification=self.repository.clarification(user_id,current)
             displayed=self.repository.last_display(user_id,current)
@@ -110,7 +117,7 @@ class SteelAgent:
                 'mass_reference_records':[r.model_dump(mode='json') for r in self.engine.mass_catalog.records
                                           if not r.id.startswith('CASE-') or r.id.split(':')[0] in selected_cases],
                 'supported_edit_operations':['set','regroup','undo','resolve','convert_mass',
-                                             'set_quantity','add_quantity','set_length','calculate_mass'],'append_supported':False}
+                                             'set_quantity','add_quantity','set_length','calculate_mass'],'append_supported':True}
             context['last_search_explanation']=search_status_text(context['last_search'])
             notes=[];previous=None;updated=None;reply=None;first_intent=None;proposals=[];source_pending=None
             shown_normalized=False
@@ -130,14 +137,27 @@ class SteelAgent:
                     candidate=json.loads(raw) if isinstance(raw,str) else previous
                     if isinstance(candidate,dict) and first_intent is None:
                         intent=candidate.get('intent')
-                        if intent in {'create_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}:
+                        if intent in {'create_request','append_request','close_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}:
                             first_intent=intent
                     validation_stage='plan_contract'
                     plan=AgentPlan.model_validate_json(raw) if isinstance(raw,str) else AgentPlan.model_validate(raw)
                     validation_stage='request_validation'
-                    if plan.intent in {'create_request','edit_request'} and first_intent != plan.intent:
+                    if plan.intent in {'create_request','append_request','close_request','edit_request'} and first_intent != plan.intent:
                         raise EngineError('repair_cannot_change_to_different_mutation_intent')
-                    if plan.intent=='create_request':
+                    if plan.intent=='close_request':
+                        if (plan.expected_request_id,plan.expected_revision)!=(
+                                current.id if current else None,current.revision if current else None):
+                            raise EngineError('stale_request_revision')
+                        return close_reply(calls)
+                    elif plan.intent=='append_request':
+                        updated=self.engine.append(current,plan,message,f'{user_id}:{event}')
+                        layout=plan.display_layout
+                        if layout:
+                            ids={old.id:new.id for old,new in zip(plan.extraction.items,updated.items[len(current.items):])}
+                            layout=layout.model_copy(update={'items':[hint.model_copy(update={'item_id':ids[hint.item_id]})
+                                for hint in layout.items if hint.item_id in ids]})
+                        text=present(updated,proposed=layout)
+                    elif plan.intent=='create_request':
                         if chosen_source is unselected:chosen_source=plan.pending_event_id
                         if chosen_source!=plan.pending_event_id:
                             raise EngineError('repair_cannot_change_source')
@@ -332,7 +352,8 @@ class SteelAgent:
                     partial=state and self.engine.partial(state) and (updated is not None or request_view)
                     reply=Reply(text=text,status='partial' if partial else 'ok',
                         intent=plan.intent,request_id=state.id if state else None,revision=state.revision if state else None,calls=calls,
-                        diagnostics=['pending_resolved:'+source_pending] if updated is not None and source_pending else [],
+                        diagnostics=(['pending_resolved:'+source_pending] if updated is not None and source_pending else
+                                     ['pending_source'] if plan.awaiting_new_request else []),
                         clarification=next_clarification)
                     shown_normalized=(updated is not None or plan.intent=='show_request' and plan.view in {'normalized','forward'}
                                       or plan.intent=='answer_question' and plan.view=='forward')
@@ -361,7 +382,7 @@ class SteelAgent:
                         try:candidate=json.loads(raw_proposal)
                         except (ValueError,TypeError):candidate=None
                     if isinstance(candidate,dict):
-                        if first_intent is None and candidate.get('intent') in {'create_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}:
+                        if first_intent is None and candidate.get('intent') in {'create_request','append_request','close_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}:
                             first_intent=candidate['intent']
                         if candidate.get('intent')=='create_request' and not candidate.get('operations'):
                             key=candidate.get('pending_event_id')
@@ -377,7 +398,7 @@ class SteelAgent:
                     context['validation_repair']=(error.errors(include_input=False,include_context=False)
                         if isinstance(error,ValidationError) else [{'type':'request_validation','msg':str(error)}])
                     trace=CURRENT.get()
-                    safe_intents={'create_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}
+                    safe_intents={'create_request','append_request','close_request','edit_request','show_request','answer_question','web_search','free_chat','clarify'}
                     intent=candidate.get('intent') if isinstance(candidate,dict) else None
                     extraction=candidate.get('extraction') if isinstance(candidate,dict) else None
                     items=extraction.get('items') if isinstance(extraction,dict) else None

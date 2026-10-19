@@ -209,12 +209,13 @@ class MassCandidate(ContractModel):
 
 
 class AgentPlan(ContractModel):
-    intent: Literal['create_request', 'edit_request', 'show_request', 'answer_question',
+    intent: Literal['create_request', 'append_request', 'close_request', 'edit_request', 'show_request', 'answer_question',
                     'web_search', 'free_chat', 'clarify']
     expected_request_id: str | None = None
     expected_revision: int | None = None
     extraction: Extraction | None = None
     pending_event_id: str | None = None
+    awaiting_new_request: bool = False
     operations: list[Operation] = Field(default_factory=list)
     answer: str = ''
     view: Literal['normalized', 'original', 'totals', 'explanation',
@@ -231,6 +232,8 @@ class AgentPlan(ContractModel):
 
     @model_validator(mode='after')
     def only_intended_mutation(self):
+        if self.awaiting_new_request and self.intent!='clarify':
+            raise ValueError('new source confirmation belongs only to clarify')
         if self.clarification is not None and self.intent != 'clarify':
             raise ValueError('clarification proposal belongs only to clarify')
         if self.clarification_event_id is not None and self.intent != 'edit_request':
@@ -242,11 +245,13 @@ class AgentPlan(ContractModel):
                 raise ValueError('readonly presentation requires show_request or answer_question')
             if self.view=='custom' and not self.answer.strip():
                 raise ValueError('custom presentation requires answer')
-        if self.intent == 'create_request':
+        if self.intent in {'create_request','append_request'}:
             if self.extraction is None or self.operations:
-                raise ValueError('create_request requires extraction and no operations')
+                raise ValueError('create/append requires extraction and no operations')
         elif self.extraction is not None:
-            raise ValueError('only create_request may carry extraction')
+            raise ValueError('only create/append may carry extraction')
+        if self.intent=='append_request' and (self.expected_request_id is None or self.expected_revision is None):
+            raise ValueError('append requires exact request revision')
         if self.intent == 'edit_request':
             if not self.operations or self.expected_request_id is None or self.expected_revision is None:
                 raise ValueError('edit requires operations and exact request revision')
@@ -260,7 +265,7 @@ class AgentPlan(ContractModel):
         elif self.search_query is not None and not (self.intent=='edit_request' and self.operations
                 and all(op.kind=='calculate_mass' for op in self.operations)):
             raise ValueError('search_query belongs only to web_search')
-        if self.mass_specs and self.intent not in {'create_request','edit_request'}:
+        if self.mass_specs and self.intent not in {'create_request','append_request','edit_request'}:
             raise ValueError('mass specs belong to request mutations')
         if self.mass_candidates and self.intent!='answer_question':
             raise ValueError('mass research cannot carry mutations')

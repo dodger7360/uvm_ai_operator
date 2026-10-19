@@ -244,6 +244,35 @@ class RequestEngine:
         from .theoretical_mass import refresh
         return self.validate(refresh(request,mass_specs,self.mass_catalog))
 
+    def append(self, current, plan, source, event_key):
+        """Validate only the new source, then compose an immutable version in memory."""
+        require(current is not None,'no_active_request')
+        require((plan.expected_request_id,plan.expected_revision)==(current.id,current.revision),'stale_request_revision')
+        segment=self.create(plan.extraction,source,event_key,plan.mass_specs)
+        prefix='append_'+str(uuid5(NAMESPACE_URL,event_key))+'_'+str(current.revision)+'_'
+        record_ids={r.id:prefix+r.id for r in segment.records}
+        item_ids={i.id:prefix+i.id for i in segment.items}
+        offset=len(current.original_text)+1
+        def remap(item):
+            return item.model_copy(update={'id':item_ids[item.id],'source_id':record_ids[item.source_id],
+                'characteristics':[c.model_copy(update={'source_ids':[record_ids[k] for k in c.source_ids]})
+                                   for c in item.characteristics]})
+        changed=current.model_copy(deep=True,update={
+            'revision':current.revision+1,'undo_stack':[*current.undo_stack,current.revision],
+            'original_text':current.original_text+'\n'+source,
+            'records':[*current.records,*[r.model_copy(update={'id':record_ids[r.id],
+                'start':r.start+offset,'end':r.end+offset}) for r in segment.records]],
+            'originals':[*current.originals,*map(remap,segment.originals)],
+            'items':[*current.items,*map(remap,segment.items)],
+            'groups':[*current.groups,*[g.model_copy(update={'id':prefix+g.id,
+                'item_ids':[item_ids[k] for k in g.item_ids]}) for g in segment.groups]],
+            'questions':list(dict.fromkeys([*current.questions,*segment.questions])),
+            'changes':[*current.changes,*[Change(item_id=item_ids[i.id],field='append',before=None,
+                after=i.label,evidence=source,message=source) for i in segment.items]],
+            'theoretical_mass':[*current.theoretical_mass,*[m.model_copy(update={
+                'spec':m.spec.model_copy(update={'item_id':item_ids[m.spec.item_id]})}) for m in segment.theoretical_mass]]})
+        return self.validate(changed)
+
     def edit(self, current, plan, message, read_version, display_ids=None, mass_approved=()):
         require(current is not None, 'no_active_request')
         require((plan.expected_request_id, plan.expected_revision) == (current.id, current.revision), 'stale_request_revision')
