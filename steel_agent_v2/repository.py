@@ -88,7 +88,9 @@ class Repository:
         self._allowed(user)
         with self.database.connection() as c:
             rows = c.execute('SELECT message,reply FROM steel_v2_turn WHERE user_id=? '
-                'AND (request_id IS NULL OR request_id=?) ORDER BY sequence DESC LIMIT 20', (user,request_id)).fetchall()
+                "AND sequence>coalesce((SELECT max(sequence) FROM steel_v2_turn WHERE user_id=? "
+                "AND json_extract(reply,'$.intent')='close_request' AND json_extract(reply,'$.status')='ok'),0) "
+                'AND (request_id IS NULL OR request_id=?) ORDER BY sequence DESC LIMIT 20', (user,user,request_id)).fetchall()
         messages = []
         for row in reversed(rows):
             messages.extend([{'role':'user','content':row['message']},
@@ -104,8 +106,7 @@ class Repository:
         self._allowed(user)
         with self.database.connection() as c:
             rows=c.execute("SELECT event_id,message,reply FROM steel_v2_turn WHERE user_id=? "
-                "AND EXISTS(SELECT 1 FROM json_each(steel_v2_turn.reply,'$.diagnostics') "
-                "WHERE value='pending_source' OR value LIKE 'pending_resolved:%') ORDER BY sequence DESC", (user,)).fetchall()
+                "ORDER BY sequence DESC", (user,)).fetchall()
         resolved=set()
         for row in rows:
             reply=Reply.model_validate_json(row['reply'])
@@ -113,6 +114,8 @@ class Repository:
             if 'pending_source' in reply.diagnostics and row['event_id'] not in resolved:
                 return {'event_id':row['event_id'], 'source_text':row['message'],
                         'verified_partial':reply.pending_snapshot.model_dump(mode='json') if reply.pending_snapshot else None}
+            if reply.intent in {'create_request','close_request'} and reply.status in {'ok','partial'}:
+                return None  # Successful replacement/closure ends the previous working scope.
         return None
 
     def clarification(self, user, current):
@@ -221,7 +224,8 @@ class Repository:
             row = c.execute('SELECT sequence,payload FROM steel_v2_active WHERE user_id=?',(user,)).fetchone()
             if (row['sequence'] if row else 0) != sequence:
                 raise EngineError('concurrent_state_change')
-            payload = updated.model_dump_json() if updated is not None else (row['payload'] if row else None)
+            payload = (None if reply.intent=='close_request' and reply.status=='ok' else
+                updated.model_dump_json() if updated is not None else (row['payload'] if row else None))
             if updated is not None:
                 c.execute('INSERT INTO steel_v2_version VALUES(?,?,?,?)', (user,updated.id,updated.revision,payload))
             c.execute('INSERT INTO steel_v2_active VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET '

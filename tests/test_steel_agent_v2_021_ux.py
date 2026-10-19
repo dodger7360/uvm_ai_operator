@@ -136,11 +136,11 @@ def test_rejected_creation_has_no_append_claim_and_retains_active(rig,caplog):
     assert all('i1' not in json.dumps(e) for e in validation)
 
 
-def test_actual_unsupported_append_still_uses_typed_clarification(rig):
+def test_append_without_new_product_details_uses_typed_clarification(rig):
     repo=Repository(rig.queue.database);SteelAgent(Fake(proposal()),repo).handle(1,SOURCE,event_id='initial')
     before=repo.load(1).model_dump_json()
-    reply=SteelAgent(Fake(dict(intent='clarify',answer='Добавление новых позиций пока не поддерживается.')),repo).handle(1,'Добавь позиции',event_id='append')
-    assert 'Добавление' in reply.text and reply.intent=='clarify'
+    reply=SteelAgent(Fake(dict(intent='clarify',answer='Какие новые позиции добавить?')),repo).handle(1,'Добавь позиции',event_id='append')
+    assert 'Какие новые позиции' in reply.text and reply.intent=='clarify'
     assert repo.load(1).model_dump_json()==before
 
 
