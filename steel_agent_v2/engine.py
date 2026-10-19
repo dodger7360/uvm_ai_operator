@@ -259,8 +259,10 @@ class RequestEngine:
             require(bool(current.undo_stack), 'nothing_to_undo')
             old = read_version(current.id, current.undo_stack[-1])
             require(old is not None, 'undo_version_missing')
-            return self.validate(old.model_copy(deep=True, update={'revision': current.revision+1,
-                'undo_stack': current.undo_stack[:-1]}))
+            from .theoretical_mass import revalidate_historical
+            restored=old.model_copy(deep=True, update={'revision': current.revision+1,
+                'undo_stack': current.undo_stack[:-1]})
+            return self.validate(revalidate_historical(restored))
         changed = current.model_copy(deep=True)
         by_id = {item.id: item for item in changed.items}
         touched = set()

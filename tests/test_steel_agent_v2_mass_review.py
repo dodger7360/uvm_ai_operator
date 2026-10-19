@@ -4,6 +4,7 @@ No runtime knowledge loading and no live model: plans below are controlled mocks
 The CASE sources are owner-published Git documents, never production SQLite.
 """
 from decimal import Decimal
+import json
 from pathlib import Path
 import re
 
@@ -11,7 +12,7 @@ import pytest
 
 from database import Database
 from steel_agent_v2 import SteelAgent, Repository, RequestEngine
-from steel_agent_v2.contracts import AgentPlan, MassReference, MassSpec, PendingMass
+from steel_agent_v2.contracts import AgentPlan, MassReference, MassSpec, PendingMass, Reply
 from steel_agent_v2.engine import EngineError
 from steel_agent_v2.presentation import render
 from steel_agent_v2.theoretical_mass import (
@@ -25,6 +26,7 @@ from test_steel_agent_v2_theoretical_mass import (
     setup, mass, beam_plan, sheet_plan, pipe_plan, spec, calc_plan, dict_source, SHEET,
 )
 from test_steel_agent_v2_telegram_html import visible
+from test_steel_agent_v2_queue import rig, admit, Executor
 from steel_agent_v2.telegram_format import payloads
 
 
@@ -476,3 +478,203 @@ def test_catalog_length_and_value_use_the_same_decimal_validation_as_calculation
     _,repo,_,_=setup(tmp_path,source,plan,MassCatalog([reference(piece_length_mm='12000,0',value='681,6')]))
     assert mass(repo).tonnes==Decimal('27.264') and mass(repo).length_origin=='user'
     assert mass(repo).reference.value=='681,6'  # Preserve source spelling, never a float.
+
+
+def legacy_mass_snapshot(repo,change=None):
+    """Fault/compatibility fixtures only: rewrite this test's temporary initial JSON."""
+    state=repo.load(1)
+    raw=json.loads(state.model_dump_json())
+    for annotation in raw['theoretical_mass']:
+        for field in ('piece_length_mm','length_origin','source_grade','grade_policy'):
+            annotation.pop(field,None)
+        for field in ('grade_policy','execution_name'):
+            if annotation['spec'].get(field) is None:annotation['spec'].pop(field,None)
+        if annotation['reference']:
+            for field in ('approval_scope','execution'):
+                if annotation['reference'].get(field) is None:annotation['reference'].pop(field,None)
+    if change:change(raw['theoretical_mass'][0])
+    payload=json.dumps(raw,ensure_ascii=False,separators=(',',':'))
+    with repo.database.connection() as connection:
+        connection.execute('UPDATE steel_v2_active SET payload=? WHERE user_id=1',(payload,))
+        connection.execute('UPDATE steel_v2_version SET payload=? WHERE user_id=1 AND request_id=? AND revision=1',
+                           (payload,state.id))
+    return repo.load(1),payload.encode('utf-8')
+
+
+def version_bytes(repo,request_id,revision=1):
+    with repo.database.connection() as connection:
+        row=connection.execute('SELECT CAST(payload AS BLOB) FROM steel_v2_version '
+                               'WHERE user_id=1 AND request_id=? AND revision=?',(request_id,revision)).fetchone()
+    return row[0] if row else None
+
+
+@pytest.mark.parametrize('length,origin',[('12000 мм','user'),(None,'uvm_default')])
+def test_undo_legacy_mass_without_length_audit_restores_goods_and_mass(tmp_path,length,origin):
+    source,plan=beam_plan(length);agent,repo,fake,_=setup(tmp_path,source,plan)
+    historical,stored=legacy_mass_snapshot(repo)
+    fake.plans.append(edit(historical,[set_op(field='quantity',name=None,value='1',evidence='1')]))
+    assert agent.handle(1,'Нужна 1 штука',event_id='one-legacy').status=='ok'
+    assert mass(repo).tonnes==Decimal('.6816')
+    undo=edit(repo.load(1),[dict(kind='undo')]);fake.plans.extend([undo,undo])
+    reply=agent.handle(1,'Отмени',event_id='undo-legacy')
+    assert reply.status=='ok',(reply.status,reply.diagnostics)
+    restored=repo.load(1)
+    assert restored.items==historical.items and restored.items[0].quantity==40
+    assert mass(repo).tonnes==Decimal('27.264')
+    assert mass(repo).piece_length_mm==12000 and mass(repo).length_origin==origin
+    assert restored.originals==historical.originals and restored.original_text==historical.original_text
+    assert restored.groups==historical.groups and restored.questions==historical.questions
+    assert restored.revision==3 and version_bytes(repo,historical.id)==stored
+    assert repo.version(1,historical.id,3)==restored and len(fake.calls)==3
+
+
+def edit_then_undo(agent,repo,fake):
+    historical=repo.load(1)
+    fake.plans.append(edit(historical,[set_op(field='quantity',name=None,value='1',evidence='1')]))
+    assert agent.handle(1,'Нужна 1 штука',event_id='one-legacy').status in {'ok','partial'}
+    undo=edit(repo.load(1),[dict(kind='undo')]);fake.plans.extend([undo,undo])
+    return agent.handle(1,'Отмени',event_id='undo-legacy')
+
+
+@pytest.mark.parametrize('damage',[
+    'wrong_tonnes','missing_reference','unknown_unit_length','mismatched_unit_length',
+    'unconfirmed_cutting','bad_coefficient','changed_classification','wrong_length_audit','wrong_origin_audit',
+])
+def test_undo_restores_goods_but_never_accepts_unsafe_historical_mass(tmp_path,damage):
+    source,plan=beam_plan('12000 мм');agent,repo,fake,_=setup(tmp_path,source,plan)
+    def corrupt(annotation):
+        if damage=='wrong_tonnes':annotation['tonnes']='99'
+        elif damage=='missing_reference':annotation['reference']=None
+        elif damage in {'unknown_unit_length','mismatched_unit_length'}:
+            annotation['reference']=reference(value='340.8',piece_length_mm=
+                None if damage=='unknown_unit_length' else '6000').model_dump(mode='json')
+        elif damage=='unconfirmed_cutting':annotation['spec']['cutting']='specified'
+        elif damage=='bad_coefficient':annotation['reference']['value']='not-a-number'
+        elif damage=='changed_classification':annotation['classification']='stale-classification'
+        elif damage=='wrong_length_audit':annotation['piece_length_mm']='6000'
+        elif damage=='wrong_origin_audit':annotation['length_origin']='uvm_default'
+    historical,stored=legacy_mass_snapshot(repo,corrupt)
+    reply=edit_then_undo(agent,repo,fake)
+    assert reply.status in {'ok','partial'} and '≈' not in reply.text
+    restored=repo.load(1);annotation=mass(repo)
+    assert restored.items==historical.items and len(restored.items)==1 and restored.items[0].quantity==40
+    assert restored.original_text==historical.original_text and restored.originals==historical.originals
+    assert restored.records==historical.records and restored.groups==historical.groups
+    assert restored.questions==historical.questions and restored.revision==3
+    assert annotation.status=='unavailable' and annotation.tonnes is None and 'требует проверки' in annotation.reason
+    assert annotation.reference==historical.theoretical_mass[0].reference
+    assert version_bytes(repo,historical.id)==stored and repo.version(1,historical.id,3)==restored
+    assert len(fake.calls)==3 and not fake.search_calls
+    # A restart and both readonly paths must retain goods but never display old tonnes.
+    reopened=Repository(Database(tmp_path/'mass.sqlite3'))
+    viewer=SteelAgent(Fake(dict(intent='show_request'),dict(intent='show_request',view='explanation')),reopened)
+    for event in ('show','explain'):
+        answer=viewer.handle(1,'Покажи',event_id=event)
+        assert '≈' not in answer.text and '40 шт' in answer.text and 'требует проверки' in answer.text
+    assert reopened.load(1)==restored and version_bytes(reopened,historical.id)==stored
+
+
+def test_legacy_undo_uses_historical_basis_not_new_catalog_and_keeps_editing_after_restart(tmp_path):
+    source,plan=beam_plan('12000 мм');agent,repo,fake,_=setup(tmp_path,source,plan)
+    historical,stored=legacy_mass_snapshot(repo)
+    # Deliberately different catalog: undo is not allowed to adopt its new value.
+    agent.engine.mass_catalog=MassCatalog([reference(id='new-table',revision='99',unit='kg_per_m',
+                                                   value='90',piece_length_mm=None)])
+    assert edit_then_undo(agent,repo,fake).status=='ok'
+    restored=repo.load(1)
+    assert mass(repo).reference==historical.theoretical_mass[0].reference and mass(repo).reference.value=='56.8'
+    assert mass(repo).tonnes==Decimal('27.264')
+    reopened=Repository(Database(tmp_path/'mass.sqlite3'));fake=Fake()
+    agent=SteelAgent(fake,reopened,mass_catalog=MassCatalog([]))
+    fake.plans.append(edit(restored,[dict(kind='set_length',target_id='i1',field='characteristic',name='length',
+        value='6',unit='м',evidence='6',unit_evidence='м')]))
+    assert agent.handle(1,'Длина 6 м',event_id='length-after-undo').status=='ok'
+    assert mass(reopened).tonnes==Decimal('13.632') and mass(reopened).piece_length_mm==6000
+    fake.plans.append(edit(reopened.load(1),[dict(kind='undo')]))
+    answer=agent.handle(1,'Отмени',event_id='undo-length')
+    assert answer.status=='ok' and mass(reopened).tonnes==Decimal('27.264')
+    fake.plans.append(edit(reopened.load(1),[set_op(field='quantity',name=None,value='2',evidence='2')]))
+    assert agent.handle(1,'Нужно 2 штуки',event_id='quantity-after-undo').status=='ok'
+    assert mass(reopened).tonnes==Decimal('1.3632')
+    fake.plans.append(edit(reopened.load(1),[dict(kind='undo')]))
+    last=agent.handle(1,'Отмени',event_id='undo-quantity')
+    final=reopened.load(1)
+    assert last.status=='ok' and final.revision==7 and final.items==historical.items
+    assert final.originals==historical.originals and final.changes==historical.changes
+    assert version_bytes(reopened,historical.id)==stored
+    assert len(fake.calls)==4 and not fake.search_calls and reopened.load(2) is None
+    assert SteelAgent(Fake(),reopened).handle(1,'Отмени',event_id='undo-quantity')==last
+
+
+def test_legacy_missing_commercial_grade_audit_is_reconstructed_from_verified_policy(tmp_path):
+    source,plan=beam_plan('12000 мм');plan['mass_specs'][0]['grade_policy']='uvm_beam_commercial'
+    agent,repo,fake,_=setup(tmp_path,source,plan)
+    historical,stored=legacy_mass_snapshot(repo)
+    assert historical.theoretical_mass[0].source_grade is None
+    assert edit_then_undo(agent,repo,fake).status=='ok'
+    assert mass(repo).source_grade=='Ст3' and mass(repo).grade_policy=='uvm_beam_commercial'
+    assert version_bytes(repo,historical.id)==stored and repo.load(1).items==historical.items
+
+
+@pytest.mark.parametrize('label',['Труба профильная','Швеллер','Уголок'])
+def test_legacy_undo_never_grants_twelve_metre_default_to_other_stock(tmp_path,label):
+    source,plan,_=sample([(label,[('profile','X','X')],'40','шт')])
+    hint=spec('linear',profile='profile',grade=None);hint['evidence']=label
+    plan['mass_specs']=[hint]
+    record=reference(kind='linear',profile='X',unit='kg_per_m',piece_length_mm=None,value='56.8')
+    agent,repo,fake,_=setup(tmp_path,source,plan,MassCatalog([record]))
+    def corrupt(annotation):
+        annotation.update(status='calculated',tonnes='27.264',reference=record.model_dump(mode='json'))
+    historical,stored=legacy_mass_snapshot(repo,corrupt)
+    assert edit_then_undo(agent,repo,fake).status=='ok'
+    assert repo.load(1).items==historical.items and mass(repo).tonnes is None
+    assert mass(repo).piece_length_mm is None and mass(repo).length_origin is None
+    assert version_bytes(repo,historical.id)==stored
+
+
+def test_compatible_readonly_legacy_view_does_not_weaken_new_snapshot_validation(tmp_path):
+    source,plan=beam_plan('12000 мм');_,repo,_,_=setup(tmp_path,source,plan)
+    historical,stored=legacy_mass_snapshot(repo)
+    with pytest.raises(EngineError,match='invalid_or_stale_mass_annotation'):
+        RequestEngine().validate(historical)  # Strict validation itself was NOT relaxed.
+    fake=Fake(dict(intent='show_request'),dict(intent='show_request',view='explanation'))
+    agent=SteelAgent(fake,repo)
+    for event in ('show-old','explain-old'):
+        reply=agent.handle(1,'Покажи',event_id=event)
+        assert reply.status=='ok' and '27,264' in reply.text
+        assert repo.load(1)==historical and version_bytes(repo,historical.id)==stored
+    assert 'Длина штуки: 12000 мм; указана пользователем' in reply.text
+    assert len(fake.calls)==2 and not fake.search_calls
+    assert repo.version(1,historical.id,2) is None
+
+
+def test_undo_commit_failure_rolls_back_snapshot_version_history_and_outbox(rig):
+    import sqlite3
+    source,plan=beam_plan('12000 мм');fake=Fake(plan)
+    executor=Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake)
+    admit(rig,630,text=source);executor.execute(rig.queue.claim())
+    repo=Repository(rig.queue.database)
+    historical,stored=legacy_mass_snapshot(repo)
+    fake.plans.append(edit(historical,[set_op(field='quantity',name=None,value='1',evidence='1')]))
+    admit(rig,631,text='Нужна 1 штука');executor.execute(rig.queue.claim())
+    assert mass(repo).tonnes==Decimal('.6816')
+    admit(rig,632,text='Отмени');rig.queue.claim()
+    hook=rig.queue.finish_hook(632)
+    def fail_after_outbox(connection,*args):
+        hook(connection,*args)
+        raise sqlite3.OperationalError('synthetic failure after undo outbox insertion')
+    transactional=Repository(rig.queue.database,finish_hook=fail_after_outbox)
+    _,current,sequence=transactional.begin(1,'telegram:632','Отмени')
+    restored=RequestEngine().edit(current,AgentPlan.model_validate(edit(current,[dict(kind='undo')])),
+                                 'Отмени',lambda key,revision:transactional.version(1,key,revision))
+    tables=('steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_inflight','steel_v2_outbox','steel_v2_inbox')
+    def ledger():
+        with rig.queue.database.connection() as connection:
+            return {table:[tuple(row) for row in connection.execute('SELECT * FROM '+table+' ORDER BY rowid')]
+                    for table in tables}
+    before=ledger();deliveries=list(rig.api.calls)
+    with pytest.raises(sqlite3.OperationalError,match='synthetic failure'):
+        transactional.finish(1,'telegram:632',sequence,'Отмени',Reply(text=render(restored),status='ok',
+            intent='edit_request',request_id=restored.id,revision=restored.revision),restored)
+    assert ledger()==before and repo.load(1)==current and repo.version(1,current.id,3) is None
+    assert version_bytes(repo,historical.id)==stored and rig.api.calls==deliveries

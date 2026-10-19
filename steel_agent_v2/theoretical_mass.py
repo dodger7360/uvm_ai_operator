@@ -234,21 +234,38 @@ def validate_annotations(request):
         else:require(mass.tonnes is None,'unverified_mass_annotation')
 
 
-def validated_for_display(request):
-    """Fail closed on an unsafe historical annotation without rewriting history.
+def revalidate_historical(request):
+    """Upgrade only missing audit metadata on a working copy, never the saved JSON.
 
-    Readonly show/explanation must not bypass validation simply because an older
-    JSON snapshot deserializes. A later explicit edit can safely recalculate it.
+    Recalculate from the historical reference ONLY. Numerical/core discrepancies,
+    explicitly incorrect metadata and inapplicable references are not accepted as
+    compatible history. Goods may still be restored with an unavailable annotation.
+    New snapshots continue through the unchanged strict validate_annotations.
     """
-    items={item.id:item for item in request.items};result=[]
-    for mass in request.theoretical_mass:
-        valid=mass.status!='calculated' and mass.tonnes is None
+    working=request.model_copy(deep=True)
+    items={item.id:item for item in working.items};result=[]
+    audit_fields={'piece_length_mm','length_origin','source_grade','grade_policy'}
+    for mass in working.theoretical_mass:
+        if mass.status!='calculated' and mass.tonnes is None:
+            result.append(mass);continue
+        reason='Отсутствует подтверждённый коэффициент или исходная позиция'
         if mass.status=='calculated' and mass.reference and mass.spec.item_id in items:
-            try:valid=calculate(items[mass.spec.item_id],mass.spec,mass.classification,[mass.reference])==mass
-            except (EngineError,ValueError):valid=False
-        result.append(mass if valid else TheoreticalMass(spec=mass.spec,classification=mass.classification,
-            status='unavailable',method='not_calculated',reason='Сохранённое расчётное основание требует проверки'))
-    return request.model_copy(update={'theoretical_mass':result})
+            try:
+                expected=calculate(items[mass.spec.item_id],mass.spec,mass.classification,[mass.reference])
+                missing=audit_fields-mass.model_fields_set
+                if expected.status=='calculated' and mass.model_dump(exclude=missing)==expected.model_dump(exclude=missing):
+                    result.append(expected);continue
+                reason=(expected.reason if expected.status!='calculated' else
+                        'Сохранённая масса или сведения расчёта не соответствуют проверенному основанию')
+            except (EngineError,ValueError):reason='Не удалось проверить коэффициент или параметры расчёта'
+        result.append(TheoreticalMass(spec=mass.spec,classification=mass.classification,reference=mass.reference,
+            status='unavailable',method='not_calculated',reason='Сохранённое расчётное основание требует проверки: '+reason))
+    return working.model_copy(update={'theoretical_mass':result})
+
+
+def validated_for_display(request):
+    # Readonly views use the same compatibility boundary, without storing a version.
+    return revalidate_historical(request)
 
 
 def rounded_tonnes(mass):
