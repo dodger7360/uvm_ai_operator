@@ -48,6 +48,7 @@ def partial_from_proposal(proposal, source, event_key):
             if not record or record.kind != 'product' or source_ids[item.source_id] != 1 or item_ids[item.id] != 1:
                 continue
             keys = {item.source_id} | {key for c in item.characteristics for key in c.source_ids}
+            if item.unit_source_id is not None:keys.add(item.unit_source_id)
             if any(key not in by_record or key != item.source_id and by_record[key].kind not in {'header', 'note'} for key in keys):
                 continue
             selected = sorted((by_record[key] for key in keys), key=lambda r: r.start)

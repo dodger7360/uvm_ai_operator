@@ -40,7 +40,7 @@ MASS_UNITS = {
     'г': ('г', -3), 'грамм': ('г', -3), 'грамма': ('г', -3), 'граммы': ('г', -3), 'граммов': ('г', -3),
     'кг': ('кг', 0), 'килограмм': ('кг', 0), 'килограмма': ('кг', 0),
     'килограммы': ('кг', 0), 'килограммов': ('кг', 0),
-    'т': ('т', 3), 'тонна': ('т', 3), 'тонны': ('т', 3), 'тонну': ('т', 3), 'тонн': ('т', 3),
+    'т': ('т', 3), 'тонна': ('т', 3), 'тонны': ('т', 3), 'тонну': ('т', 3), 'тонн': ('т', 3), 'тоннах': ('т', 3),
 }
 
 
@@ -186,8 +186,22 @@ class RequestEngine:
                 require(bool(item.quantity_text) and item.quantity_text in fragment, 'quantity_evidence:' + item.id)
                 require(decimal_text(item.quantity_text) == item.quantity, 'quantity_mismatch:' + item.id)
             if item.unit is not None:
-                require(bool(item.unit_text) and item.unit_text in fragment and item.unit == item.unit_text,
-                        'unit_evidence:' + item.id)
+                if item.unit_source_id is None:
+                    require(bool(item.unit_text) and item.unit_text in fragment and item.unit == item.unit_text,
+                            'unit_evidence:' + item.id)
+                else:
+                    # Explicit header provenance, not a fallback search across the
+                    # entire original. No quantity conversion or product inference.
+                    header=by_record.get(item.unit_source_id)
+                    require(header is not None and header.kind=='header' and header.end<=record.start,
+                            'unit_source:' + item.id)
+                    source=request.original_text[header.start:header.end]
+                    require(item.unit_text and unit_evidence_in_message(source,item.unit_text), 'unit_evidence:' + item.id)
+                    source_unit=MASS_UNITS.get(item.unit_text.strip().casefold())
+                    require(source_unit is not None and source_unit[0]==item.unit,
+                            'header_unit_mismatch:' + item.id)
+            else:
+                require(item.unit_source_id is None, 'unit_source_without_unit:' + item.id)
             for c in item.characteristics:
                 unique(c.source_ids, 'duplicate_attribute_source:' + item.id)
                 require(bool(c.source_ids) and all(key in by_record for key in c.source_ids), 'attribute_source:' + item.id)

@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from .contracts import AgentPlan, Reply, PendingClarification, Clarification, DisplayOrder
 from .engine import RequestEngine, EngineError, SelectionError, totals, unit_evidence_in_message
 from .repository import Busy
-from .presentation import render, display_order
+from .presentation import render, display_order, display_layout
 from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
 
@@ -66,6 +66,12 @@ class SteelAgent:
             clarification=self.repository.clarification(user_id,current)
             displayed=self.repository.last_display(user_id,current)
             display_ids=displayed.item_ids if displayed else None
+            used_layout=None
+            def present(state, view='normalized', proposed=None):
+                nonlocal used_layout
+                prior=displayed.layout if displayed and state and state.id==displayed.request_id else None
+                used_layout=display_layout(state,prior,proposed)
+                return render(state,view,layout=used_layout)
             if pending:pending['source_lines']=source_lines(pending['source_text'])
             context={'pending_request':pending,'unresolved_fragments':[
                 {'number':n,'id':r.id,'start':r.start,'end':r.end,'text':current.original_text[r.start:r.end]}
@@ -76,6 +82,7 @@ class SteelAgent:
                 'can_undo': bool(current and current.undo_stack),
                 'display_numbers':{str(n):key for n,key in enumerate(display_ids,1)} if display_ids else {},
                 'display_order_available':displayed is not None,
+                'last_display_layout':displayed.layout.model_dump(mode='json') if displayed and displayed.layout else None,
                 'totals':totals(current.items) if current else ({},[]),
                 'totals_are_partial':bool(current and self.engine.partial(current)),
                 'history':self.repository.history(user_id,current.id if current else None),
@@ -93,6 +100,7 @@ class SteelAgent:
                 # A rejected proposal must never leak into a readonly repair.
                 updated=None
                 shown_normalized=False
+                used_layout=None
                 candidate=None;plan=None;validation_stage='structured_response'
                 try:
                     calls+=1
@@ -120,7 +128,7 @@ class SteelAgent:
                             source=pending['source_text']
                             source_pending=plan.pending_event_id
                         updated=self.engine.create(plan.extraction,source,f'{user_id}:{event}')
-                        text=render(updated)
+                        text=present(updated,proposed=plan.display_layout)
                     elif plan.intent=='edit_request':
                         has_selection=any(op.selection is not None for op in plan.operations)
                         plan=self.engine.resolve_plan(current,plan,message,display_ids)
@@ -172,13 +180,13 @@ class SteelAgent:
                             updated=updated.model_copy(update={'changes':updated.changes[:len(current.changes)]+[
                                 change.model_copy(update={'message':message})
                                 for change in updated.changes[len(current.changes):]]})
-                        text=render(updated)
+                        text=present(updated,proposed=plan.display_layout)
                     elif plan.view=='search_status':
                         text=search_status_text(context['last_search'])
                     elif plan.view=='custom':
                         text=('Заявка требует уточнения.\n' if current and self.engine.partial(current) else '')+plan.answer
                     elif plan.intent=='show_request' or plan.intent=='answer_question' and plan.view in {'original','totals','explanation','forward'}:
-                        text=render(current,plan.view)
+                        text=present(current,plan.view,plan.display_layout)
                     elif plan.intent=='web_search':
                         # Search has no mutation tools and its text is NEVER parsed as a plan.
                         calls+=1
@@ -326,7 +334,7 @@ class SteelAgent:
                         diagnostics=notes,calls=calls)
                 elif recovered is not None and current is None:
                     updated=recovered
-                    reply=Reply(text=render(updated),status='partial',intent='create_request',
+                    reply=Reply(text=present(updated),status='partial',intent='create_request',
                         request_id=updated.id,revision=updated.revision,calls=calls,
                         diagnostics=notes+['partial_recovered']+(['pending_resolved:'+source_pending] if source_pending else []))
                 else:
@@ -334,9 +342,9 @@ class SteelAgent:
                     prefix='Исходник сохранён и ожидает разбора. '
                     if current:prefix+='Действующая заявка не изменена. '
                     if recovered is not None:
-                        text=prefix+'\n\nПроверенная часть новой заявки (ещё не активна):\n'+render(recovered)
+                        text=prefix+'\n\nПроверенная часть новой заявки (ещё не активна):\n'+present(recovered)
                     else:
-                        text=prefix+('\n\nДействующая заявка:\n'+render(current) if current else '')+'\n\nОжидает разбора:\n'+source
+                        text=prefix+('\n\nДействующая заявка:\n'+present(current) if current else '')+'\n\nОжидает разбора:\n'+source
                     text+='\n\nМожно попросить продолжить разбор сохранённого исходника; отправлять его целиком повторно не нужно.'
                     reply=Reply(text=text,status='failed',intent='clarify',request_id=current.id if current else None,
                         revision=current.revision if current else None,calls=calls,
@@ -350,7 +358,7 @@ class SteelAgent:
             state=updated or current
             if state and (updated is not None or shown_normalized):
                 reply=reply.model_copy(update={'display':DisplayOrder(
-                    request_id=state.id,revision=state.revision,item_ids=display_order(state))})
+                    request_id=state.id,revision=state.revision,item_ids=display_order(state,used_layout),layout=used_layout)})
             return self.repository.finish(user_id,event,sequence,message,reply,updated)
         except PermissionError:
             raise
