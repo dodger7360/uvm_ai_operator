@@ -273,7 +273,7 @@ def test_mass_change_all_angles_and_only_fourth_pipe_wall_are_evidence_checked(t
     after=repo.load(1)
     assert after.items[:3]==current.items[:3] and after.items[3].characteristics[1].value=='8 мм'
     assert after.items[3].characteristics[0].value=='159×8 мм'
-    assert reply.text.splitlines()[3].startswith('4. Труба 159×8 мм')
+    assert reply.text.splitlines()[3].startswith('Труба 159×8 мм')
     assert after.original_text==source
 
 

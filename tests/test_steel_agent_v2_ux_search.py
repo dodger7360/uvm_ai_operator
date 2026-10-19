@@ -247,17 +247,18 @@ def test_completed_page_action_url_is_verified_source(action):
     assert result.sources[0].url=='https://example.org/consulted'
 
 
-def test_visible_numbers_match_edit_context_when_groups_reordered(tmp_path):
+def test_hidden_display_numbers_match_actual_rows_when_groups_reordered(tmp_path):
     agent,repo,fake=state(tmp_path)
     request=repo.load(1)
     groups=[dict(id='b',label='Second',item_ids=['i2'],rationale='Synthetic'),
             dict(id='a',label='First',item_ids=['i1'],rationale='Synthetic')]
     fake.plans=[edit(request,[dict(kind='regroup',groups=groups)])]
     reply=agent.handle(1,'Раздели группы',event_id='regroup')
-    assert '2. Лист Ст3' in reply.text and '1. Лист С245' in reply.text
+    assert '2. Лист Ст3' not in reply.text and '1. Лист С245' not in reply.text
+    assert reply.text.index('Лист Ст3') < reply.text.index('Лист С245')
     fake.plans=[dict(intent='show_request')]
     agent.handle(1,'Покажи коротко',event_id='show')
-    assert fake.calls[-1][0]['display_numbers']=={'1':'i1','2':'i2'}
+    assert fake.calls[-1][0]['display_numbers']=={'1':'i2','2':'i1'}
 
 
 def test_partial_forward_retains_partial_status(tmp_path):

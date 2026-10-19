@@ -1,5 +1,20 @@
 # Responses Structured Outputs boundary
 
+## Candidate: semantic editing, stage 2
+
+Operation.selection replaces target_id for display/where/all selection. Closed
+nested predicates use existing label/characteristic values; component matching
+specifies an existing field, literal separator and 1-based component, without a
+product-specific Python parser. Cardinality one/all is explicit.
+set_quantity/add_quantity/set_length carry the source number and unit evidence,
+not model-computed results. The same strict WireAgentPlan adapter strips defaults,
+preserves required/nullable properties and uses the installed Responses SDK.
+
+DisplayOrder belongs only to stored Reply, not to the model's wire plan.
+PendingClarification optionally stores the unresolved operation with unit evidence.
+Null new receipt fields are omitted for compatibility; SQLite schema is unchanged.
+Real SDK fake HTTP tests inspect the final payload, including selection and measures.
+
 ## Candidate №31
 
 AgentPlan adds nullable clarification and clarification_event_id; Operation.kind

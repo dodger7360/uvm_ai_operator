@@ -1,5 +1,5 @@
 """Pure validation and transactional proposal building; GPT owns interpretation."""
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 import re
 from uuid import uuid5, NAMESPACE_URL
 from .contracts import RequestSnapshot, Characteristic, Change
@@ -8,6 +8,12 @@ from quantity import normalize_quantity, sum_quantities
 
 class EngineError(ValueError):
     pass
+
+
+class SelectionError(EngineError):
+    def __init__(self, code, question, operation, candidates=()):
+        self.question,self.operation,self.candidates=question,operation,list(candidates)
+        super().__init__(code)
 
 
 def require(condition, code):
@@ -48,6 +54,71 @@ def convert_mass(quantity, source, target):
     return Decimal((sign,digits,exponent+src[1]-dst[1])),dst[0]
 
 
+LENGTH_UNITS={'мм':('мм',0),'миллиметр':('мм',0),'миллиметра':('мм',0),'миллиметров':('мм',0),
+              'см':('см',1),'сантиметр':('см',1),'сантиметра':('см',1),'сантиметров':('см',1),'м':('м',3),
+              'метр':('м',3),'метра':('м',3),'метры':('м',3),'метров':('м',3)}
+
+
+def measured_unit(value):
+    key=value.strip().casefold() if value else ''
+    return ('mass',*MASS_UNITS[key]) if key in MASS_UNITS else (
+           ('length',*LENGTH_UNITS[key]) if key in LENGTH_UNITS else None)
+
+
+def unit_evidence_in_message(message, evidence):
+    """A unit may follow a number without a space, but not hide inside a word."""
+    if not evidence:return False
+    return any((match.start()==0 or not message[match.start()-1].isalpha())
+               and (match.end()==len(message) or not message[match.end()].isalpha())
+               for match in re.finditer(re.escape(evidence),message))
+
+
+def exact_add(left, right):
+    # The span, not just the larger operand's digit count, determines precision.
+    low=min(left.as_tuple().exponent,right.as_tuple().exponent)
+    high=max(left.adjusted(),right.adjusted())
+    with localcontext() as context:
+        context.prec=max(1,high-low+2)
+        return left+right
+
+
+def select_ids(request, operation, message, display_ids=None):
+    selection=operation.selection
+    require(selection.evidence in message,'selection_evidence_not_in_message')
+    items={item.id:item for item in request.items}
+    if selection.mode=='display':
+        if (display_ids is None or len(display_ids)!=len(items) or set(display_ids)!=set(items)
+                or any(n>len(display_ids) for n in selection.positions)):
+            raise SelectionError('display_order_unavailable',
+                'Сначала покажите актуальную заявку, затем укажите позицию или опишите товар.',operation)
+        chosen=[display_ids[n-1] for n in selection.positions]
+    else:
+        def matches(item,predicate):
+            values=[item.label] if predicate.field=='label' else [
+                c.value for c in item.characteristics if c.name==predicate.name and c.value is not None]
+            value=predicate.value.strip().casefold()
+            if predicate.match=='component':
+                parts=[v.split(predicate.separator) for v in values]
+                # No product grammar or inferred role: GPT supplies the existing
+                # field, literal delimiter and component; Python checks it exactly.
+                values=[row[predicate.component-1] for row in parts if len(row)>=predicate.component
+                        and len(row)>1]
+                return any(v.strip().casefold()==value for v in values)
+            return any((v.strip().casefold()==value if predicate.match=='equals' else
+                        re.search(r'(?<!\w)'+re.escape(value)+r'(?!\w)',v.casefold()) is not None)
+                       for v in values)
+        chosen=[item.id for item in request.items
+                if all(matches(item,p) for p in selection.predicates)]
+    if not chosen:
+        raise SelectionError('selection_no_match',
+            'Не удалось однозначно найти товар по этим признакам. Уточните размер, марку или вид.',operation)
+    if selection.cardinality=='one' and len(chosen)!=1:
+        raise SelectionError('selection_ambiguous',
+            'Подходят несколько позиций. Уточните, какую выбрать: размер, марку или другую характеристику.',
+            operation,chosen)
+    return chosen
+
+
 def totals(items):
     amounts, unknown = {}, []
     for item in items:
@@ -76,6 +147,17 @@ def differences(items):
 
 
 class RequestEngine:
+    def resolve_plan(self, current, plan, message, display_ids=None):
+        require(current is not None,'no_active_request')
+        require((plan.expected_request_id,plan.expected_revision)==(current.id,current.revision),'stale_request_revision')
+        expanded=[]
+        for operation in plan.operations:
+            if operation.selection is None:expanded.append(operation)
+            else:
+                expanded.extend(operation.model_copy(update={'target_id':key,'selection':None})
+                                for key in select_ids(current,operation,message,display_ids))
+        return plan.model_copy(update={'operations':expanded})
+
     def validate(self, request):
         records, originals, items = request.records, request.originals, request.items
         require(bool(originals), 'no_product_items')
@@ -137,10 +219,10 @@ class RequestEngine:
             items=[i.model_copy(deep=True) for i in extraction.items], groups=extraction.groups, questions=extraction.questions)
         return self.validate(request)
 
-    def edit(self, current, plan, message, read_version):
+    def edit(self, current, plan, message, read_version, display_ids=None):
         require(current is not None, 'no_active_request')
         require((plan.expected_request_id, plan.expected_revision) == (current.id, current.revision), 'stale_request_revision')
-        operations = plan.operations
+        operations = self.resolve_plan(current,plan,message,display_ids).operations
         if any(op.kind == 'undo' for op in operations):
             require(len(operations) == 1, 'undo_must_be_standalone')
             require(plan.remaining_questions is None, 'undo_restores_questions_without_override')
@@ -157,6 +239,54 @@ class RequestEngine:
         touched = set()
         regrouped = False
         for op in operations:
+            if op.kind in {'set_quantity','add_quantity','set_length'}:
+                length=op.kind=='set_length'
+                require(op.target_id in by_id and not op.groups and op.replace_from is None
+                        and op.field==('characteristic' if length else 'quantity')
+                        and (bool(op.name) if length else op.name is None),'invalid_measured_edit')
+                require(bool(op.evidence) and op.evidence in message
+                        and unit_evidence_in_message(message,op.unit_evidence),'edit_evidence_not_in_message')
+                amount=decimal_text(op.value)
+                require(decimal_text(op.evidence)==amount,'edited_quantity_evidence_mismatch')
+                unit=measured_unit(op.unit)
+                require(unit is not None and measured_unit(op.unit_evidence)==unit,'measured_unit_evidence')
+                item=by_id[op.target_id]
+                if length:
+                    require(unit[0]=='length','length_unit_required')
+                    names=[c.name for c in item.characteristics
+                           if c.name.casefold() in {'length','length_mm','длина'}]
+                    require(op.name.casefold() in {'length','length_mm','длина'}
+                            and len(names)<=1 and (not names or names==[op.name]),
+                            'ambiguous_length_characteristic')
+                    sign,digits,exponent=amount.as_tuple()
+                    value=format(Decimal((sign,digits,exponent+unit[2])),'f')+' мм'
+                    fields={'characteristic:'+op.name:value}
+                else:
+                    if op.kind=='add_quantity':
+                        old_unit=measured_unit(item.unit)
+                        require(item.quantity is not None and old_unit is not None
+                                and old_unit[0]==unit[0],'addition_requires_compatible_known_quantity')
+                        sign,digits,exponent=amount.as_tuple()
+                        amount=exact_add(item.quantity,Decimal((sign,digits,exponent+unit[2]-old_unit[2])))
+                        new_unit=item.unit
+                    else:new_unit=unit[1]
+                    fields={'quantity':amount,'unit':new_unit}
+                for field,value in fields.items():
+                    name=op.name if length else None
+                    key=(item.id,'characteristic' if length else field,name)
+                    require(key not in touched,'contradictory_duplicate_patch')
+                    touched.add(key)
+                    before=next((c.value for c in item.characteristics if c.name==name),None) if length else getattr(item,field)
+                    if length:
+                        chars=[c.model_copy(update={'value':value}) if c.name==name else c for c in item.characteristics]
+                        if not any(c.name==name for c in chars):chars.append(Characteristic(name=name,value=value))
+                        item=item.model_copy(update={'characteristics':chars})
+                    else:item=item.model_copy(update={field:value})
+                    changed.changes.append(Change(item_id=item.id,field=field,
+                        before=str(before) if before is not None else None,after=str(value),
+                        evidence=op.evidence+' '+op.unit_evidence,message=message))
+                by_id[item.id]=item
+                continue
             if op.kind == 'convert_mass':
                 require(op.target_id in by_id and op.field is None and op.name is None
                         and not op.groups and op.replace_from is None and op.resolution is None,
