@@ -27,6 +27,7 @@ class Item(ContractModel):
     unit: NonEmpty | None = None
     quantity_text: str | None = None
     unit_text: str | None = None
+    unit_source_id: NonEmpty | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode='after')
     def finite_nonnegative(self):
@@ -139,10 +140,44 @@ class PendingClarification(ContractModel):
     operation: Operation | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class DisplayDimension(ContractModel):
+    """A semantic role supplied by GPT, pointing at a current fact, not a new fact."""
+    role: NonEmpty
+    name: NonEmpty
+    unit: Literal['мм', 'см', 'м'] | None = None
+    separator: str | None = None
+    component: Annotated[int, Field(strict=True, ge=1)] | None = None
+
+    @model_validator(mode='after')
+    def component_reference(self):
+        if bool(self.separator) != (self.component is not None):
+            raise ValueError('dimension component requires a nonempty separator and index')
+        return self
+
+
+class DisplayItem(ContractModel):
+    item_id: NonEmpty
+    kind: NonEmpty | None = None
+    grade_name: NonEmpty | None = None
+    dimensions: list[DisplayDimension] = Field(default_factory=list)
+
+
+class DisplayGradeOrder(ContractModel):
+    kind: NonEmpty
+    grades: list[NonEmpty]
+
+
+class DisplayLayout(ContractModel):
+    """Presentation hints, separate from commercial groups and saved product facts."""
+    items: list[DisplayItem]
+    grade_order: list[DisplayGradeOrder] = Field(default_factory=list)
+
+
 class DisplayOrder(ContractModel):
     request_id: str
     revision: int
     item_ids: list[str]
+    layout: DisplayLayout | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class AgentPlan(ContractModel):
@@ -160,6 +195,7 @@ class AgentPlan(ContractModel):
     remaining_questions: list[str] | None = None
     clarification: Clarification | None = None
     clarification_event_id: str | None = None
+    display_layout: DisplayLayout | None = None
 
     @model_validator(mode='after')
     def only_intended_mutation(self):
