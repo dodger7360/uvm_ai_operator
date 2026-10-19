@@ -1,10 +1,10 @@
 """One GPT coordinator. No keyword/regex intent router and no legacy pipeline."""
 import json
 from pydantic import ValidationError
-from .contracts import AgentPlan, Reply, PendingClarification
-from .engine import RequestEngine, EngineError, totals
+from .contracts import AgentPlan, Reply, PendingClarification, Clarification, DisplayOrder
+from .engine import RequestEngine, EngineError, SelectionError, totals, unit_evidence_in_message
 from .repository import Busy
-from .presentation import render
+from .presentation import render, display_order
 from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
 
@@ -64,6 +64,8 @@ class SteelAgent:
         try:
             pending=self.repository.pending(user_id)
             clarification=self.repository.clarification(user_id,current)
+            displayed=self.repository.last_display(user_id,current)
+            display_ids=displayed.item_ids if displayed else None
             if pending:pending['source_lines']=source_lines(pending['source_text'])
             context={'pending_request':pending,'unresolved_fragments':[
                 {'number':n,'id':r.id,'start':r.start,'end':r.end,'text':current.original_text[r.start:r.end]}
@@ -72,20 +74,25 @@ class SteelAgent:
                 'active_request': current.model_dump(mode='json',exclude={'undo_stack','changes','originals'}) if current else None,
                 'recent_changes':[c.model_dump() for c in current.changes[-10:]] if current else [],
                 'can_undo': bool(current and current.undo_stack),
-                'display_numbers':{str(n):item.id for n,item in enumerate(current.items,1)} if current else {},
+                'display_numbers':{str(n):key for n,key in enumerate(display_ids,1)} if display_ids else {},
+                'display_order_available':displayed is not None,
                 'totals':totals(current.items) if current else ({},[]),
                 'totals_are_partial':bool(current and self.engine.partial(current)),
                 'history':self.repository.history(user_id,current.id if current else None),
                 'last_search':self.repository.last_search(user_id),
                 'previous_operation':self.repository.last_operation(user_id),
                 'pending_clarification':clarification.model_dump(mode='json') if clarification else None,
-                'supported_edit_operations':['set','regroup','undo','resolve','convert_mass'],'append_supported':False}
+                'supported_edit_operations':['set','regroup','undo','resolve','convert_mass',
+                                             'set_quantity','add_quantity','set_length'],'append_supported':False}
             context['last_search_explanation']=search_status_text(context['last_search'])
             notes=[];previous=None;updated=None;reply=None;first_intent=None;proposals=[];source_pending=None
+            shown_normalized=False
+            selected_scope=None
             unselected=object();chosen_source=unselected
             for attempt in range(2):
                 # A rejected proposal must never leak into a readonly repair.
                 updated=None
+                shown_normalized=False
                 candidate=None;plan=None;validation_stage='structured_response'
                 try:
                     calls+=1
@@ -115,9 +122,22 @@ class SteelAgent:
                         updated=self.engine.create(plan.extraction,source,f'{user_id}:{event}')
                         text=render(updated)
                     elif plan.intent=='edit_request':
+                        has_selection=any(op.selection is not None for op in plan.operations)
+                        plan=self.engine.resolve_plan(current,plan,message,display_ids)
+                        scope=sorted((op.kind,op.field or '',op.name or '',op.target_id or '') for op in plan.operations)
+                        conversion_repair=(selected_scope is not None and
+                            all(kind=='convert_mass' for kind,_,_,_ in scope) and
+                            all((kind=='convert_mass' or kind=='set' and field in {'quantity','unit'})
+                                and not name for kind,field,name,_ in selected_scope) and
+                            {row[3] for row in scope}=={row[3] for row in selected_scope})
+                        if selected_scope is not None and selected_scope!=scope and not conversion_repair:
+                            raise EngineError('semantic_edit_scope_changed')
+                        if has_selection:selected_scope=scope
                         if attempt and any(op.kind=='convert_mass' for op in plan.operations):
                             prior=json.loads(prior_proposal) if isinstance(prior_proposal,str) else prior_proposal
-                            old_ops=prior.get('operations',[]) if isinstance(prior,dict) else []
+                            old_plan=AgentPlan.model_validate(prior)
+                            old_ops=[op.model_dump() for op in self.engine.resolve_plan(
+                                current,old_plan,message,display_ids).operations]
                             if (not old_ops or any(not isinstance(op,dict) or
                                 not (op.get('kind')=='convert_mass' or
                                      op.get('kind')=='set' and op.get('field') in {'quantity','unit'})
@@ -130,14 +150,17 @@ class SteelAgent:
                             if clarification is None or plan.clarification_event_id!=clarification.event_id:
                                 raise EngineError('clarification_stale_or_missing')
                             proposal=clarification.proposal
+                            saved=clarification.operation
                             inherited=False
                             for op in plan.operations:
-                                matches=(op.kind=='set' and op.target_id in proposal.target_ids and
+                                matches=(op.kind==(saved.kind if saved else 'set') and op.target_id in proposal.target_ids and
                                     op.field==proposal.field and op.name==proposal.name and
                                     op.value==proposal.value and op.evidence==proposal.evidence and
-                                    op.replace_from is None)
+                                    op.replace_from is None and
+                                    (op.unit,op.unit_evidence)==((saved.unit,saved.unit_evidence) if saved else (None,None)))
                                 if matches:inherited=True
-                                elif not op.evidence or op.evidence not in message:
+                                elif (not op.evidence or op.evidence not in message or
+                                      op.unit_evidence is not None and not unit_evidence_in_message(message,op.unit_evidence)):
                                     raise EngineError('clarification_scope_mismatch')
                             if not inherited:raise EngineError('clarification_scope_mismatch')
                             edit_message=clarification.source_message+'\n'+message
@@ -203,7 +226,8 @@ class SteelAgent:
                             next_clarification=PendingClarification(
                                 event_id=clarification.event_id if inherited else event,
                                 request_id=current.id,revision=current.revision,proposal=proposal,
-                                source_message=source,question=plan.answer)
+                                source_message=source,question=plan.answer,
+                                operation=clarification.operation if inherited else None)
                         elif next_clarification:
                             next_clarification=next_clarification.model_copy(update={'question':plan.answer})
                     request_view=plan.intent=='show_request' or plan.intent=='answer_question' and plan.view in {'original','totals','explanation','forward','custom'}
@@ -212,8 +236,25 @@ class SteelAgent:
                         intent=plan.intent,request_id=state.id if state else None,revision=state.revision if state else None,calls=calls,
                         diagnostics=['pending_resolved:'+source_pending] if updated is not None and source_pending else [],
                         clarification=next_clarification)
+                    shown_normalized=(updated is not None or plan.intent=='show_request' and plan.view in {'normalized','forward'}
+                                      or plan.intent=='answer_question' and plan.view=='forward')
                     break
                 except (ValidationError,EngineError,json.JSONDecodeError,ValueError) as error:
+                    if isinstance(error,SelectionError):
+                        saved=None;op=error.operation
+                        if (error.candidates and op.kind in {'set','set_quantity','add_quantity','set_length'}
+                                and op.field in {'quantity','unit','characteristic'} and op.value
+                                and op.evidence and op.evidence in message and op.value in op.evidence):
+                            saved=PendingClarification(event_id=event,request_id=current.id,
+                                revision=current.revision,source_message=message,question=error.question,
+                                proposal=Clarification(target_ids=error.candidates,field=op.field,name=op.name,
+                                    value=op.value,evidence=op.evidence,alternatives=['Уточните один из подходящих товаров']),
+                                operation=op.model_copy(update={'selection':None,'target_id':None}))
+                        reply=Reply(text=error.question,status='ok',intent='clarify',calls=calls,
+                            request_id=current.id,revision=current.revision,diagnostics=[str(error)],
+                            clarification=saved or clarification)
+                        updated=None
+                        break
                     # A completed HTTP response may have failed wire validation before
                     # transport.plan returned. Preserve it only in private repair memory.
                     raw_proposal=getattr(error,'proposal',None)
@@ -306,6 +347,10 @@ class SteelAgent:
                         reply=reply.model_copy(update={'diagnostics':notes})
             if updated is None and reply.status=='failed' and clarification:
                 reply=reply.model_copy(update={'clarification':clarification})
+            state=updated or current
+            if state and (updated is not None or shown_normalized):
+                reply=reply.model_copy(update={'display':DisplayOrder(
+                    request_id=state.id,revision=state.revision,item_ids=display_order(state))})
             return self.repository.finish(user_id,event,sequence,message,reply,updated)
         except PermissionError:
             raise

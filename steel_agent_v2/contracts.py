@@ -1,5 +1,5 @@
 """Small GPT wire contracts. No steel equivalence rules or legacy recognizer."""
-from typing import Literal
+from typing import Literal, Annotated
 from pydantic import Field, model_validator
 from nomenclature import ContractModel, ExactDecimal, NonEmpty
 
@@ -60,18 +60,52 @@ class Clarification(ContractModel):
     alternatives: list[NonEmpty] = Field(min_length=1)
 
 
-class PendingClarification(ContractModel):
-    event_id: str
-    request_id: str
-    revision: int
-    proposal: Clarification
-    source_message: str
-    question: str
+class SelectionPredicate(ContractModel):
+    field: Literal['label', 'characteristic']
+    name: str | None = None
+    value: NonEmpty
+    match: Literal['equals', 'token', 'component']
+    separator: str | None = None
+    component: Annotated[int, Field(strict=True, ge=1)] | None = None
+
+    @model_validator(mode='after')
+    def named_characteristic(self):
+        if (self.field=='characteristic')!=bool(self.name):
+            raise ValueError('name belongs only to a characteristic predicate')
+        if self.match=='component':
+            if self.field!='characteristic' or not self.separator or self.component is None:
+                raise ValueError('component requires a characteristic, separator and positive component')
+        elif self.separator is not None or self.component is not None:
+            raise ValueError('component parameters belong only to component matching')
+        if self.match=='token' and (self.field!='label' or not any(c.isalpha() for c in self.value)):
+            raise ValueError('token matching is for product labels; dimensions require exact fields or components')
+        return self
+
+
+class Selection(ContractModel):
+    mode: Literal['display', 'where', 'all']
+    positions: list[Annotated[int, Field(strict=True, ge=1)]] = Field(default_factory=list)
+    predicates: list[SelectionPredicate] = Field(default_factory=list)
+    cardinality: Literal['one', 'all']
+    evidence: NonEmpty
+
+    @model_validator(mode='after')
+    def shape(self):
+        if self.mode=='display':
+            if not self.positions or self.predicates or any(n<=0 for n in self.positions):
+                raise ValueError('display selection requires positive positions only')
+            if len(set(self.positions))!=len(self.positions):
+                raise ValueError('duplicate display position')
+        elif self.positions or (self.mode=='where')!=bool(self.predicates):
+            raise ValueError('where requires predicates; all carries neither predicates nor positions')
+        return self
 
 
 class Operation(ContractModel):
-    kind: Literal['set', 'regroup', 'undo', 'resolve', 'convert_mass']
+    kind: Literal['set', 'regroup', 'undo', 'resolve', 'convert_mass',
+                  'set_quantity', 'add_quantity', 'set_length']
     target_id: str | None = None
+    selection: Selection | None = None
     field: Literal['quantity', 'unit', 'label', 'characteristic'] | None = None
     name: str | None = None
     value: str | None = None
@@ -79,14 +113,36 @@ class Operation(ContractModel):
     groups: list[CommercialGroup] = Field(default_factory=list)
     resolution: Extraction | None = None
     replace_from: str | None = None
+    unit: str | None = None
+    unit_evidence: str | None = None
 
     @model_validator(mode='after')
     def resolution_only(self):
+        if self.selection is not None and (self.target_id is not None or self.kind in {'undo','regroup','resolve'}):
+            raise ValueError('selection replaces target_id only for item operations')
+        if self.kind not in {'set_quantity','add_quantity','set_length'} and (self.unit is not None or self.unit_evidence is not None):
+            raise ValueError('unit fields belong only to measured operations')
         if self.replace_from is not None and (self.kind != 'set' or self.field != 'characteristic'):
             raise ValueError('literal replacement belongs only to a characteristic set')
         if (self.kind == 'resolve') != (self.resolution is not None):
             raise ValueError('resolve requires resolution; other operations cannot carry it')
         return self
+
+
+class PendingClarification(ContractModel):
+    event_id: str
+    request_id: str
+    revision: int
+    proposal: Clarification
+    source_message: str
+    question: str
+    operation: Operation | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class DisplayOrder(ContractModel):
+    request_id: str
+    revision: int
+    item_ids: list[str]
 
 
 class AgentPlan(ContractModel):
@@ -176,3 +232,4 @@ class Reply(ContractModel):
     calls: int = 0
     pending_snapshot: RequestSnapshot | None = Field(default=None, exclude_if=lambda value: value is None)
     clarification: PendingClarification | None = Field(default=None, exclude_if=lambda value: value is None)
+    display: DisplayOrder | None = Field(default=None, exclude_if=lambda value: value is None)

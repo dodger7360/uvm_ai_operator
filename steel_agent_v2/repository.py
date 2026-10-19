@@ -125,6 +125,25 @@ class Repository:
         value=Reply.model_validate_json(row[0]).clarification if row else None
         return value if value and (value.request_id,value.revision)==(current.id,current.revision) else None
 
+    def last_display(self, user, current):
+        """Durable last full normalized/forward view; never infer an old order."""
+        self._allowed(user)
+        if current is None:return None
+        with self.database.connection() as c:
+            has_queue=c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='steel_v2_inbox'").fetchone()
+            delivered=(" AND NOT EXISTS(SELECT 1 FROM steel_v2_inbox q "
+                       "WHERE steel_v2_turn.event_id='telegram:'||q.update_id AND q.state!='delivered')"
+                       if has_queue else "")
+            row=c.execute("SELECT reply FROM steel_v2_turn WHERE user_id=? "
+                          "AND json_type(reply,'$.display')='object'"+delivered+" ORDER BY sequence DESC LIMIT 1",
+                          (user,)).fetchone()
+        value=Reply.model_validate_json(row[0]).display if row else None
+        if (value and (value.request_id,value.revision)==(current.id,current.revision)
+                and len(value.item_ids)==len(current.items)
+                and set(value.item_ids)=={item.id for item in current.items}):
+            return value
+        return None
+
     def last_search(self, user):
         """Bounded technical summary from existing history, never model speculation."""
         self._allowed(user)

@@ -10,6 +10,11 @@ def number(value):
     return text.replace('.', ',')
 
 
+def display_order(request):
+    """Single view-order definition. No sorting, grouping policy or state mutation."""
+    return [key for group in request.groups for key in group.item_ids]
+
+
 def totals_text(items, positions=None):
     sums, unknown=totals(items)
     lines=['Известная часть количества:' if unknown else 'Количество:']
@@ -56,12 +61,12 @@ def _item_text(item, original, city, changes=()):
     if original.unit and original.unit!=item.unit:
         original_amount=original.quantity_text or (number(original.quantity) if original.quantity is not None else 'количество не уточнено')
         text+=' (исходно: '+original_amount+' '+original.unit+')'
-    return text
+    return ' '.join(text.split())
 
 
 def _humanize(text, request):
     mapping={request.id:'текущая заявка'}
-    mapping.update({item.id:f'позиция {n}' for n,item in enumerate(request.items,1)})
+    mapping.update({key:f'позиция {n}' for n,key in enumerate(display_order(request),1)})
     mapping.update({group.id:f'группа {n}' for n,group in enumerate(request.groups,1)})
     mapping.update({record.id:f'фрагмент {n}' for n,record in enumerate(request.records,1)})
     for key,value in sorted(mapping.items(),key=lambda pair:-len(pair[0])):
@@ -86,12 +91,12 @@ def render(request, view='normalized'):
     city=_cities(request)
     by_id={item.id:item for item in request.items}
     originals={item.id:item for item in request.originals}
-    positions={item.id:n for n,item in enumerate(request.items,1)}
+    positions={key:n for n,key in enumerate(display_order(request),1)}
     for n,group in enumerate(request.groups,1):
         members=[by_id[key] for key in group.item_ids]
         if not detailed or len(members)==1:
             for item in members:
-                prefix='' if not detailed and len(request.items)==1 else f'{positions[item.id]}. '
+                prefix=f'{positions[item.id]}. ' if detailed else ''
                 lines.append(prefix+_item_text(item,originals[item.id],city,request.changes))
         else:
             lines.append(f'Группа {n}: '+group.label)

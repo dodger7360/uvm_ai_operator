@@ -482,7 +482,7 @@ def test_general_chat_survives_new_request_without_old_technical_context(rig):
     agent.handle(1,'Как меня зовут?',event_id='remember')
     history=fake.calls[-1][0]['history']
     assert any(m['content']=='Меня зовут Максим' for m in history)
-    assert sum(m['content']==SOURCE for m in history)==1
+    assert sum(m['role']=='user' and m['content']==SOURCE for m in history)==1
 
 
 @pytest.mark.parametrize('field,value',[('unit',' '),('quantity',1.25),('quantity',True),('quantity','NaN')])

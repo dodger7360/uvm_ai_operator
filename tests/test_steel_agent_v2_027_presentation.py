@@ -64,9 +64,9 @@ def test_different_and_duplicate_items_remain_separate_without_group_comments(vi
     before = state.model_dump_json()
     text = render(state, view)
     assert text.splitlines() == [
-        '1. Уголок 50×50×5 мм; Ст3сп; ГОСТ 8509-93 — 2,125 т',
-        '2. Уголок 50×50×5 мм; 09Г2С; ГОСТ 19281-2014 — 317,5 кг',
-        '3. Уголок 50×50×5 мм; Ст3сп; ГОСТ 8509-93 — 2,125 т']
+        'Уголок 50×50×5 мм; Ст3сп; ГОСТ 8509-93 — 2,125 т',
+        'Уголок 50×50×5 мм; 09Г2С; ГОСТ 19281-2014 — 317,5 кг',
+        'Уголок 50×50×5 мм; Ст3сп; ГОСТ 8509-93 — 2,125 т']
     for forbidden in ('версия', 'Группа', 'Количество:', 'взаимозаменяемость', 'Служебное', 'Внутренн', state.id, 'i1', 'g1'):
         assert forbidden not in text
     assert state.model_dump_json() == before
