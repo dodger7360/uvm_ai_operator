@@ -262,7 +262,9 @@ def test_web_prompt_injection_stays_read_only(rig):
         (SourceLink(url='https://example.org/standard',title='Источник'),))
     result=agent.handle(1,'найди ГОСТ',event_id='web')
     assert result.sources and repo.load(1).model_dump_json()==before
-    assert 'https://example.org/standard' in result.text
+    assert result.sources[0].url=='https://example.org/standard'
+    assert any(run.url==result.sources[0].url for run in result.presentation)
+    assert 'https://example.org/standard' not in result.text
 
 
 def test_history_bounded_and_old_request_excluded(rig):

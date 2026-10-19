@@ -233,9 +233,10 @@ def test_search_keeps_all_sources_but_renders_short_checked_html_links(tmp_path)
     repo=Repository(Database(tmp_path/'search.sqlite3'))
     reply=SteelAgent(fake,repo).handle(1,'Проверь сведения',event_id='search')
     parts=[p['text'] for p in payloads(reply,1)];text=visible(parts)
-    assert len(fake.calls)==1 and len(fake.search_calls)==1 and reply.sources==sources
-    assert all(url not in text for url in urls) and 'Сайт 3' in text
-    assert [link for part in parts for link in InspectHTML(part).links]==urls
+    assert len(fake.calls)==1 and len(fake.search_calls)==1
+    assert [s.url for s in reply.sources]==urls and all(s.title==old.title for s,old in zip(reply.sources,sources))
+    assert all(url not in text for url in urls) and 'Сайт 3' not in text
+    assert [link for part in parts for link in InspectHTML(part).links]==urls[:2]
     assert 'Уточните актуальность' in text and '**' not in text and '###' not in text
 
 

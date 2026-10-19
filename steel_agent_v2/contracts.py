@@ -190,7 +190,7 @@ class AgentPlan(ContractModel):
     operations: list[Operation] = Field(default_factory=list)
     answer: str = ''
     view: Literal['normalized', 'original', 'totals', 'explanation',
-                  'forward', 'custom', 'search_status'] = 'normalized'
+                  'forward', 'custom', 'search_status', 'sources'] = 'normalized'
     search_query: str | None = None
     remaining_questions: list[str] | None = None
     clarification: Clarification | None = None
@@ -205,7 +205,7 @@ class AgentPlan(ContractModel):
             raise ValueError('clarification reference belongs only to edit_request')
         if self.pending_event_id is not None and self.intent != 'create_request':
             raise ValueError('pending source belongs only to explicit create_request recovery')
-        if self.view in {'forward','custom','search_status'}:
+        if self.view in {'forward','custom','search_status','sources'}:
             if self.intent not in {'show_request','answer_question'}:
                 raise ValueError('readonly presentation requires show_request or answer_question')
             if self.view=='custom' and not self.answer.strip():
@@ -252,9 +252,18 @@ class RequestSnapshot(ContractModel):
     undo_stack: list[int] = Field(default_factory=list)
 
 
+class SourceCitation(ContractModel):
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    text: str
+
+
 class SourceLink(ContractModel):
     url: str
     title: str
+    origins: list[Literal['search','open_page','find_in_page','url_citation']] = Field(default_factory=list,exclude_if=lambda value:not value)
+    titles: list[str] = Field(default_factory=list,exclude_if=lambda value:not value)
+    citations: list[SourceCitation] = Field(default_factory=list,exclude_if=lambda value:not value)
 
 
 class PresentationRun(ContractModel):
@@ -277,3 +286,7 @@ class Reply(ContractModel):
     clarification: PendingClarification | None = Field(default=None, exclude_if=lambda value: value is None)
     display: DisplayOrder | None = Field(default=None, exclude_if=lambda value: value is None)
     presentation: list[PresentationRun] | None = Field(default=None, exclude_if=lambda value: value is None)
+    search_query: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    search_text: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    source_event_id: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    search_providers: list[str] = Field(default_factory=list,exclude_if=lambda value:not value)
