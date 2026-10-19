@@ -104,7 +104,7 @@ class Selection(ContractModel):
 
 class Operation(ContractModel):
     kind: Literal['set', 'regroup', 'undo', 'resolve', 'convert_mass',
-                  'set_quantity', 'add_quantity', 'set_length']
+                  'set_quantity', 'add_quantity', 'set_length', 'calculate_mass']
     target_id: str | None = None
     selection: Selection | None = None
     field: Literal['quantity', 'unit', 'label', 'characteristic'] | None = None
@@ -180,6 +180,30 @@ class DisplayOrder(ContractModel):
     layout: DisplayLayout | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class MassSpec(ContractModel):
+    """Semantic references to current facts; never numeric arithmetic from GPT."""
+    item_id: NonEmpty
+    kind: Literal['solid_carbon_sheet','round_welded_pipe','ibeam','linear','other']
+    dimensions: list[DisplayDimension] = Field(default_factory=list)
+    profile_name: str | None = None
+    standard_name: str | None = None
+    grade_name: str | None = None
+    cutting: Literal['none','specified','unknown','confirmed_piece_length']
+    evidence: NonEmpty
+
+
+class MassCandidate(ContractModel):
+    item_id: NonEmpty
+    value: NonEmpty
+    unit: Literal['kg_per_m','kg_per_piece']
+    source_url: NonEmpty
+    quote: NonEmpty
+    profile_evidence: NonEmpty
+    standard_evidence: str | None = None
+    piece_length_evidence: str | None = None
+    suitability: Literal['applicable','uncertain','conflicting']
+
+
 class AgentPlan(ContractModel):
     intent: Literal['create_request', 'edit_request', 'show_request', 'answer_question',
                     'web_search', 'free_chat', 'clarify']
@@ -196,6 +220,10 @@ class AgentPlan(ContractModel):
     clarification: Clarification | None = None
     clarification_event_id: str | None = None
     display_layout: DisplayLayout | None = None
+    mass_specs: list[MassSpec] = Field(default_factory=list)
+    mass_candidates: list[MassCandidate] = Field(default_factory=list)
+    mass_confirmation_event_id: str | None = None
+    mass_approval_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def only_intended_mutation(self):
@@ -225,8 +253,20 @@ class AgentPlan(ContractModel):
         if self.intent == 'web_search':
             if not self.search_query or not self.search_query.strip():
                 raise ValueError('web_search requires a query')
-        elif self.search_query is not None:
+        elif self.search_query is not None and not (self.intent=='edit_request' and self.operations
+                and all(op.kind=='calculate_mass' for op in self.operations)):
             raise ValueError('search_query belongs only to web_search')
+        if self.mass_specs and self.intent not in {'create_request','edit_request'}:
+            raise ValueError('mass specs belong to request mutations')
+        if self.mass_candidates and self.intent!='answer_question':
+            raise ValueError('mass research cannot carry mutations')
+        if bool(self.mass_confirmation_event_id)!=bool(self.mass_approval_ids):
+            raise ValueError('mass confirmation requires event and chosen candidate IDs')
+        if self.mass_confirmation_event_id and (self.intent!='edit_request' or self.search_query
+                or any(op.kind!='calculate_mass' for op in self.operations)):
+            raise ValueError('mass confirmation is a separate mass-only edit')
+        if self.operations and all(op.kind=='calculate_mass' for op in self.operations) and self.remaining_questions is not None:
+            raise ValueError('mass-only edit cannot clear product questions')
         return self
 
 
@@ -250,6 +290,7 @@ class RequestSnapshot(ContractModel):
     questions: list[str] = Field(default_factory=list)
     changes: list[Change] = Field(default_factory=list)
     undo_stack: list[int] = Field(default_factory=list)
+    theoretical_mass: list['TheoreticalMass'] = Field(default_factory=list,exclude_if=lambda value:not value)
 
 
 class SourceCitation(ContractModel):
@@ -264,6 +305,49 @@ class SourceLink(ContractModel):
     origins: list[Literal['search','open_page','find_in_page','url_citation']] = Field(default_factory=list,exclude_if=lambda value:not value)
     titles: list[str] = Field(default_factory=list,exclude_if=lambda value:not value)
     citations: list[SourceCitation] = Field(default_factory=list,exclude_if=lambda value:not value)
+
+
+class MassReference(ContractModel):
+    id: NonEmpty
+    revision: NonEmpty
+    kind: NonEmpty
+    profile: str | None = None
+    piece_length_mm: str | None = None
+    dimensions_mm: list[str] = Field(default_factory=list)
+    standards: list[str] = Field(default_factory=list)
+    grades: list[str] = Field(default_factory=list)
+    value: NonEmpty
+    unit: Literal['kg_per_m','kg_per_piece','kg_per_m3']
+    status: Literal['reviewed','owner_confirmed','observed']
+    method: NonEmpty
+    sources: list[SourceLink] = Field(min_length=1)
+    checked_at: NonEmpty
+    limitation: NonEmpty
+
+
+class TheoreticalMass(ContractModel):
+    spec: MassSpec
+    classification: NonEmpty
+    status: Literal['calculated','unavailable','conflicting']
+    tonnes: ExactDecimal | None = None
+    reference: MassReference | None = None
+    dimensions_mm: list[str] = Field(default_factory=list)
+    method: NonEmpty
+    reason: str | None = None
+
+
+class PendingMass(ContractModel):
+    event_id: NonEmpty
+    request_id: NonEmpty
+    revision: int
+    candidates: list[MassReference]
+    specs: list[MassSpec]
+    item_ids: list[str]
+    classifications: list[str]
+    requested_specs: list[MassSpec] = Field(default_factory=list)
+
+
+RequestSnapshot.model_rebuild()
 
 
 class PresentationRun(ContractModel):
@@ -290,3 +374,4 @@ class Reply(ContractModel):
     search_text: str | None = Field(default=None, exclude_if=lambda value: value is None)
     source_event_id: str | None = Field(default=None, exclude_if=lambda value: value is None)
     search_providers: list[str] = Field(default_factory=list,exclude_if=lambda value:not value)
+    pending_mass: PendingMass | None = Field(default=None,exclude_if=lambda value:value is None)

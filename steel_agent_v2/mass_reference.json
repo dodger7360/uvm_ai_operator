@@ -1,0 +1,26 @@
+[
+  {
+    "id": "solid-carbon-sheet-density", "revision": "2026-10-19.1",
+    "kind": "solid_carbon_sheet", "value": "7850", "unit": "kg_per_m3",
+    "grades": ["08пс", "Ст3"], "status": "reviewed", "method": "rectangular_sheet_nominal_geometry",
+    "sources": [{"url": "https://e-metall.ru/utility/calc/list/", "title": "Е-Металл: расчёт листа"}],
+    "checked_at": "2026-10-19", "limitation": "Утверждённое расчётное допущение для обычного сплошного листа углеродистой стали. Не фактическая масса; не ПВЛ, не рифлёный/покрытый лист."
+  },
+  {
+    "id": "welded-round-159-6", "revision": "2026-10-19.1",
+    "kind": "round_welded_pipe", "dimensions_mm": ["159", "6"],
+    "standards": ["ГОСТ 10704", "ГОСТ 10704-91", "ГОСТ 10705", "ГОСТ 10705-80"],
+    "grades": ["Ст20", "20"], "value": "22.64", "unit": "kg_per_m", "status": "reviewed",
+    "method": "manufacturer_nominal_table",
+    "sources": [{"url": "https://trubprom.com/products/catalog/esv/round-pipes/159/159x6", "title": "Уралтрубпром: 159×6"}],
+    "checked_at": "2026-10-19", "limitation": "Номинальная масса круглой электросварной трубы без покрытия. Не подтверждает поставку, конкретную партию, бесшовную трубу или иное исполнение."
+  },
+  {
+    "id": "ibeam-30sh1-2017", "revision": "2026-10-19.1", "kind": "ibeam",
+    "profile": "30Ш1", "standards": ["ГОСТ Р 57837-2017"],
+    "grades": ["С255", "С355", "Ст3", "09Г2С"], "value": "56.8", "unit": "kg_per_m", "status": "reviewed",
+    "method": "nominal_assortment_table_2017",
+    "sources": [{"url": "https://ese.pro/upload/iblock/f86/374qczwmu8qmaa4vv33qlovyjcq5wvwv/Katalog_produktsii_evraz.pdf", "title": "ЕВРАЗ: каталог двутавров"}],
+    "checked_at": "2026-10-19", "limitation": "Число эталона владельца совпадает с индексированной таблицей каталога ЕВРАЗ. PDF при прямом чтении вернул 403. Основание 2017 года — явная коммерческая политика владельца, не утверждение действующего нормативного статуса или применимости к партии."
+  }
+]

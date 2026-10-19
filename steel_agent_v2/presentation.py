@@ -213,7 +213,10 @@ def render(request, view='normalized', *, layout=None):
     by_id={item.id:item for item in request.items}
     originals={item.id:item for item in request.originals}
     if not detailed:
-        lines.extend(_item_text(by_id[key],originals[key],city,request.changes) for key in order)
+        from .theoretical_mass import display as mass_text
+        masses={m.spec.item_id:m for m in request.theoretical_mass}
+        lines.extend(_item_text(by_id[key],originals[key],city,request.changes)+
+                     (mass_text(masses[key]) if key in masses else '') for key in order)
     for n,group in enumerate(request.groups if detailed else [],1):
         members=[by_id[key] for key in group.item_ids]
         if not detailed or len(members)==1:

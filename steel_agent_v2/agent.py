@@ -9,6 +9,7 @@ from .telegram_format import prose, literal
 from .search_sources import compact as compact_sources, full as full_sources
 from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
+from .theoretical_mass import MassCatalog
 
 
 def search_status_text(status):
@@ -46,9 +47,9 @@ def validation_notes(error):
 
 
 class SteelAgent:
-    def __init__(self, transport, repository):
+    def __init__(self, transport, repository, *, mass_catalog=None):
         self.transport,self.repository=transport,repository
-        self.engine=RequestEngine()
+        self.engine=RequestEngine(mass_catalog or MassCatalog())
 
     def handle(self, user_id, message, *, event_id):
         if not isinstance(message,str) or not message.strip() or not str(event_id):
@@ -68,6 +69,7 @@ class SteelAgent:
             clarification=self.repository.clarification(user_id,current)
             displayed=self.repository.last_display(user_id,current)
             saved_sources=self.repository.source_search(user_id,current)
+            mass_pending=self.repository.mass_pending(user_id,current)
             display_ids=displayed.item_ids if displayed else None
             used_layout=None
             def present(state, view='normalized', proposed=None):
@@ -94,8 +96,10 @@ class SteelAgent:
                                         'count':len(saved_sources['reply'].sources) if saved_sources else 0},
                 'previous_operation':self.repository.last_operation(user_id),
                 'pending_clarification':clarification.model_dump(mode='json') if clarification else None,
+                'pending_mass':mass_pending.model_dump(mode='json') if mass_pending else None,
+                'mass_reference_records':[r.model_dump(mode='json') for r in self.engine.mass_catalog.records],
                 'supported_edit_operations':['set','regroup','undo','resolve','convert_mass',
-                                             'set_quantity','add_quantity','set_length'],'append_supported':False}
+                                             'set_quantity','add_quantity','set_length','calculate_mass'],'append_supported':False}
             context['last_search_explanation']=search_status_text(context['last_search'])
             notes=[];previous=None;updated=None;reply=None;first_intent=None;proposals=[];source_pending=None
             shown_normalized=False
@@ -132,7 +136,7 @@ class SteelAgent:
                                 raise EngineError('pending_source_changed_or_unavailable')
                             source=pending['source_text']
                             source_pending=plan.pending_event_id
-                        updated=self.engine.create(plan.extraction,source,f'{user_id}:{event}')
+                        updated=self.engine.create(plan.extraction,source,f'{user_id}:{event}',plan.mass_specs)
                         text=present(updated,proposed=plan.display_layout)
                     elif plan.intent=='edit_request':
                         has_selection=any(op.selection is not None for op in plan.operations)
@@ -177,8 +181,73 @@ class SteelAgent:
                                     raise EngineError('clarification_scope_mismatch')
                             if not inherited:raise EngineError('clarification_scope_mismatch')
                             edit_message=clarification.source_message+'\n'+message
+                        from .theoretical_mass import confirm, research_candidates
+                        approved=confirm(current,plan,mass_pending) if plan.mass_confirmation_event_id else ()
+                        if approved:
+                            saved_specs={s.item_id:s for s in (mass_pending.requested_specs or mass_pending.specs)}
+                            if any(s!=saved_specs.get(s.item_id) for s in plan.mass_specs):
+                                raise EngineError('mass_confirmation_spec_changed')
+                            plan=plan.model_copy(update={'mass_specs':list(saved_specs.values())})
                         updated=self.engine.edit(current,plan,edit_message,
-                            lambda key,rev:self.repository.version(user_id,key,rev))
+                            lambda key,rev:self.repository.version(user_id,key,rev),mass_approved=approved)
+                        if approved and not {op.target_id for op in plan.operations}<={m.spec.item_id for m in updated.theoretical_mass if m.status=='calculated'}:
+                            raise EngineError('mass_confirmation_inapplicable')
+                        if plan.search_query:
+                            targets={op.target_id for op in plan.operations}
+                            known={m.spec.item_id for m in updated.theoretical_mass if m.status=='calculated'}
+                            if not targets<=known:
+                                # No retries after this external stage. Its result never
+                                # enters ordinary edit repair or becomes arithmetic truth.
+                                updated=None
+                                calls+=1
+                                try:
+                                    result=self.transport.search(plan.search_query)
+                                    require_sources=list(result.sources)
+                                    if not require_sources or any(not safe_source(s.url) for s in require_sources):
+                                        raise SearchUnavailable('no_sources')
+                                except PermissionError:
+                                    raise
+                                except Exception as error:
+                                    # SearchUnavailable is a ValueError too. It is
+                                    # NOT a rejected edit plan to repair/re-execute.
+                                    reason=error.reason if isinstance(error,SearchUnavailable) else 'api_error'
+                                    reply=Reply(text=search_status_text({'status':'failed','reason':reason}),
+                                        status='failed',intent='web_search',request_id=current.id,revision=current.revision,
+                                        calls=calls,diagnostics=['mass_search_unavailable','search:'+reason])
+                                    break
+                                specs={m.spec.item_id:m.spec for m in current.theoretical_mass}
+                                specs.update({s.item_id:s for s in plan.mass_specs})
+                                requested=[specs[key] for key in specs if key in targets-known]
+                                known_specs=[specs[key] for key in specs if key in targets & known]
+                                research_context={'task':'mass_reference_evidence','message':message,
+                                    'mass_research':{'specs':[s.model_dump(mode='json') for s in requested],
+                                        'request':current.model_dump(mode='json'), 'text':result.text,
+                                        'sources':[s.model_dump(mode='json') for s in result.sources]}}
+                                calls+=1
+                                try:
+                                    raw_evidence=self.transport.plan(research_context)
+                                    evidence_plan=AgentPlan.model_validate_json(raw_evidence) if isinstance(raw_evidence,str) else AgentPlan.model_validate(raw_evidence)
+                                    if evidence_plan.intent!='answer_question' or evidence_plan.view!='normalized':
+                                        raise EngineError('mass_research_must_be_readonly')
+                                    pending_result=research_candidates(current,requested,result,evidence_plan.mass_candidates,event,known_specs)
+                                    rows=[]
+                                    for key,record in zip(pending_result.item_ids,pending_result.candidates):
+                                        position=display_ids.index(key)+1 if display_ids and key in display_ids else None
+                                        name=f'позиции {position}' if position else next(i.label for i in current.items if i.id==key)
+                                        rows.append('Для '+name+': '+record.value.replace('.',',')+' '+
+                                                    {'kg_per_m':'кг/м','kg_per_piece':'кг/шт'}[record.unit]+'. '+
+                                                    record.sources[0].title+'. '+record.limitation)
+                                    body='\n'.join(rows)+'\nЭто найденные расчётные данные, ещё не проверенная масса партии. '
+                                    body+='Подтвердите коэффициент и его применимость; при разных значениях укажите, какое использовать. Заявка не изменена.'
+                                    sources,text,runs=compact_sources(body,result.sources,[message,*literal_fragments(current)])
+                                    reply=Reply(text=text,status='ok',intent='web_search',request_id=current.id,revision=current.revision,
+                                        sources=sources,presentation=runs,search_query=plan.search_query,search_text=result.text,
+                                        pending_mass=pending_result,calls=calls)
+                                except (ValidationError,EngineError,ValueError):
+                                    reply=Reply(text='Не удалось подтвердить коэффициент, его единицу или соответствие товару. '
+                                        'Расчёт не применён; действующая заявка не изменена.',status='failed',intent='web_search',
+                                        request_id=current.id,revision=current.revision,calls=calls,diagnostics=['mass_research_invalid'])
+                                break
                         # History records the actual confirming message; inherited
                         # evidence remains separately recorded in each Change.
                         if plan.clarification_event_id is not None:
