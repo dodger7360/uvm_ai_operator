@@ -183,11 +183,13 @@ class DisplayOrder(ContractModel):
 class MassSpec(ContractModel):
     """Semantic references to current facts; never numeric arithmetic from GPT."""
     item_id: NonEmpty
-    kind: Literal['solid_carbon_sheet','round_welded_pipe','ibeam','linear','other']
+    kind: Literal['solid_carbon_sheet','round_welded_pipe','ibeam','linear','fixed_unit','other']
     dimensions: list[DisplayDimension] = Field(default_factory=list)
     profile_name: str | None = None
     standard_name: str | None = None
     grade_name: str | None = None
+    grade_policy: Literal['uvm_beam_commercial'] | None = None
+    execution_name: str | None = None
     cutting: Literal['none','specified','unknown','confirmed_piece_length']
     evidence: NonEmpty
 
@@ -201,6 +203,7 @@ class MassCandidate(ContractModel):
     profile_evidence: NonEmpty
     standard_evidence: str | None = None
     piece_length_evidence: str | None = None
+    execution_evidence: str | None = None
     suitability: Literal['applicable','uncertain','conflicting']
 
 
@@ -318,7 +321,9 @@ class MassReference(ContractModel):
     grades: list[str] = Field(default_factory=list)
     value: NonEmpty
     unit: Literal['kg_per_m','kg_per_piece','kg_per_m3']
-    status: Literal['reviewed','owner_confirmed','observed']
+    status: Literal['reviewed','owner_confirmed','owner_indicative','observed']
+    approval_scope: str | None = None
+    execution: str | None = None
     method: NonEmpty
     sources: list[SourceLink] = Field(min_length=1)
     checked_at: NonEmpty
@@ -334,6 +339,10 @@ class TheoreticalMass(ContractModel):
     dimensions_mm: list[str] = Field(default_factory=list)
     method: NonEmpty
     reason: str | None = None
+    piece_length_mm: ExactDecimal | None = Field(default=None,exclude_if=lambda value:value is None)
+    length_origin: Literal['user','uvm_default'] | None = Field(default=None,exclude_if=lambda value:value is None)
+    source_grade: str | None = Field(default=None,exclude_if=lambda value:value is None)
+    grade_policy: Literal['uvm_beam_commercial'] | None = Field(default=None,exclude_if=lambda value:value is None)
 
 
 class PendingMass(ContractModel):

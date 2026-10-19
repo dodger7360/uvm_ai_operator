@@ -81,7 +81,8 @@ def calc_plan(current,message='Рассчитай',query=None):
 def test_approved_sheet_exact_value_alternative_grade_original_and_no_total(tmp_path):
     agent,repo,fake,reply=setup(tmp_path)
     state=repo.load(1);m=mass(repo)
-    assert m.tonnes==Decimal('28.6034375') and '≈ 28,603 т' in reply.text and '583 шт' in reply.text
+    assert m.tonnes==Decimal('28.6034375') and '≈28,603 т' in reply.text and '583 шт' in reply.text
+    assert reply.text=='Лист г/к 2×1250×2500 мм сталь 08пс (допускается Ст3) — 583 шт. / ≈28,603 т'
     assert state.original_text==SHEET and state.items[0].quantity==583 and state.items[0].unit=='шт'
     assert state.items[0].id==state.originals[0].id=='i1' and '08пс' in reply.text and 'допускается Ст3' in reply.text
     assert not any(value in reply.text for value in ('ГОСТ','Итого','Суммар','Группа ','версия','1. '))
@@ -105,7 +106,7 @@ def test_sheet_edit_quantity_geometry_grade_undo_and_restart(tmp_path):
     assert mass(repo).tonnes is None and mass(repo).status=='unavailable'
     changed=repo.load(1);fake.plans.append(edit(changed,[dict(kind='undo')]))
     restored=agent.handle(1,'Отмени',event_id='undo')
-    assert mass(repo).tonnes==Decimal('44.15625') and '≈ 44,156 т' in restored.text
+    assert mass(repo).tonnes==Decimal('44.15625') and '≈44,156 т' in restored.text
     assert repo.load(1).originals==first.originals and repo.load(1).records==first.records
     reopened=Repository(Database(tmp_path/'mass.sqlite3'))
     assert reopened.load(1)==repo.load(1) and reopened.load(2) is None
@@ -168,11 +169,11 @@ def test_non_solid_sheet_is_not_given_rectangular_formula(tmp_path,label):
 
 
 def test_reviewed_unit_mass_interface_and_catalog_conflict(tmp_path):
-    record=MassReference(id='synthetic-unit',revision='1',kind='linear',profile='X',value='12.125',unit='kg_per_piece',
-        status='reviewed',method='approved_test_unit_mass',checked_at='synthetic',limitation='Test only',
+    record=MassReference(id='synthetic-unit',revision='1',kind='fixed_unit',profile='X',value='12.125',unit='kg_per_piece',
+        status='reviewed',method='fixed_unit_mass',checked_at='synthetic',limitation='Test only; fixed article, not cut stock',
         sources=[dict(url='https://example.org/unit',title='Test unit mass')])
     source,plan,_=sample([('Изделие',[('profile','X','X')],'2.5','шт')])
-    plan['mass_specs']=[spec('linear',grade=None,profile='profile')]
+    plan['mass_specs']=[spec('fixed_unit',grade=None,profile='profile')]
     agent,repo,fake,reply=setup(tmp_path,source,plan,MassCatalog([record]))
     assert mass(repo).tonnes==Decimal('.0303125') and '2,5 шт' in reply.text
     conflict=record.model_copy(update={'id':'other','value':'13'})
@@ -332,7 +333,8 @@ def test_mixed_profiles_sources_ids_originals_and_unrequested_totals(tmp_path):
     assert [m.spec.item_id for m in state.theoretical_mass]==['i1','i2','i3']
     assert len(state.items)==len(state.originals)==len(state.records)==3
     assert state.items==state.originals and state.original_text==source
-    assert len(reply.text.splitlines())==3 and reply.text.count(' / ≈ ')==3
+    assert len(reply.text.splitlines())==3 and reply.text.count('≈')==3
+    assert reply.text.count(' / ≈')==1 and reply.text.count('(≈')==2
     assert 'Итого' not in reply.text and '61,301' not in reply.text
     assert all(m.reference.sources for m in state.theoretical_mass)
 
@@ -344,7 +346,8 @@ def test_piece_length_edit_recomputes_beam_and_keeps_stock_policy_out_of_facts(t
     hint=spec('ibeam',profile='profile');hint['dimensions']=[dict(role='piece_length',name='length',unit='мм')]
     changed['mass_specs']=[hint];fake.plans.append(changed)
     result=agent.handle(1,'Длина 6 м',event_id='length')
-    assert mass(repo).tonnes==Decimal('13.632') and '6000 мм' in result.text
+    assert mass(repo).tonnes==Decimal('13.632') and '6м' in result.text
+    assert next(c.value for c in repo.load(1).items[0].characteristics if c.name=='length')=='6000 мм'
     assert repo.load(1).originals==old.originals and old.items[0].characteristics==old.originals[0].characteristics
     fake.plans.append(edit(repo.load(1),[dict(kind='undo')]))
     agent.handle(1,'Отмена',event_id='undo-length')

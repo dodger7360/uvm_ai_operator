@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 
 from .contracts import MassReference, TheoreticalMass, PendingMass
-from .engine import require, unique, decimal_text, measured_unit, PIECE_UNITS, LENGTH_UNITS
+from .engine import require, unique, decimal_text, measured_unit, PIECE_UNITS, LENGTH_UNITS, EngineError
 from .telegram_format import safe_link
 
 
@@ -33,17 +33,34 @@ def coefficient(reference):
     return value
 
 
+def long_stock(spec):
+    # Unknown products cannot opt out of stock-length checks. Fixed unit mass is
+    # an explicitly separate semantic method, not an unscoped kg/piece shortcut.
+    return spec.kind not in {'solid_carbon_sheet','fixed_unit'}
+
+
+def validate_reference(record):
+    coefficient(record)
+    require(record.unit=='kg_per_m3' or record.profile or record.dimensions_mm,'unscoped_mass_reference')
+    require(record.unit!='kg_per_m3' or record.kind=='solid_carbon_sheet','unsupported_density_method')
+    require(all(decimal_text(v)>0 for v in record.dimensions_mm),'invalid_mass_reference_dimension')
+    require(record.piece_length_mm is None or decimal_text(record.piece_length_mm)>0,'invalid_mass_reference_length')
+    if record.unit=='kg_per_piece' and long_stock(record):
+        require(record.piece_length_mm is not None,'mass_reference_piece_length_required')
+    if record.kind=='fixed_unit':
+        require(record.unit=='kg_per_piece' and record.method=='fixed_unit_mass','unsupported_fixed_unit_method')
+    if record.status=='owner_indicative':
+        require(bool(record.approval_scope and record.approval_scope.strip()),'indicative_mass_approval_required')
+    return record
+
+
 class MassCatalog:
     def __init__(self,records=None):
         raw=json.loads(Path(__file__).with_name('mass_reference.json').read_text(encoding='utf-8')) if records is None else records
         self.records=tuple(MassReference.model_validate(r) for r in raw)
         unique([(r.id,r.revision) for r in self.records],'duplicate_mass_reference')
         for record in self.records:
-            coefficient(record)
-            require(record.unit=='kg_per_m3' or record.profile or record.dimensions_mm,'unscoped_mass_reference')
-            require(record.unit!='kg_per_m3' or record.kind=='solid_carbon_sheet','unsupported_density_method')
-            require(all(decimal_text(v)>0 for v in record.dimensions_mm),'invalid_mass_reference_dimension')
-            require(record.piece_length_mm is None or decimal_text(record.piece_length_mm)>0,'invalid_mass_reference_length')
+            validate_reference(record)
 
 
 def fact(item,name):
@@ -78,16 +95,43 @@ def scope(item,spec):
     return dims,values,fact(item,spec.profile_name),fact(item,spec.standard_name)
 
 
+def piece_length(item,spec):
+    """One length policy shared by catalog, search, confirmation and replay validation."""
+    if spec.cutting not in {'none','confirmed_piece_length'}:
+        return None,None,'Для резки подтвердите длину готовой детали и схему поставки'
+    dims=dimensions(item,spec)
+    references={d.name for d in spec.dimensions if d.role=='piece_length'}
+    explicit={c.name for c in item.characteristics
+              if c.name.casefold() in {'length','length_mm','длина','piece_length','cut_length'}}
+    if explicit-references:
+        return None,None,'Уточните противоречивую или неразобранную длину одного изделия'
+    length=dims.get('piece_length')
+    if length is not None:return length,'user',None
+    if (spec.kind=='ibeam' and spec.cutting=='none' and fact(item,spec.profile_name)
+            and not references and 'length' not in dims):
+        return Decimal(12000),'uvm_default',None
+    return None,None,'Уточните длину одного изделия, не общий метраж'
+
+
 def applicable(reference,item,spec):
+    try:validate_reference(reference)
+    except (EngineError,ValueError):return False
     if reference.kind!=spec.kind:return False
+    execution_names={c.name for c in item.characteristics if c.name.casefold() in {'execution','исполнение','coating','покрытие','type','тип'}}
+    if execution_names and execution_names!={spec.execution_name}:return False
     dims,values,profile,standard=scope(item,spec)
     if reference.profile and reference.profile!=profile:return False
-    if reference.piece_length_mm is not None and dims.get('piece_length')!=Decimal(reference.piece_length_mm):return False
+    length,_,reason=piece_length(item,spec) if long_stock(spec) else (dims.get('piece_length'),None,None)
+    if long_stock(spec) and item.unit and item.unit.strip().casefold() in PIECES and reason:return False
+    if reference.piece_length_mm is not None and (reason or length!=decimal_text(reference.piece_length_mm)):return False
     if reference.unit=='kg_per_piece' and ((dims.get('piece_length') is not None and reference.piece_length_mm is None)
                                         or values and not reference.dimensions_mm):return False
-    if reference.dimensions_mm and (None in values or values!=[Decimal(v) for v in reference.dimensions_mm]):return False
+    if reference.dimensions_mm and (None in values or values!=[decimal_text(v) for v in reference.dimensions_mm]):return False
     if reference.standards and standard and standard not in reference.standards:return False
-    if spec.standard_name and standard is None:return False
+    if spec.standard_name and standard is None and reference.status!='owner_indicative':return False
+    if spec.execution_name:
+        execution=fact(item,spec.execution_name)
+        if execution is None or execution!=reference.execution:return False
     if reference.grades and fact(item,spec.grade_name) not in reference.grades:return False
     return True
 
@@ -97,16 +141,31 @@ def calculate(item,spec,signature,records):
     def unavailable(reason,status='unavailable'):
         return TheoreticalMass(**base,status=status,reason=reason)
     if classification(item,spec)!=signature:return unavailable('Характеристики изменены: расчётное основание требует проверки')
+    grade_audit={}
+    if spec.grade_policy:
+        grade=next((c for c in item.characteristics if c.name==spec.grade_name),None)
+        approved={'ст3':'С255','09г2с':'С355'}
+        if (spec.kind!='ibeam' or grade is None or not grade.raw
+                or approved.get(grade.raw.strip().casefold())!=grade.value):
+            return unavailable('Коммерческая марка балки требует подтверждённого основания UVM')
+        grade_audit=dict(source_grade=grade.raw,grade_policy=spec.grade_policy)
     # A missing semantic pointer must not silently bypass an explicit standard.
     norm_names={c.name for c in item.characteristics if c.name.casefold() in {'standard','gost','гост','норматив'}}
     if norm_names and norm_names!={spec.standard_name}:return unavailable('Уточните применимый норматив для расчёта')
+    execution_names={c.name for c in item.characteristics if c.name.casefold() in {'execution','исполнение','coating','покрытие','type','тип'}}
+    if execution_names and execution_names!={spec.execution_name}:
+        return unavailable('Уточните применимость коэффициента к указанному исполнению')
     unit=measured_unit(item.unit)
     piece=bool(item.unit and item.unit.strip().casefold() in PIECES)
     if item.quantity is None:return unavailable('Количество не определено')
     if not piece and (not unit or unit[0]!='length'):return unavailable('Для расчёта нужны метры или штуки')
-    candidates=[r for r in records if r.status in {'reviewed','owner_confirmed'} and applicable(r,item,spec)]
+    length=None;origin=None
+    if piece and long_stock(spec):
+        length,origin,reason=piece_length(item,spec)
+        if reason:return unavailable(reason)
+    candidates=[r for r in records if r.status in {'reviewed','owner_confirmed','owner_indicative'} and applicable(r,item,spec)]
     if not candidates:return unavailable('Нет проверенного коэффициента для этих характеристик')
-    if len({(Decimal(r.value),r.unit) for r in candidates})>1:
+    if len({(decimal_text(r.value),r.unit) for r in candidates})>1:
         return unavailable('Справочные массы различаются: подтвердите расчётное основание','conflicting')
     reference=candidates[0];value=coefficient(reference);dims,values,_,_=scope(item,spec)
     result=None;method=reference.method
@@ -121,17 +180,14 @@ def calculate(item,spec,signature,records):
         # Measured unit exponent is relative to mm; convert to m then kg to t.
         result=product(item.quantity,value,exponent=unit[2]-6)
     else:
-        length=dims.get('piece_length')
-        if spec.cutting not in {'none','confirmed_piece_length'}:return unavailable('Для резки подтвердите длину готовой детали и схему поставки')
-        if length is None and spec.kind=='ibeam' and spec.cutting=='none' and not any(d.role=='piece_length' for d in spec.dimensions):
-            if any(c.name.casefold() in {'length','length_mm','длина','piece_length','cut_length'} for c in item.characteristics):
-                return unavailable('Уточните указанную длину одного изделия')
-            length=Decimal(12000);method+='; UVM_default_piece_length_12000_mm'
+        if length is None:length=dims.get('piece_length')
         if length is None:return unavailable('Уточните длину одного изделия, не общий метраж')
         result=product(item.quantity,length,value,exponent=-6)
         values=[*values,length]
+    if origin=='uvm_default':method+='; UVM_default_piece_length_12000_mm'
     return TheoreticalMass(spec=spec,classification=signature,status='calculated',tonnes=result,
-        reference=reference,dimensions_mm=[format(v,'f') for v in values],method=method)
+        reference=reference,dimensions_mm=[format(v,'f') for v in values],method=method,
+        piece_length_mm=length,length_origin=origin,**grade_audit)
 
 
 def refresh(request,specs=(),catalog=None,approved=()):
@@ -148,7 +204,7 @@ def refresh(request,specs=(),catalog=None,approved=()):
         require(spec.evidence in fragment or spec.evidence in item.label,'mass_classification_evidence')
         names={c.name for c in item.characteristics}
         require(all(d.name in names for d in spec.dimensions),'mass_dimension_reference')
-        require(all(name is None or name in names for name in (spec.profile_name,spec.standard_name,spec.grade_name)),
+        require(all(name is None or name in names for name in (spec.profile_name,spec.standard_name,spec.grade_name,spec.execution_name)),
                 'mass_fact_reference')
         signature=classification(item,spec)
         previous=old.get(item.id)
@@ -178,15 +234,60 @@ def validate_annotations(request):
         else:require(mass.tonnes is None,'unverified_mass_annotation')
 
 
-def display(mass):
-    if mass.status!='calculated':return ' (расчётная масса не определена: '+mass.reason+')'
+def validated_for_display(request):
+    """Fail closed on an unsafe historical annotation without rewriting history.
+
+    Readonly show/explanation must not bypass validation simply because an older
+    JSON snapshot deserializes. A later explicit edit can safely recalculate it.
+    """
+    items={item.id:item for item in request.items};result=[]
+    for mass in request.theoretical_mass:
+        valid=mass.status!='calculated' and mass.tonnes is None
+        if mass.status=='calculated' and mass.reference and mass.spec.item_id in items:
+            try:valid=calculate(items[mass.spec.item_id],mass.spec,mass.classification,[mass.reference])==mass
+            except (EngineError,ValueError):valid=False
+        result.append(mass if valid else TheoreticalMass(spec=mass.spec,classification=mass.classification,
+            status='unavailable',method='not_calculated',reason='Сохранённое расчётное основание требует проверки'))
+    return request.model_copy(update={'theoretical_mass':result})
+
+
+def rounded_tonnes(mass):
     value=mass.tonnes
     with localcontext() as ctx:
         ctx.prec=max(32,len(value.as_tuple().digits)+abs(value.as_tuple().exponent)+4)
         rounded=value.quantize(Decimal('.001'),rounding=ROUND_HALF_UP)
     if value>0 and rounded==0:
-        return ' / < 0,001 т (теоретическая)'
-    return ' / ≈ '+format(rounded,'f').replace('.',',')+' т'
+        return '< 0,001 т'
+    return '≈'+format(rounded,'f').replace('.',',')+' т'
+
+
+def display(mass):
+    if mass.status!='calculated':return ' (расчётная масса не определена: '+mass.reason+')'
+    value=rounded_tonnes(mass)
+    return ' / '+value if mass.spec.kind=='solid_carbon_sheet' else ' ('+value+')'
+
+
+def explanation(item,mass):
+    from .presentation import number
+    if mass.status!='calculated':return 'Расчётная масса не определена: '+(mass.reason or 'основание не подтверждено')+'.'
+    reference=mass.reference
+    units={'kg_per_m':'кг/м','kg_per_piece':'кг/шт.','kg_per_m3':'кг/м³'}
+    statuses={'reviewed':'проверенное расчётное основание','owner_confirmed':'коэффициент подтверждён пользователем',
+              'owner_indicative':'одобренный владельцем предварительный ориентир'}
+    lines=[f'Расчётная масса: {number(item.quantity)} {item.unit}.']
+    if mass.piece_length_mm is not None:
+        origin='указана пользователем' if mass.length_origin=='user' else 'коммерческое допущение UVM: балка 12 м'
+        lines.append(f'Длина штуки: {number(mass.piece_length_mm)} мм; {origin}.')
+    lines.extend([f'Основание: {reference.value} {units[reference.unit]}; редакция {reference.revision}.',
+                  f'Точное значение: {number(mass.tonnes)} т; отображение: {rounded_tonnes(mass)}.',
+                  f'Метод: {mass.method}. Статус: {statuses[reference.status]}.',
+                  'Источник: '+'; '.join(source.title for source in reference.sources)+'.',
+                  'Ограничения: '+reference.limitation])
+    if reference.execution:lines.append('Исполнение основания: '+reference.execution)
+    if reference.approval_scope:lines.append('Область согласования: '+reference.approval_scope)
+    if mass.grade_policy:lines.append('Коммерческая марка: '+mass.source_grade+' → '+fact(item,mass.spec.grade_name)+
+                                      '; правило UVM только для балок, не нормативная взаимозаменяемость.')
+    return '\n'.join(lines)
 
 
 def research_candidates(request,specs,answer,candidates,event_id,known_specs=()):
@@ -211,13 +312,19 @@ def research_candidates(request,specs,answer,candidates,event_id,known_specs=())
                     for line in candidate.quote.splitlines()),'mass_research_cross_row')
         spec=by_id[candidate.item_id];item=items[candidate.item_id]
         dims,values,profile,standard=scope(item,spec)
-        if candidate.unit=='kg_per_piece' and spec.kind in {'ibeam','round_welded_pipe','linear'}:
+        length=None
+        if item.unit and item.unit.strip().casefold() in PIECES and long_stock(spec):
+            length,_,reason=piece_length(item,spec)
+            require(reason is None,'mass_research_piece_length_unconfirmed')
+        if candidate.unit=='kg_per_piece' and long_stock(spec):
             length_text=candidate.piece_length_evidence
             match=re.fullmatch(r'(\d+(?:[.,]\d+)?)\s*(мм|см|м)',length_text.strip()) if length_text else None
-            require(match and length_text in candidate.quote and dims.get('piece_length') is not None,
+            require(match and length_text in candidate.quote and length is not None,
                     'mass_research_piece_length_missing')
-            length=product(decimal_text(match[1]),exponent=LENGTH_UNITS[match[2]][1])
-            require(length==dims['piece_length'],'mass_research_piece_length_mismatch')
+            require(any(candidate.profile_evidence in line and candidate.value in line and length_text in line
+                        for line in candidate.quote.splitlines()),'mass_research_piece_length_cross_row')
+            quoted_length=product(decimal_text(match[1]),exponent=LENGTH_UNITS[match[2]][1])
+            require(quoted_length==length,'mass_research_piece_length_mismatch')
         if profile:require(re.search(r'(?<!\w)'+re.escape(profile)+r'(?!\w)',candidate.profile_evidence),
                            'mass_research_profile_mismatch')
         else:
@@ -226,16 +333,22 @@ def research_candidates(request,specs,answer,candidates,event_id,known_specs=())
             require(any(tokens[n:n+len(values)]==values for n in range(len(tokens))),'mass_research_dimensions_mismatch')
         if standard:require(candidate.standard_evidence and standard in candidate.standard_evidence
                             and candidate.standard_evidence in candidate.quote,'mass_research_standard_mismatch')
+        execution=fact(item,spec.execution_name)
+        if execution:require(candidate.execution_evidence and execution in candidate.execution_evidence
+                             and candidate.execution_evidence in candidate.quote,'mass_research_execution_mismatch')
         # Applicability is checked against actual dimensions/profile, not the query.
         record=MassReference(id='research:'+event_id+':'+str(len(records)+1),revision='1',kind=spec.kind,
             profile=profile,dimensions_mm=[str(v) for v in values],standards=[standard] if standard else [],
-            piece_length_mm=str(dims['piece_length']) if candidate.unit=='kg_per_piece' and dims.get('piece_length') else None,
+            execution=execution,
+            piece_length_mm=str(length) if candidate.unit=='kg_per_piece' and length is not None else None,
             grades=[fact(item,spec.grade_name)] if fact(item,spec.grade_name) else [],
             value=str(value),unit=candidate.unit,status='observed',method='web_observation: '+candidate.suitability+'; '+candidate.quote,
             sources=[sources[candidate.source_url]],checked_at='event:'+event_id,
             limitation=({'conflicting':'Источники противоречат друг другу. ',
                          'uncertain':'Применимость не установлена. '}.get(candidate.suitability,'')+
                          'Требует явного подтверждения коэффициента и применимости пользователем; не нормативная гарантия'))
+        validate_reference(record)
+        require(applicable(record,item,spec),'mass_research_inapplicable')
         records.append(record);keys.append(item.id);bindings.append(classification(item,spec));selected_specs.append(spec)
     require(bool(records),'mass_research_no_valid_candidates')
     require(set(keys)==set(by_id),'mass_research_incomplete_targets')
@@ -253,7 +366,11 @@ def confirm(request,plan,pending):
         require(len(matches)==1,'mass_confirmation_unknown_candidate')
         n=matches[0];item=next(i for i in request.items if i.id==pending.item_ids[n])
         require(classification(item,pending.specs[n])==pending.classifications[n],'mass_confirmation_changed_facts')
-        chosen.append((item.id,pending.candidates[n].model_copy(update={'status':'owner_confirmed'})))
+        record=pending.candidates[n].model_copy(update={'status':'owner_confirmed'})
+        validate_reference(record)
+        require(calculate(item,pending.specs[n],pending.classifications[n],[record]).status=='calculated',
+                'mass_confirmation_inapplicable')
+        chosen.append((item.id,record))
     unique([key for key,_ in chosen],'conflicting_mass_approvals')
     require({key for key,_ in chosen}==set(pending.item_ids),'mass_confirmation_incomplete_candidates')
     expected={s.item_id for s in pending.requested_specs} or set(pending.item_ids)

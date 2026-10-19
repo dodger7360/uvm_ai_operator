@@ -9,7 +9,7 @@ from .telegram_format import prose, literal
 from .search_sources import compact as compact_sources, full as full_sources
 from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
-from .theoretical_mass import MassCatalog
+from .theoretical_mass import MassCatalog, validated_for_display
 
 
 def search_status_text(status):
@@ -82,7 +82,7 @@ class SteelAgent:
                 {'number':n,'id':r.id,'start':r.start,'end':r.end,'text':current.original_text[r.start:r.end]}
                 for n,r in enumerate((r for r in current.records if r.kind=='unresolved'),1)] if current else [],
                 'message':message,'source_lines':source_lines(message),
-                'active_request': current.model_dump(mode='json',exclude={'undo_stack','changes','originals'}) if current else None,
+                'active_request': validated_for_display(current).model_dump(mode='json',exclude={'undo_stack','changes','originals'}) if current else None,
                 'recent_changes':[c.model_dump() for c in current.changes[-10:]] if current else [],
                 'can_undo': bool(current and current.undo_stack),
                 'display_numbers':{str(n):key for n,key in enumerate(display_ids,1)} if display_ids else {},
@@ -443,7 +443,13 @@ class SteelAgent:
                 if pending:protected.append(pending['source_text'])
                 protected.extend(turn['content'] for turn in context['history'] if turn['role']=='user')
                 original_view=plan is not None and plan.intent in {'show_request','answer_question'} and plan.view=='original'
-                reply=reply.model_copy(update={'presentation':literal(reply.text) if original_view else prose(reply.text,protected)})
+                mass_sources=[source for mass in state.theoretical_mass if mass.status=='calculated' and mass.reference
+                              for source in mass.reference.sources] if state and plan and plan.view=='explanation' else []
+                if mass_sources:
+                    sources,text,runs=compact_sources(reply.text,mass_sources,protected)
+                    reply=reply.model_copy(update={'text':text,'sources':sources,'presentation':runs})
+                else:
+                    reply=reply.model_copy(update={'presentation':literal(reply.text) if original_view else prose(reply.text,protected)})
             return self.repository.finish(user_id,event,sequence,message,reply,updated)
         except PermissionError:
             raise
