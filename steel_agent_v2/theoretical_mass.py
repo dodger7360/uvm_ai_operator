@@ -44,6 +44,9 @@ def validate_reference(record):
     require(record.unit=='kg_per_m3' or record.profile or record.dimensions_mm,'unscoped_mass_reference')
     require(record.unit!='kg_per_m3' or record.kind=='solid_carbon_sheet','unsupported_density_method')
     require(all(decimal_text(v)>0 for v in record.dimensions_mm),'invalid_mass_reference_dimension')
+    if record.family is not None:
+        require(record.dimension_roles==sorted(set(record.dimension_roles))
+                and len(record.dimension_roles)==len(record.dimensions_mm),'invalid_mass_reference_roles')
     require(record.piece_length_mm is None or decimal_text(record.piece_length_mm)>0,'invalid_mass_reference_length')
     if record.unit=='kg_per_piece' and long_stock(record):
         require(record.piece_length_mm is not None,'mass_reference_piece_length_required')
@@ -117,9 +120,13 @@ def applicable(reference,item,spec):
     try:validate_reference(reference)
     except (EngineError,ValueError):return False
     if reference.kind!=spec.kind:return False
+    if reference.family is not None and reference.family!=spec.family:return False
     execution_names={c.name for c in item.characteristics if c.name.casefold() in {'execution','исполнение','coating','покрытие','type','тип'}}
     if execution_names and execution_names!={spec.execution_name}:return False
     dims,values,profile,standard=scope(item,spec)
+    if reference.family is not None and reference.dimension_roles!=sorted(
+            role for role in dims if role not in {'piece_length','total_length'}):return False
+    if reference.unspecified_standard_only and standard is not None:return False
     if reference.profile and reference.profile!=profile:return False
     length,_,reason=piece_length(item,spec) if long_stock(spec) else (dims.get('piece_length'),None,None)
     if long_stock(spec) and item.unit and item.unit.strip().casefold() in PIECES and reason:return False
@@ -278,10 +285,10 @@ def rounded_tonnes(mass):
     return '≈'+format(rounded,'f').replace('.',',')+' т'
 
 
-def display(mass):
+def display(mass,compact=False):
     if mass.status!='calculated':return ' (расчётная масса не определена: '+mass.reason+')'
     value=rounded_tonnes(mass)
-    return ' / '+value if mass.spec.kind=='solid_carbon_sheet' else ' ('+value+')'
+    return ' / '+value if mass.spec.kind=='solid_carbon_sheet' and not compact else ' ('+value+')'
 
 
 def explanation(item,mass):

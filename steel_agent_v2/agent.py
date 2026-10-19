@@ -1,7 +1,7 @@
 """One GPT coordinator. No keyword/regex intent router and no legacy pipeline."""
 import json
 from pydantic import ValidationError
-from .contracts import AgentPlan, Reply, PendingClarification, Clarification, DisplayOrder
+from .contracts import AgentPlan, Reply, PendingClarification, Clarification, DisplayOrder, KnowledgeContext
 from .engine import RequestEngine, EngineError, SelectionError, totals, unit_evidence_in_message
 from .repository import Busy
 from .presentation import render, display_order, display_layout, literal_fragments
@@ -10,6 +10,7 @@ from .search_sources import compact as compact_sources, full as full_sources
 from .recovery import partial_from_proposal
 from .transport import SearchUnavailable, safe_source, SEARCH_PROVIDERS
 from .theoretical_mass import MassCatalog, validated_for_display
+from .knowledge import installed
 
 
 def search_status_text(status):
@@ -47,9 +48,11 @@ def validation_notes(error):
 
 
 class SteelAgent:
-    def __init__(self, transport, repository, *, mass_catalog=None):
+    def __init__(self, transport, repository, *, mass_catalog=None, knowledge_package=None):
         self.transport,self.repository=transport,repository
-        self.engine=RequestEngine(mass_catalog or MassCatalog())
+        self.knowledge=knowledge_package if knowledge_package is not None else installed()
+        catalog=mass_catalog if mass_catalog is not None else MassCatalog([*MassCatalog().records,*self.knowledge.mass_records()])
+        self.engine=RequestEngine(catalog)
 
     def handle(self, user_id, message, *, event_id):
         if not isinstance(message,str) or not message.strip() or not str(event_id):
@@ -63,7 +66,7 @@ class SteelAgent:
             return Reply(text='Повторное сообщение имеет конфликтующий идентификатор. Заявка не изменена.',
                          status='failed',intent='clarify',diagnostics=[str(error)])
         if cached is not None:return cached
-        calls=0;clarification=None
+        calls=0;clarification=None;knowledge_use=None
         try:
             pending=self.repository.pending(user_id)
             clarification=self.repository.clarification(user_id,current)
@@ -76,8 +79,14 @@ class SteelAgent:
                 nonlocal used_layout
                 prior=displayed.layout if displayed and state and state.id==displayed.request_id else None
                 used_layout=display_layout(state,prior,proposed)
-                return render(state,view,layout=used_layout)
+                return render(state,view,layout=used_layout,expert=True)
             if pending:pending['source_lines']=source_lines(pending['source_text'])
+            knowledge_input=message+('\n'+pending['source_text'] if pending else '')
+            expert=self.knowledge.context(knowledge_input,current)
+            knowledge_use=KnowledgeContext.model_validate(self.knowledge.provenance(expert))
+            selected_cases={case['id'] for case in expert['cases']}
+            trace=CURRENT.get()
+            emit('steel_v2_knowledge_context',operation=trace.operation_id if trace else None,version=self.knowledge.version)
             context={'pending_request':pending,'unresolved_fragments':[
                 {'number':n,'id':r.id,'start':r.start,'end':r.end,'text':current.original_text[r.start:r.end]}
                 for n,r in enumerate((r for r in current.records if r.kind=='unresolved'),1)] if current else [],
@@ -97,7 +106,9 @@ class SteelAgent:
                 'previous_operation':self.repository.last_operation(user_id),
                 'pending_clarification':clarification.model_dump(mode='json') if clarification else None,
                 'pending_mass':mass_pending.model_dump(mode='json') if mass_pending else None,
-                'mass_reference_records':[r.model_dump(mode='json') for r in self.engine.mass_catalog.records],
+                'expert_knowledge':expert,
+                'mass_reference_records':[r.model_dump(mode='json') for r in self.engine.mass_catalog.records
+                                          if not r.id.startswith('CASE-') or r.id.split(':')[0] in selected_cases],
                 'supported_edit_operations':['set','regroup','undo','resolve','convert_mass',
                                              'set_quantity','add_quantity','set_length','calculate_mass'],'append_supported':False}
             context['last_search_explanation']=search_status_text(context['last_search'])
@@ -219,7 +230,7 @@ class SteelAgent:
                                 specs.update({s.item_id:s for s in plan.mass_specs})
                                 requested=[specs[key] for key in specs if key in targets-known]
                                 known_specs=[specs[key] for key in specs if key in targets & known]
-                                research_context={'task':'mass_reference_evidence','message':message,
+                                research_context={'task':'mass_reference_evidence','message':message,'expert_knowledge':expert,
                                     'mass_research':{'specs':[s.model_dump(mode='json') for s in requested],
                                         'request':current.model_dump(mode='json'), 'text':result.text,
                                         'sources':[s.model_dump(mode='json') for s in result.sources]}}
@@ -450,6 +461,7 @@ class SteelAgent:
                     reply=reply.model_copy(update={'text':text,'sources':sources,'presentation':runs})
                 else:
                     reply=reply.model_copy(update={'presentation':literal(reply.text) if original_view else prose(reply.text,protected)})
+            if knowledge_use and calls:reply=reply.model_copy(update={'knowledge':knowledge_use})
             return self.repository.finish(user_id,event,sequence,message,reply,updated)
         except PermissionError:
             raise
@@ -463,7 +475,7 @@ class SteelAgent:
             reply=Reply(text='Обработка не завершена. Активная заявка не изменена; исходное сообщение сохранено в истории. '
                 'Повторите позже или сообщите администратору.',status='failed',intent='clarify',
                 request_id=current.id if current else None,revision=current.revision if current else None,
-                diagnostics=[code],calls=calls,clarification=clarification)
+                diagnostics=[code],calls=calls,clarification=clarification,knowledge=knowledge_use if calls else None)
             try:
                 return self.repository.finish(user_id,event,sequence,message,reply)
             except Exception:

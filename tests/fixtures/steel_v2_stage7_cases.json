@@ -1,0 +1,2136 @@
+{
+  "fixture_kind": "explicit_mock_agent_plans",
+  "cases": [
+    {
+      "id": "CASE-20261019-001",
+      "source": "Полоса 2х60 ПН -0-2 ст3 ГОСТ 14637-2014, ГОСТ 19903-2015 — 0,005 т\nУголок 50х50х3 Ст. 3пс Гост 535-2005 ГОСТ8509-93-2025,00кг.\nЛист Б ПН -0-2 Ст. 3 пс. ГОСТ 14637-2014 ГОСТ 19903-2015-5,1 кг.\nКв. 60х60х2 Длинна 2300-791,67 кг. резка\nКв. 60х60х2 Длинна 600-198,38 кг. резка\nКв. 40х40х3-10,44 кг. Длинна 1500 резка",
+      "plan": {
+        "intent": "create_request",
+        "extraction": {
+          "records": [
+            {
+              "id": "s1",
+              "kind": "product",
+              "start": 0,
+              "end": 66
+            },
+            {
+              "id": "s2",
+              "kind": "product",
+              "start": 67,
+              "end": 126
+            },
+            {
+              "id": "s3",
+              "kind": "product",
+              "start": 127,
+              "end": 191
+            },
+            {
+              "id": "s4",
+              "kind": "product",
+              "start": 192,
+              "end": 232
+            },
+            {
+              "id": "s5",
+              "kind": "product",
+              "start": 233,
+              "end": 272
+            },
+            {
+              "id": "s6",
+              "kind": "product",
+              "start": 273,
+              "end": 312
+            }
+          ],
+          "items": [
+            {
+              "id": "i1",
+              "source_id": "s1",
+              "label": "Полоса",
+              "quantity": "0.005",
+              "unit": "т",
+              "quantity_text": "0,005",
+              "unit_text": "т",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "2×60",
+                  "raw": "2х60",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "precision",
+                  "value": "ПН-0-2",
+                  "raw": "ПН -0-2",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 14637-2014",
+                  "raw": "ГОСТ 14637-2014",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "rolling_standard",
+                  "value": "ГОСТ 19903-2015",
+                  "raw": "ГОСТ 19903-2015",
+                  "source_ids": [
+                    "s1"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i2",
+              "source_id": "s2",
+              "label": "Уголок",
+              "quantity": "2025.00",
+              "unit": "кг",
+              "quantity_text": "2025,00",
+              "unit_text": "кг",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "50×50×3",
+                  "raw": "50х50х3",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3пс",
+                  "raw": "Ст. 3пс",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 535-2005",
+                  "raw": "Гост 535-2005",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "rolling_standard",
+                  "value": "ГОСТ 8509-93",
+                  "raw": "ГОСТ8509-93",
+                  "source_ids": [
+                    "s2"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i3",
+              "source_id": "s3",
+              "label": "Лист Б",
+              "quantity": "5.1",
+              "unit": "кг",
+              "quantity_text": "5,1",
+              "unit_text": "кг",
+              "characteristics": [
+                {
+                  "name": "precision",
+                  "value": "ПН-0-2",
+                  "raw": "ПН -0-2",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3пс",
+                  "raw": "Ст. 3 пс.",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 14637-2014",
+                  "raw": "ГОСТ 14637-2014",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "rolling_standard",
+                  "value": "ГОСТ 19903-2015",
+                  "raw": "ГОСТ 19903-2015",
+                  "source_ids": [
+                    "s3"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i4",
+              "source_id": "s4",
+              "label": "Труба профильная",
+              "quantity": "791.67",
+              "unit": "кг",
+              "quantity_text": "791,67",
+              "unit_text": "кг",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "60×60×2",
+                  "raw": "60х60х2",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "L=2300мм",
+                  "raw": "Длинна 2300",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "cutting",
+                  "value": "резка",
+                  "raw": "резка",
+                  "source_ids": [
+                    "s4"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i5",
+              "source_id": "s5",
+              "label": "Труба профильная",
+              "quantity": "198.38",
+              "unit": "кг",
+              "quantity_text": "198,38",
+              "unit_text": "кг",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "60×60×2",
+                  "raw": "60х60х2",
+                  "source_ids": [
+                    "s5"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "L=600мм",
+                  "raw": "Длинна 600",
+                  "source_ids": [
+                    "s5"
+                  ]
+                },
+                {
+                  "name": "cutting",
+                  "value": "резка",
+                  "raw": "резка",
+                  "source_ids": [
+                    "s5"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i6",
+              "source_id": "s6",
+              "label": "Труба профильная",
+              "quantity": "10.44",
+              "unit": "кг",
+              "quantity_text": "10,44",
+              "unit_text": "кг",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "40×40×3",
+                  "raw": "40х40х3",
+                  "source_ids": [
+                    "s6"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "L=1500мм",
+                  "raw": "Длинна 1500",
+                  "source_ids": [
+                    "s6"
+                  ]
+                },
+                {
+                  "name": "cutting",
+                  "value": "резка",
+                  "raw": "резка",
+                  "source_ids": [
+                    "s6"
+                  ]
+                }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "id": "g1",
+              "label": "Позиции заявки",
+              "item_ids": [
+                "i1",
+                "i2",
+                "i3",
+                "i4",
+                "i5",
+                "i6"
+              ],
+              "rationale": "Явный mock-план по опубликованному утверждённому CASE; не живая GPT-нормализация"
+            }
+          ]
+        },
+        "display_layout": {
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "strip",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i2",
+              "kind": "angle",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i3",
+              "kind": "sheet",
+              "grade_name": "grade",
+              "dimensions": []
+            },
+            {
+              "item_id": "i4",
+              "kind": "pipe",
+              "grade_name": null,
+              "dimensions": []
+            },
+            {
+              "item_id": "i5",
+              "kind": "pipe",
+              "grade_name": null,
+              "dimensions": []
+            },
+            {
+              "item_id": "i6",
+              "kind": "pipe",
+              "grade_name": null,
+              "dimensions": []
+            }
+          ]
+        },
+        "mass_specs": []
+      },
+      "expected_text": "Полоса 2×60 ПН-0-2 Ст3 ГОСТ 14637-2014 ГОСТ 19903-2015 — 0,005 т\nУголок 50×50×3 Ст3пс ГОСТ 535-2005 ГОСТ 8509-93 — 2,025 т\nЛист Б ПН-0-2 Ст3пс ГОСТ 14637-2014 ГОСТ 19903-2015 — 0,0051 т\nТруба профильная 60×60×2 L=2300мм резка — 0,79167 т\nТруба профильная 60×60×2 L=600мм резка — 0,19838 т\nТруба профильная 40×40×3 L=1500мм резка — 0,01044 т",
+      "expected_item_count": 6,
+      "expected_display_ids": [
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5",
+        "i6"
+      ],
+      "expected_quantities_t": [
+        "0.005",
+        "2.025",
+        "0.0051",
+        "0.79167",
+        "0.19838",
+        "0.01044"
+      ]
+    },
+    {
+      "id": "CASE-20261019-002",
+      "source": "Труба 40х40х3 ст3 гост - 430 хлыстов по 6 метров\nУголок 63х40х5 гост ст3 - 240 хлыстов по 6 метров\nУголок 50х50х5 гост ст3 - 26 хлыстов по 6 метров\nУголок 60х40х3 гост ст3 - 426 хлыстов по 6 метров",
+      "plan": {
+        "intent": "create_request",
+        "extraction": {
+          "records": [
+            {
+              "id": "s1",
+              "kind": "product",
+              "start": 0,
+              "end": 48
+            },
+            {
+              "id": "s2",
+              "kind": "product",
+              "start": 49,
+              "end": 98
+            },
+            {
+              "id": "s3",
+              "kind": "product",
+              "start": 99,
+              "end": 147
+            },
+            {
+              "id": "s4",
+              "kind": "product",
+              "start": 148,
+              "end": 197
+            }
+          ],
+          "items": [
+            {
+              "id": "i1",
+              "source_id": "s1",
+              "label": "Труба профильная",
+              "quantity": "430",
+              "unit": "хлыстов",
+              "quantity_text": "430",
+              "unit_text": "хлыстов",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "40×40×3",
+                  "raw": "40х40х3",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "6м",
+                  "raw": "6 метров",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": null,
+                  "raw": "гост",
+                  "source_ids": [
+                    "s1"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i2",
+              "source_id": "s2",
+              "label": "Уголок",
+              "quantity": "240",
+              "unit": "хлыстов",
+              "quantity_text": "240",
+              "unit_text": "хлыстов",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "63×40×5",
+                  "raw": "63х40х5",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "6м",
+                  "raw": "6 метров",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": null,
+                  "raw": "гост",
+                  "source_ids": [
+                    "s2"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i3",
+              "source_id": "s3",
+              "label": "Уголок",
+              "quantity": "26",
+              "unit": "хлыстов",
+              "quantity_text": "26",
+              "unit_text": "хлыстов",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "50×50×5",
+                  "raw": "50х50х5",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "6м",
+                  "raw": "6 метров",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": null,
+                  "raw": "гост",
+                  "source_ids": [
+                    "s3"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i4",
+              "source_id": "s4",
+              "label": "Уголок",
+              "quantity": "426",
+              "unit": "хлыстов",
+              "quantity_text": "426",
+              "unit_text": "хлыстов",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "60×40×3",
+                  "raw": "60х40х3",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "6м",
+                  "raw": "6 метров",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": null,
+                  "raw": "гост",
+                  "source_ids": [
+                    "s4"
+                  ]
+                }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "id": "g1",
+              "label": "Позиции заявки",
+              "item_ids": [
+                "i1",
+                "i3",
+                "i4",
+                "i2"
+              ],
+              "rationale": "Явный mock-план по опубликованному утверждённому CASE; не живая GPT-нормализация"
+            }
+          ]
+        },
+        "display_layout": {
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "pipe",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "wall",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i2",
+              "kind": "angle",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "thickness",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i3",
+              "kind": "angle",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "thickness",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i4",
+              "kind": "angle",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "thickness",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            }
+          ]
+        },
+        "mass_specs": [
+          {
+            "item_id": "i1",
+            "kind": "linear",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Труба",
+            "dimensions": [
+              {
+                "role": "width",
+                "name": "profile",
+                "unit": "мм",
+                "component": 1,
+                "separator": "×"
+              },
+              {
+                "role": "height",
+                "name": "profile",
+                "unit": "мм",
+                "component": 2,
+                "separator": "×"
+              },
+              {
+                "role": "wall",
+                "name": "profile",
+                "unit": "мм",
+                "component": 3,
+                "separator": "×"
+              },
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "standard_name": "standard",
+            "family": "profile_pipe"
+          },
+          {
+            "item_id": "i2",
+            "kind": "linear",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Уголок",
+            "dimensions": [
+              {
+                "role": "width",
+                "name": "profile",
+                "unit": "мм",
+                "component": 1,
+                "separator": "×"
+              },
+              {
+                "role": "height",
+                "name": "profile",
+                "unit": "мм",
+                "component": 2,
+                "separator": "×"
+              },
+              {
+                "role": "thickness",
+                "name": "profile",
+                "unit": "мм",
+                "component": 3,
+                "separator": "×"
+              },
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "standard_name": "standard",
+            "family": "angle"
+          },
+          {
+            "item_id": "i3",
+            "kind": "linear",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Уголок",
+            "dimensions": [
+              {
+                "role": "width",
+                "name": "profile",
+                "unit": "мм",
+                "component": 1,
+                "separator": "×"
+              },
+              {
+                "role": "height",
+                "name": "profile",
+                "unit": "мм",
+                "component": 2,
+                "separator": "×"
+              },
+              {
+                "role": "thickness",
+                "name": "profile",
+                "unit": "мм",
+                "component": 3,
+                "separator": "×"
+              },
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "standard_name": "standard",
+            "family": "angle"
+          },
+          {
+            "item_id": "i4",
+            "kind": "linear",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Уголок",
+            "dimensions": [
+              {
+                "role": "width",
+                "name": "profile",
+                "unit": "мм",
+                "component": 1,
+                "separator": "×"
+              },
+              {
+                "role": "height",
+                "name": "profile",
+                "unit": "мм",
+                "component": 2,
+                "separator": "×"
+              },
+              {
+                "role": "thickness",
+                "name": "profile",
+                "unit": "мм",
+                "component": 3,
+                "separator": "×"
+              },
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "standard_name": "standard",
+            "family": "angle"
+          }
+        ]
+      },
+      "expected_text": "Труба профильная 40×40×3 Ст3 6м — 430 шт. (≈8,669 т)\nУголок 50×50×5 Ст3 6м — 26 шт. (≈0,588 т)\nУголок 60×40×3 Ст3 6м — 426 шт. (≈5,700 т)\nУголок 63×40×5 Ст3 6м — 240 шт. (≈5,630 т)",
+      "expected_item_count": 4,
+      "expected_display_ids": [
+        "i1",
+        "i3",
+        "i4",
+        "i2"
+      ],
+      "expected_tonnes_by_id": {
+        "i1": "8.6688",
+        "i2": "5.6304",
+        "i3": "0.58812",
+        "i4": "5.69988"
+      }
+    },
+    {
+      "id": "CASE-20261019-003",
+      "source": "Лист ГК 2 1,25х2,5 ст08пс(ст3) -583 шт",
+      "plan": {
+        "intent": "create_request",
+        "extraction": {
+          "records": [
+            {
+              "id": "s1",
+              "kind": "product",
+              "start": 0,
+              "end": 38
+            }
+          ],
+          "items": [
+            {
+              "id": "i1",
+              "source_id": "s1",
+              "label": "Лист г/к",
+              "quantity": "583",
+              "unit": "шт",
+              "quantity_text": "583",
+              "unit_text": "шт",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "2×1250×2500",
+                  "raw": "2 1,25х2,5",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "08пс",
+                  "raw": "ст08пс",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "alternative_grade",
+                  "value": "допускается Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s1"
+                  ]
+                }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "id": "g1",
+              "label": "Позиции заявки",
+              "item_ids": [
+                "i1"
+              ],
+              "rationale": "Явный mock-план по опубликованному утверждённому CASE; не живая GPT-нормализация"
+            }
+          ]
+        },
+        "display_layout": {
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "sheet",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "length",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            }
+          ]
+        },
+        "mass_specs": [
+          {
+            "item_id": "i1",
+            "kind": "solid_carbon_sheet",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Лист",
+            "dimensions": [
+              {
+                "role": "thickness",
+                "name": "size",
+                "unit": "мм",
+                "component": 1,
+                "separator": "×"
+              },
+              {
+                "role": "width",
+                "name": "size",
+                "unit": "мм",
+                "component": 2,
+                "separator": "×"
+              },
+              {
+                "role": "length",
+                "name": "size",
+                "unit": "мм",
+                "component": 3,
+                "separator": "×"
+              }
+            ]
+          }
+        ]
+      },
+      "expected_text": "Лист г/к 2×1250×2500 08пс (допускается Ст3) — 583 шт. (≈28,603 т)",
+      "expected_item_count": 1,
+      "expected_display_ids": [
+        "i1"
+      ],
+      "expected_tonnes_by_id": {
+        "i1": "28.6034375"
+      }
+    },
+    {
+      "id": "CASE-20261019-004",
+      "source": "балка 20ш1-20тн\nбалка 25к2-20тн\nтр проф 300*300*8-100тн\nС255",
+      "plan": {
+        "intent": "create_request",
+        "extraction": {
+          "records": [
+            {
+              "id": "s1",
+              "kind": "product",
+              "start": 0,
+              "end": 15
+            },
+            {
+              "id": "s2",
+              "kind": "product",
+              "start": 16,
+              "end": 31
+            },
+            {
+              "id": "s3",
+              "kind": "product",
+              "start": 32,
+              "end": 55
+            },
+            {
+              "id": "s4",
+              "kind": "note",
+              "start": 56,
+              "end": 60
+            }
+          ],
+          "items": [
+            {
+              "id": "i1",
+              "source_id": "s1",
+              "label": "Балка",
+              "quantity": "20",
+              "unit": "тн",
+              "quantity_text": "20",
+              "unit_text": "тн",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "20Ш1",
+                  "raw": "20ш1",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "С255",
+                  "raw": "С255",
+                  "source_ids": [
+                    "s4"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i2",
+              "source_id": "s2",
+              "label": "Балка",
+              "quantity": "20",
+              "unit": "тн",
+              "quantity_text": "20",
+              "unit_text": "тн",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "25К2",
+                  "raw": "25к2",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "С255",
+                  "raw": "С255",
+                  "source_ids": [
+                    "s4"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i3",
+              "source_id": "s3",
+              "label": "Труба профильная",
+              "quantity": "100",
+              "unit": "тн",
+              "quantity_text": "100",
+              "unit_text": "тн",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "300×300×8",
+                  "raw": "300*300*8",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "С255",
+                  "raw": "С255",
+                  "source_ids": [
+                    "s4"
+                  ]
+                }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "id": "g1",
+              "label": "Позиции заявки",
+              "item_ids": [
+                "i1",
+                "i2",
+                "i3"
+              ],
+              "rationale": "Явный mock-план по опубликованному утверждённому CASE; не живая GPT-нормализация"
+            }
+          ]
+        },
+        "display_layout": {
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "beam",
+              "grade_name": "grade",
+              "dimensions": []
+            },
+            {
+              "item_id": "i2",
+              "kind": "beam",
+              "grade_name": "grade",
+              "dimensions": []
+            },
+            {
+              "item_id": "i3",
+              "kind": "pipe",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "wall",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            }
+          ]
+        },
+        "mass_specs": []
+      },
+      "expected_text": "Балка 20Ш1 С255 — 20 т\nБалка 25К2 С255 — 20 т\nТруба профильная 300×300×8 С255 — 100 т",
+      "expected_item_count": 3,
+      "expected_display_ids": [
+        "i1",
+        "i2",
+        "i3"
+      ]
+    },
+    {
+      "id": "CASE-20261019-005",
+      "source": "1. Прокат листовой горячекатаный, марки стали Ст3сп, Ст3пс, (2000х1000х16 мм - 1 шт) ГОСТ 14637-89 0,251 т\n2. Прокат листовой горячекатаный, марки стали Ст3сп, Ст3пс, (косынки 2000х3000х10 мм - 3шт) ГОСТ 19903-2015 - 1,413 т\n3. Прокат листовой горячекатаный, марки стали Ст3сп, Ст3пс, (оголовок 1250х3000х20 мм) ГОСТ 19903-2015 0,589 т\n4. Прокат листовой горячекатаный, марки стали Ст3сп, Ст3пс, (опорная плита 1250х2500х25 мм) ГОСТ 19903-2015 1,226 т\n5. Уголок стальной горячекатаный равнополочный, марки стали Ст3сп, Ст3пс, 45х45х3 ГОСТ 8509-93 2,359 т\n6. Уголок стальной горячекатаный равнополочный, марки стали Ст3сп, Ст3пс, 75х75х5 мм ГОСТ 8509-93 3,620 т",
+      "plan": {
+        "intent": "create_request",
+        "extraction": {
+          "records": [
+            {
+              "id": "s1",
+              "kind": "product",
+              "start": 0,
+              "end": 106
+            },
+            {
+              "id": "s2",
+              "kind": "product",
+              "start": 107,
+              "end": 224
+            },
+            {
+              "id": "s3",
+              "kind": "product",
+              "start": 225,
+              "end": 335
+            },
+            {
+              "id": "s4",
+              "kind": "product",
+              "start": 336,
+              "end": 451
+            },
+            {
+              "id": "s5",
+              "kind": "product",
+              "start": 452,
+              "end": 554
+            },
+            {
+              "id": "s6",
+              "kind": "product",
+              "start": 555,
+              "end": 660
+            }
+          ],
+          "items": [
+            {
+              "id": "i1",
+              "source_id": "s1",
+              "label": "Лист г/к",
+              "quantity": "0.251",
+              "unit": "т",
+              "quantity_text": "0,251",
+              "unit_text": "т",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "16×1000×2000",
+                  "raw": "2000х1000х16 мм",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3сп/Ст3пс",
+                  "raw": "Ст3сп, Ст3пс",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 14637-89",
+                  "raw": "ГОСТ 14637-89",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "declared_quantity",
+                  "value": "1 шт.",
+                  "raw": "1 шт",
+                  "source_ids": [
+                    "s1"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i2",
+              "source_id": "s2",
+              "label": "Лист г/к",
+              "quantity": "1.413",
+              "unit": "т",
+              "quantity_text": "1,413",
+              "unit_text": "т",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "10×2000×3000",
+                  "raw": "2000х3000х10 мм",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3сп/Ст3пс",
+                  "raw": "Ст3сп, Ст3пс",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 19903-2015",
+                  "raw": "ГОСТ 19903-2015",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "purpose",
+                  "value": "(косынки)",
+                  "raw": "косынки",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "declared_quantity",
+                  "value": "3 шт.",
+                  "raw": "3шт",
+                  "source_ids": [
+                    "s2"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i3",
+              "source_id": "s3",
+              "label": "Лист г/к",
+              "quantity": "0.589",
+              "unit": "т",
+              "quantity_text": "0,589",
+              "unit_text": "т",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "20×1250×3000",
+                  "raw": "1250х3000х20 мм",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3сп/Ст3пс",
+                  "raw": "Ст3сп, Ст3пс",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 19903-2015",
+                  "raw": "ГОСТ 19903-2015",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "purpose",
+                  "value": "(оголовок)",
+                  "raw": "оголовок",
+                  "source_ids": [
+                    "s3"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i4",
+              "source_id": "s4",
+              "label": "Лист г/к",
+              "quantity": "1.226",
+              "unit": "т",
+              "quantity_text": "1,226",
+              "unit_text": "т",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "25×1250×2500",
+                  "raw": "1250х2500х25 мм",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3сп/Ст3пс",
+                  "raw": "Ст3сп, Ст3пс",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 19903-2015",
+                  "raw": "ГОСТ 19903-2015",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "purpose",
+                  "value": "(опорная плита)",
+                  "raw": "опорная плита",
+                  "source_ids": [
+                    "s4"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i5",
+              "source_id": "s5",
+              "label": "Уголок",
+              "quantity": "2.359",
+              "unit": "т",
+              "quantity_text": "2,359",
+              "unit_text": "т",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "45×45×3",
+                  "raw": "45х45х3",
+                  "source_ids": [
+                    "s5"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3сп/Ст3пс",
+                  "raw": "Ст3сп, Ст3пс",
+                  "source_ids": [
+                    "s5"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 8509-93",
+                  "raw": "ГОСТ 8509-93",
+                  "source_ids": [
+                    "s5"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i6",
+              "source_id": "s6",
+              "label": "Уголок",
+              "quantity": "3.620",
+              "unit": "т",
+              "quantity_text": "3,620",
+              "unit_text": "т",
+              "characteristics": [
+                {
+                  "name": "size",
+                  "value": "75×75×5",
+                  "raw": "75х75х5",
+                  "source_ids": [
+                    "s6"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3сп/Ст3пс",
+                  "raw": "Ст3сп, Ст3пс",
+                  "source_ids": [
+                    "s6"
+                  ]
+                },
+                {
+                  "name": "standard",
+                  "value": "ГОСТ 8509-93",
+                  "raw": "ГОСТ 8509-93",
+                  "source_ids": [
+                    "s6"
+                  ]
+                }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "id": "g1",
+              "label": "Позиции заявки",
+              "item_ids": [
+                "i2",
+                "i1",
+                "i3",
+                "i4",
+                "i5",
+                "i6"
+              ],
+              "rationale": "Явный mock-план по опубликованному утверждённому CASE; не живая GPT-нормализация"
+            }
+          ]
+        },
+        "display_layout": {
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "sheet",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "length",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i2",
+              "kind": "sheet",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "length",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i3",
+              "kind": "sheet",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "length",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i4",
+              "kind": "sheet",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "length",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i5",
+              "kind": "angle",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i6",
+              "kind": "angle",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "thickness",
+                  "name": "size",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            }
+          ]
+        },
+        "mass_specs": []
+      },
+      "expected_text": "Лист г/к 10×2000×3000 Ст3сп/Ст3пс ГОСТ 19903-2015 (косынки) — 3 шт. (1,413 т)\nЛист г/к 16×1000×2000 Ст3сп/Ст3пс ГОСТ 14637-89 — 1 шт. (0,251 т)\nЛист г/к 20×1250×3000 Ст3сп/Ст3пс ГОСТ 19903-2015 (оголовок) — 0,589 т\nЛист г/к 25×1250×2500 Ст3сп/Ст3пс ГОСТ 19903-2015 (опорная плита) — 1,226 т\nУголок 45×45×3 Ст3сп/Ст3пс ГОСТ 8509-93 — 2,359 т\nУголок 75×75×5 Ст3сп/Ст3пс ГОСТ 8509-93 — 3,620 т",
+      "expected_item_count": 6,
+      "expected_display_ids": [
+        "i2",
+        "i1",
+        "i3",
+        "i4",
+        "i5",
+        "i6"
+      ]
+    },
+    {
+      "id": "CASE-20261019-006",
+      "source": "Труба профильная 100х100х4 ст3 12 м - 50 шт\nБалка 30Б1 ст3 12м - 8 шт\nБалка 60Б2 С355 12м - 18 шт\nШвеллер 18П ст3 12м - 78 шт\nБалка 25К1 С255 12 м - 16 шт",
+      "plan": {
+        "intent": "create_request",
+        "extraction": {
+          "records": [
+            {
+              "id": "s1",
+              "kind": "product",
+              "start": 0,
+              "end": 43
+            },
+            {
+              "id": "s2",
+              "kind": "product",
+              "start": 44,
+              "end": 69
+            },
+            {
+              "id": "s3",
+              "kind": "product",
+              "start": 70,
+              "end": 97
+            },
+            {
+              "id": "s4",
+              "kind": "product",
+              "start": 98,
+              "end": 125
+            },
+            {
+              "id": "s5",
+              "kind": "product",
+              "start": 126,
+              "end": 154
+            }
+          ],
+          "items": [
+            {
+              "id": "i1",
+              "source_id": "s1",
+              "label": "Труба профильная",
+              "quantity": "50",
+              "unit": "шт",
+              "quantity_text": "50",
+              "unit_text": "шт",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "100×100×4",
+                  "raw": "100х100х4",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s1"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "12м",
+                  "raw": "12 м",
+                  "source_ids": [
+                    "s1"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i2",
+              "source_id": "s2",
+              "label": "Балка",
+              "quantity": "8",
+              "unit": "шт",
+              "quantity_text": "8",
+              "unit_text": "шт",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "30Б1",
+                  "raw": "30Б1",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "С255",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s2"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "12м",
+                  "raw": "12м",
+                  "source_ids": [
+                    "s2"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i3",
+              "source_id": "s3",
+              "label": "Балка",
+              "quantity": "18",
+              "unit": "шт",
+              "quantity_text": "18",
+              "unit_text": "шт",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "60Б2",
+                  "raw": "60Б2",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "С355",
+                  "raw": "С355",
+                  "source_ids": [
+                    "s3"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "12м",
+                  "raw": "12м",
+                  "source_ids": [
+                    "s3"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i4",
+              "source_id": "s4",
+              "label": "Швеллер",
+              "quantity": "78",
+              "unit": "шт",
+              "quantity_text": "78",
+              "unit_text": "шт",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "18П",
+                  "raw": "18П",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "Ст3",
+                  "raw": "ст3",
+                  "source_ids": [
+                    "s4"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "12м",
+                  "raw": "12м",
+                  "source_ids": [
+                    "s4"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "i5",
+              "source_id": "s5",
+              "label": "Балка",
+              "quantity": "16",
+              "unit": "шт",
+              "quantity_text": "16",
+              "unit_text": "шт",
+              "characteristics": [
+                {
+                  "name": "profile",
+                  "value": "25К1",
+                  "raw": "25К1",
+                  "source_ids": [
+                    "s5"
+                  ]
+                },
+                {
+                  "name": "grade",
+                  "value": "С255",
+                  "raw": "С255",
+                  "source_ids": [
+                    "s5"
+                  ]
+                },
+                {
+                  "name": "length",
+                  "value": "12м",
+                  "raw": "12 м",
+                  "source_ids": [
+                    "s5"
+                  ]
+                }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "id": "g1",
+              "label": "Позиции заявки",
+              "item_ids": [
+                "i5",
+                "i2",
+                "i3",
+                "i4",
+                "i1"
+              ],
+              "rationale": "Явный mock-план по опубликованному утверждённому CASE; не живая GPT-нормализация"
+            }
+          ]
+        },
+        "display_layout": {
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "pipe",
+              "grade_name": "grade",
+              "dimensions": [
+                {
+                  "role": "width",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 1,
+                  "separator": "×"
+                },
+                {
+                  "role": "height",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 2,
+                  "separator": "×"
+                },
+                {
+                  "role": "wall",
+                  "name": "profile",
+                  "unit": "мм",
+                  "component": 3,
+                  "separator": "×"
+                }
+              ]
+            },
+            {
+              "item_id": "i2",
+              "kind": "beam",
+              "grade_name": "grade",
+              "dimensions": []
+            },
+            {
+              "item_id": "i3",
+              "kind": "beam",
+              "grade_name": "grade",
+              "dimensions": []
+            },
+            {
+              "item_id": "i4",
+              "kind": "channel",
+              "grade_name": "grade",
+              "dimensions": []
+            },
+            {
+              "item_id": "i5",
+              "kind": "beam",
+              "grade_name": "grade",
+              "dimensions": []
+            }
+          ]
+        },
+        "mass_specs": [
+          {
+            "item_id": "i1",
+            "kind": "linear",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Труба",
+            "dimensions": [
+              {
+                "role": "width",
+                "name": "profile",
+                "unit": "мм",
+                "component": 1,
+                "separator": "×"
+              },
+              {
+                "role": "height",
+                "name": "profile",
+                "unit": "мм",
+                "component": 2,
+                "separator": "×"
+              },
+              {
+                "role": "wall",
+                "name": "profile",
+                "unit": "мм",
+                "component": 3,
+                "separator": "×"
+              },
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "family": "profile_pipe"
+          },
+          {
+            "item_id": "i2",
+            "kind": "ibeam",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Балка",
+            "dimensions": [
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "grade_policy": "uvm_beam_commercial",
+            "family": "beam"
+          },
+          {
+            "item_id": "i3",
+            "kind": "ibeam",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Балка",
+            "dimensions": [
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "family": "beam"
+          },
+          {
+            "item_id": "i4",
+            "kind": "linear",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Швеллер",
+            "dimensions": [
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "family": "channel"
+          },
+          {
+            "item_id": "i5",
+            "kind": "ibeam",
+            "grade_name": "grade",
+            "cutting": "none",
+            "evidence": "Балка",
+            "dimensions": [
+              {
+                "role": "piece_length",
+                "name": "length",
+                "unit": "м"
+              }
+            ],
+            "profile_name": "profile",
+            "family": "beam"
+          }
+        ]
+      },
+      "expected_text": "Балка 25К1 С255 12м — 16 шт. (≈12,019 т)\nБалка 30Б1 С255 12м — 8 шт. (≈3,072 т)\nБалка 60Б2 С355 12м — 18 шт. (≈22,788 т)\nШвеллер 18П Ст3 12м — 78 шт. (≈15,257 т)\nТруба профильная 100×100×4 Ст3 12м — 50 шт. (≈7,038 т)",
+      "expected_item_count": 5,
+      "expected_display_ids": [
+        "i5",
+        "i2",
+        "i3",
+        "i4",
+        "i1"
+      ],
+      "expected_tonnes_by_id": {
+        "i1": "7.038",
+        "i2": "3.072",
+        "i3": "22.788",
+        "i4": "15.2568",
+        "i5": "12.0192"
+      }
+    }
+  ]
+}

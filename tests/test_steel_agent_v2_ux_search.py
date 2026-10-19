@@ -47,7 +47,7 @@ def test_forward_is_readonly_and_one_coordinator_call(tmp_path,message):
     count=len(fake.calls)
     reply=agent.handle(1,message,event_id='forward')
     assert reply.status=='ok' and reply.calls==1 and len(fake.calls)==count+1
-    assert 'С245' in reply.text and 'Ст3' in reply.text and '750' in reply.text
+    assert 'С245' in reply.text and 'Ст3' in reply.text and '0,75 т' in reply.text
     assert 'версия' not in reply.text.lower() and '[i1]' not in reply.text
     assert repo.load(1).model_dump_json()==before
 
@@ -162,7 +162,7 @@ def test_display_after_mass_edit_undo_reopen_and_other_user(tmp_path):
     assert repo.load(1).original_text==SOURCE
     fake.plans=[edit(repo.load(1),[dict(kind='undo')])]
     undone=agent.handle(1,'Отмени изменение',event_id='undo')
-    assert undone.status=='ok' and '1,25' in undone.text and '750' in undone.text
+    assert undone.status=='ok' and '1,25' in undone.text and '0,75 т' in undone.text
     assert repo.load(1).revision==3
     reopened=Repository(Database(tmp_path/'ux.sqlite3'))
     assert reopened.version(1,first.id,2).changes

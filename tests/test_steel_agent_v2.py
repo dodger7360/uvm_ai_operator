@@ -75,7 +75,8 @@ def test_create_decimal_technical_differences_and_originals(rig):
     assert 'взаимозаменяемость' not in reply.text
     from steel_agent_v2.presentation import render
     assert 'взаимозаменяемость' in render(current,'explanation')
-    assert 'кг' in reply.text and '750' in reply.text
+    assert '0,75 т' in reply.text
+    assert current.items[1].quantity==Decimal('750') and current.items[1].unit=='кг'
     assert fake.calls[0][0]['message']==SOURCE
 
 

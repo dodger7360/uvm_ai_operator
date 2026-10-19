@@ -1,0 +1,285 @@
+{
+  "revision": 1,
+  "cases": [
+    {
+      "id": "CASE-20261019-001",
+      "revision": 2,
+      "position_count": 6,
+      "topics": [
+        "полос",
+        "угол",
+        "лист",
+        "труб",
+        "кв.",
+        "резк"
+      ],
+      "mass_records": []
+    },
+    {
+      "id": "CASE-20261019-002",
+      "revision": 3,
+      "position_count": 4,
+      "topics": [
+        "угол",
+        "труб",
+        "хлыст"
+      ],
+      "mass_records": [
+        {
+          "profile": "40×40×3",
+          "value_text": "3,36",
+          "kind": "linear",
+          "grades": [
+            "Ст3"
+          ],
+          "source_url": "https://metmo.ru/catalog/truba/profilnaya_kvadratnaya/razmer_40/truba_profilnaya_kvadratnaya_40kh40kh3_0.html",
+          "source_title": "Метмо: труба40×40×3",
+          "execution": "Профильная труба; вариант исполнения поставки не подтверждён",
+          "piece_length_mm": "6000",
+          "evidence_section": 8,
+          "scope": "Только указанный профиль, марка и длина 6000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "profile_pipe",
+          "dimension_scope": {
+            "height": "40",
+            "wall": "3",
+            "width": "40"
+          }
+        },
+        {
+          "profile": "50×50×5",
+          "value_text": "3,77",
+          "kind": "linear",
+          "grades": [
+            "Ст3"
+          ],
+          "source_url": "https://www.calcal.ru/ves-ugolka-50x50x5",
+          "source_title": "Calcal: уголок50×50×5",
+          "execution": "Справочная таблица равнополочного уголка",
+          "piece_length_mm": "6000",
+          "evidence_section": 8,
+          "scope": "Только указанный профиль, марка и длина 6000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "angle",
+          "dimension_scope": {
+            "height": "50",
+            "thickness": "5",
+            "width": "50"
+          }
+        },
+        {
+          "profile": "60×40×3",
+          "value_text": "2,23",
+          "kind": "linear",
+          "grades": [
+            "Ст3"
+          ],
+          "source_url": "https://metalguide.ru/sortament/ugolok-gnutyj-neravnopolochnyj",
+          "source_title": "Metalguide: гнутый уголок",
+          "execution": "Справочное гнутое исполнение, изготовление заказанного изделия не подтверждено",
+          "piece_length_mm": "6000",
+          "evidence_section": 8,
+          "scope": "Только указанный профиль, марка и длина 6000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "angle",
+          "dimension_scope": {
+            "height": "40",
+            "thickness": "3",
+            "width": "60"
+          }
+        },
+        {
+          "profile": "63×40×5",
+          "value_text": "3,91",
+          "kind": "linear",
+          "grades": [
+            "Ст3"
+          ],
+          "source_url": "https://ptoflow.ru/sortament/ugolok/63x40x5",
+          "source_title": "Ptoflow: уголок63×40×5",
+          "execution": "Справочный неравнополочный уголок",
+          "piece_length_mm": "6000",
+          "evidence_section": 8,
+          "scope": "Только указанный профиль, марка и длина 6000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "angle",
+          "dimension_scope": {
+            "height": "40",
+            "thickness": "5",
+            "width": "63"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CASE-20261019-003",
+      "revision": 2,
+      "position_count": 1,
+      "topics": [
+        "лист",
+        "08пс",
+        "583"
+      ],
+      "mass_records": []
+    },
+    {
+      "id": "CASE-20261019-004",
+      "revision": 2,
+      "position_count": 3,
+      "topics": [
+        "балк",
+        "труб",
+        "с255"
+      ],
+      "mass_records": []
+    },
+    {
+      "id": "CASE-20261019-005",
+      "revision": 2,
+      "position_count": 6,
+      "topics": [
+        "лист",
+        "угол",
+        "косын",
+        "оголов",
+        "плит"
+      ],
+      "mass_records": []
+    },
+    {
+      "id": "CASE-20261019-006",
+      "revision": 1,
+      "position_count": 5,
+      "topics": [
+        "балк",
+        "швелл",
+        "труб"
+      ],
+      "mass_records": [
+        {
+          "profile": "25К1",
+          "value_text": "62,6",
+          "kind": "ibeam",
+          "grades": [
+            "С255"
+          ],
+          "source_url": "https://metcalc.ru/calc-metalloprokat/steel/balka/table/standard-59",
+          "source_title": "Metcalc: сортамент балок",
+          "execution": "Номинальный профиль двутавра",
+          "piece_length_mm": "12000",
+          "evidence_section": 4,
+          "scope": "Только указанный профиль, марка и длина 12000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "beam",
+          "dimension_scope": {}
+        },
+        {
+          "profile": "30Б1",
+          "value_text": "32,0",
+          "kind": "ibeam",
+          "grades": [
+            "С255"
+          ],
+          "source_url": "https://metcalc.ru/calc-metalloprokat/steel/balka/table/standard-59",
+          "source_title": "Metcalc: сортамент балок",
+          "execution": "Номинальный профиль двутавра",
+          "piece_length_mm": "12000",
+          "evidence_section": 4,
+          "scope": "Только указанный профиль, марка и длина 12000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "beam",
+          "dimension_scope": {}
+        },
+        {
+          "profile": "60Б2",
+          "value_text": "105,5",
+          "kind": "ibeam",
+          "grades": [
+            "С355"
+          ],
+          "source_url": "https://elsort.ru/?id=dvutavr%2F57837-2017%2F60b2",
+          "source_title": "Elsort:60Б2",
+          "execution": "Номинальный профиль двутавра",
+          "piece_length_mm": "12000",
+          "evidence_section": 4,
+          "scope": "Только указанный профиль, марка и длина 12000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "beam",
+          "dimension_scope": {}
+        },
+        {
+          "profile": "18П",
+          "value_text": "16,3",
+          "kind": "linear",
+          "grades": [
+            "Ст3"
+          ],
+          "source_url": "https://base.garant.ru/3924246/",
+          "source_title": "Гарант: сортамент швеллера",
+          "execution": "Номинальная таблица профиля18П",
+          "piece_length_mm": "12000",
+          "evidence_section": 4,
+          "scope": "Только указанный профиль, марка и длина 12000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "channel",
+          "dimension_scope": {}
+        },
+        {
+          "profile": "100×100×4",
+          "value_text": "11,73",
+          "kind": "linear",
+          "grades": [
+            "Ст3"
+          ],
+          "source_url": "https://www.calcal.ru/ves-profilnoj-truby-100x100",
+          "source_title": "Calcal: профильная труба",
+          "execution": "Таблица с учётом закруглений, исполнение поставки не подтверждено",
+          "piece_length_mm": "12000",
+          "evidence_section": 4,
+          "scope": "Только указанный профиль, марка и длина 12000мм; предварительная оценка согласованного CASE, не техническая взаимозаменяемость",
+          "limitation": "Одобренный ориентир CASE; ГОСТ поставки не задан и не добавляется; фактическая масса и исполнение не подтверждены; иные явные условия требуют проверки",
+          "family": "profile_pipe",
+          "dimension_scope": {
+            "height": "100",
+            "wall": "4",
+            "width": "100"
+          }
+        }
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "UVM-BEAM-POLICY",
+      "scope": "ibeam_only",
+      "topics": [
+        "балк"
+      ],
+      "source": "docs/steel-agent-v2/NORMALIZATION.md",
+      "pattern": "Только для двутавров UVM[\\s\\S]*?(?=\\n\\n)"
+    },
+    {
+      "id": "REFERENCE-LIMITS",
+      "scope": "global",
+      "topics": [],
+      "source": "docs/steel-agent-v2/knowledge/METAL_BASICS.md",
+      "pattern": "Неполнота Reference не мешает GPT[\\s\\S]*?(?=\\n\\n|\\Z)"
+    },
+    {
+      "id": "MASS-SAFETY",
+      "scope": "mass_calculation",
+      "topics": [
+        "балк",
+        "труб",
+        "лист",
+        "угол",
+        "швелл",
+        "масс",
+        "тонн",
+        "хлыст"
+      ],
+      "source": "docs/steel-agent-v2/knowledge/METAL_BASICS.md",
+      "pattern": "Для длинномера кг/шт[\\s\\S]*?(?=\\nНовые интернет)"
+    }
+  ]
+}
