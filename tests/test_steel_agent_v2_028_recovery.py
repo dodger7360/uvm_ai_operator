@@ -210,8 +210,30 @@ def test_transport_unknown_or_refusal_never_runs_repair_or_local_salvage(rig,fai
         admit(rig,201,text=source)
         Executor(rig.queue,rig.access,lambda:rig.api,lambda:api).execute(rig.queue.claim())
     assert len(calls)==1 and Repository(rig.queue.database).load(1) is None
-    if failure=='timeout':assert rig.queue.job(201)['state']=='execution_unknown'
-    else:assert rig.queue.job(201)['state']=='delivered'
+    if failure=='timeout':
+        job=rig.queue.job(201)
+        assert job['state']=='delivered'
+        assert job['committed']==1 and job['uncertain']==1
+        with rig.queue.database.connection() as c:
+            saved=c.execute(
+                "SELECT reply FROM steel_v2_turn WHERE user_id=1 "
+                "AND event_id='telegram:201'"
+            ).fetchone()
+            assert json.loads(saved['reply'])['status']=='failed'
+            assert c.execute(
+                "SELECT count(*) FROM steel_v2_outbox "
+                "WHERE update_id=201 AND state='delivered' "
+                "AND message_id IS NOT NULL"
+            ).fetchone()[0]>0
+            assert [tuple(row) for row in c.execute(
+                "SELECT kind,state FROM steel_v2_attempt "
+                "WHERE update_id=201 ORDER BY number"
+            )]==[('plan','execution_unknown')]
+        admit(rig,202,text='????????? ??????')
+        assert rig.queue.claim()['update_id']==202
+        assert len(calls)==1
+    else:
+        assert rig.queue.job(201)['state']=='delivered'
 
 
 def test_resolve_existing_fragment_then_apply_explicit_correction_and_undo(tmp_path):
