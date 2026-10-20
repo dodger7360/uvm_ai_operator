@@ -829,3 +829,75 @@ def test_offset_ahead_of_existing_inbox_is_blocked_even_before_first_runtime(rig
     admit(rig,1)
     with pytest.raises(QueueConflict):rig.queue.align_offset(10)
     assert rig.queue.cursor()==2 and rig.queue.job(1)['state']=='queued'
+
+
+@pytest.mark.parametrize('outcome',['success','coordinator_network_failure'])
+def test_restart_after_persisted_receipt_before_terminal_transition(rig,monkeypatch,outcome):
+    """Crash after the receipt transaction, before final inbox delivery state.
+
+    External effects are fake; crash escapes deliver directly, like process death,
+    rather than Executor's catch handler turning it into a different crash window.
+    """
+    import httpx2
+    from openai import APIConnectionError
+    from steel_agent_v2 import SteelAgent
+    from steel_agent_v2.queue_runtime import AttemptTransport
+    from scripts.v2_sqlite_snapshot import metadata
+    admit(rig,1)
+    seed=Fake(proposal())
+    Executor(rig.queue,rig.access,lambda:rig.api,lambda:seed).execute(rig.queue.claim())
+    prior=Repository(rig.queue.database).load(1)
+    admit(rig,2)
+    assert rig.queue.claim()['update_id']==2
+    result=proposal() if outcome=='success' else APIConnectionError(
+        request=httpx2.Request('POST','https://offline.invalid'))
+    model=Fake(result)
+    repository=Repository(rig.queue.database,finish_hook=rig.queue.finish_hook(2))
+    reply=SteelAgent(AttemptTransport(model,rig.queue,2),repository).handle(1,SOURCE,event_id='telegram:2')
+    assert reply.calls==len(model.calls)==1
+    assert reply.status==('ok' if outcome=='success' else 'failed')
+    state=repository.load(1)
+    if outcome!='success':assert state==prior
+    with rig.queue.database.connection() as c:
+        baseline=metadata(c)
+        archived=c.execute("SELECT message,reply FROM steel_v2_turn WHERE event_id='telegram:2'").fetchone()
+        assert archived['message']==SOURCE and Reply.model_validate_json(archived['reply'])==reply
+    class ProcessDied(BaseException):pass
+    original_change=rig.queue.change
+    def crash_before_terminal(number,old,new):
+        if number==2 and old=='delivery_pending' and new in {'delivered','execution_unknown'}:
+            raise ProcessDied()
+        return original_change(number,old,new)
+    with monkeypatch.context() as patch:
+        patch.setattr(rig.queue,'change',crash_before_terminal)
+        with pytest.raises(ProcessDied):rig.queue.deliver(2,rig.api,rig.access)
+    assert rig.queue.job(2)['state']=='delivery_pending'
+    with rig.queue.database.connection() as c:
+        receipts=[tuple(r) for r in c.execute('SELECT part,state,message_id FROM steel_v2_outbox WHERE update_id=2')]
+    assert receipts and all(s=='delivered' and receipt is not None for _,s,receipt in receipts)
+    sends=len(rig.api.calls);factories=[]
+    restarted=DurableQueue(Database(rig.queue.database.path))
+    restarted.recover()
+    def forbidden_model():
+        factories.append(True)
+        raise AssertionError('Recovery must not call GPT')
+    scheduler=Scheduler(restarted,Executor(restarted,rig.access,lambda:rig.api,forbidden_model))
+    try:drain(scheduler,lambda:restarted.job(2)['state']=='delivered')
+    finally:scheduler.close()
+    assert not factories and len(model.calls)==1 and len(rig.api.calls)==sends
+    assert restarted.job(2)['uncertain']==int(outcome!='success')
+    assert Repository(restarted.database).load(1)==state
+    with restarted.database.connection() as c:
+        after=metadata(c)
+        for table in ('steel_v2_active','steel_v2_version','steel_v2_turn','steel_v2_attempt','steel_v2_inflight'):
+            assert after['tables'][table]==baseline['tables'][table]
+        assert [tuple(r) for r in c.execute('SELECT part,state,message_id FROM steel_v2_outbox WHERE update_id=2')]==receipts
+    restarted.recover()
+    assert restarted.delivery_candidates()==[] and restarted.drained()
+    admit(rig,3,text='Следующее сообщение')
+    claimed=restarted.claim()
+    assert claimed['update_id']==3
+    next_model=Fake(dict(intent='free_chat',answer='Следующий ответ'))
+    Executor(restarted,rig.access,lambda:rig.api,lambda:next_model).execute(claimed)
+    assert restarted.drained() and len(next_model.calls)==1
+    assert Repository(restarted.database).load(1)==state
