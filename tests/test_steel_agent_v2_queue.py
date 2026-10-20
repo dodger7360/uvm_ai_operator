@@ -585,6 +585,39 @@ def test_search_unknown_network_outcome_is_not_masked_by_value_error(rig):
             ('plan','result_received'),('search','execution_unknown')]
 
 
+
+@pytest.mark.parametrize('error_type', ['connection','timeout'])
+def test_confirmed_coordinator_network_failure_unblocks_next_turn(rig,error_type):
+    from openai import APIConnectionError, APITimeoutError
+    import httpx2
+
+    request=httpx2.Request('POST','https://offline.invalid')
+    error=(APIConnectionError(request=request) if error_type=='connection'
+           else APITimeoutError(request=request))
+    fake=Fake(error)
+
+    admit(rig,1)
+    admit(rig,2,text='next')
+    Executor(rig.queue,rig.access,lambda:rig.api,lambda:fake).execute(rig.queue.claim())
+
+    job=rig.queue.job(1)
+    assert len(fake.calls)==1
+    assert job['state']=='delivered'
+    assert job['uncertain']==1
+    assert job['committed']==1
+    assert Repository(rig.queue.database).load(1) is None
+
+    with rig.queue.database.connection() as c:
+        saved=c.execute(
+            "SELECT reply FROM steel_v2_turn WHERE event_id='telegram:1'"
+        ).fetchone()
+        assert json.loads(saved[0])['status']=='failed'
+
+    reopened=DurableQueue(rig.queue.database)
+    reopened.recover()
+    assert reopened.claim()['update_id']==2
+
+
 def test_known_http_error_is_not_retried_but_does_not_freeze_next_user_turn(rig):
     import httpx2 as httpx
     from openai import APIStatusError

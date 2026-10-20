@@ -364,7 +364,42 @@ class DurableQueue:
             with self.database.connection() as c:
                 row=c.execute("SELECT * FROM steel_v2_outbox WHERE update_id=? AND state!='delivered' ORDER BY part LIMIT 1",(number,)).fetchone()
             if row is None:
-                self.change(number,'delivery_pending','execution_unknown' if job['uncertain'] else 'delivered')
+                terminal='delivered'
+                if job['uncertain']:
+                    # Only a confirmed delivered network-failure reply from
+                    # the read-only coordinator may release the next turn.
+                    # Unknown search/access and unconfirmed delivery stay blocked.
+                    with self.database.connection() as c:
+                        saved=c.execute(
+                            "SELECT reply FROM steel_v2_turn "
+                            "WHERE user_id=? AND event_id=?",
+                            (job['user_id'],'telegram:'+str(number))
+                        ).fetchone()
+                        attempts=c.execute(
+                            "SELECT kind,state FROM steel_v2_attempt "
+                            "WHERE update_id=? ORDER BY number",
+                            (number,)
+                        ).fetchall()
+                        receipts=c.execute(
+                            "SELECT count(*) FROM steel_v2_outbox "
+                            "WHERE update_id=? AND state='delivered' "
+                            "AND message_id IS NOT NULL",
+                            (number,)
+                        ).fetchone()[0]
+                    reply=json.loads(saved['reply']) if saved else {}
+                    safe=(
+                        job['committed']==1
+                        and receipts>0
+                        and bool(attempts)
+                        and all(a['kind']=='plan' for a in attempts)
+                        and attempts[-1]['state']=='execution_unknown'
+                        and reply.get('status')=='failed'
+                        and bool(set(reply.get('diagnostics') or ()) &
+                                 {'api_connection','api_timeout'})
+                    )
+                    if not safe:
+                        terminal='execution_unknown'
+                self.change(number,'delivery_pending',terminal)
                 return
             if row['state']!='delivery_pending':return
             # Legacy permission and the durable send-start marker share a linearization gate.
