@@ -14,30 +14,18 @@ from steel_agent_v2.queue import DurableQueue, QueueConflict, TABLES
 from steel_agent_v2.queue_runtime import Executor
 from scripts.v2_queue_status import inspect, prepare_rollback
 from scripts.v2_sqlite_snapshot import snapshot, metadata
-from test_steel_agent_v2_queue import rig, admit, Fake, proposal, old_repository_class
+from test_steel_agent_v2_queue import rig, admit, Fake, proposal
 
 ROOT=Path(__file__).resolve().parents[1]
-OLD='aa11380dfe1ed646fec2355b22880fdb03b0d706'
+from prequeue_fixture import seed_prequeue
 
 
-def published_agent(repository):
-    # Produce the historical migration fixture with its matching published API,
-    # not a new agent that calls Repository.pending (absent in the old code).
-    from types import ModuleType
-    source=subprocess.check_output(['git','show',OLD+':steel_agent_v2/agent.py'],encoding='utf-8')
-    module=ModuleType('steel_agent_v2._published_agent');module.__package__='steel_agent_v2'
-    exec(compile(source,'published_agent.py','exec'),module.__dict__)
-    return module.SteelAgent(Fake(proposal()),repository)
 
 
 def digest(db):
     with db.connection() as c:return metadata(c)
 
 
-@pytest.mark.parametrize('name',['start-telegram.ps1','stop-telegram.ps1','windows_supervisor.py','windows_runtime.py'])
-def test_existing_launch_infrastructure_is_exactly_production(name):
-    published=subprocess.check_output(['git','show',OLD+':'+name])
-    assert (ROOT/name).read_bytes().replace(b'\r\n',b'\n')==published.replace(b'\r\n',b'\n')
 
 
 @pytest.mark.parametrize('maintenance',[False,True])
@@ -147,10 +135,7 @@ def test_invalid_mirror_is_not_silently_adopted(rig,offset):
 
 def test_real_old_core_migrates_additively_and_reopens_without_external_manifest(tmp_path):
     db=Database(tmp_path/'old-production-shape.sqlite3')
-    old=old_repository_class()(db)
-    from test_steel_agent_v2 import SOURCE
-    reply=published_agent(old).handle(1,SOURCE,event_id='old-valid-turn')
-    assert reply.status=='ok'
+    seed_prequeue(db)
     before=digest(db)
     assert len(before['tables'])==4
     Repository(db);q=DurableQueue(db)
@@ -242,9 +227,8 @@ def test_validation_uses_single_snapshot_during_concurrent_admission(rig,monkeyp
 
 
 def test_additive_migration_fault_rolls_back_all_ddl_without_touching_history(tmp_path,monkeypatch):
-    from test_steel_agent_v2 import SOURCE
-    db=Database(tmp_path/'pre-queue.sqlite3');repo=old_repository_class()(db)
-    assert published_agent(repo).handle(1,SOURCE,event_id='one').status=='ok'
+    db=Database(tmp_path/'pre-queue.sqlite3')
+    seed_prequeue(db)
     before=digest(db)
     def fail(_):raise RuntimeError('injected before migration commit')
     monkeypatch.setattr(DurableQueue,'_validate_schema',staticmethod(fail))

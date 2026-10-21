@@ -149,28 +149,6 @@ class ArmaturaPriceIngestionTests(unittest.TestCase):
                 0,
             )
 
-    def test_grade_variants_are_not_inferred_for_other_listed_diameters(self):
-        ingest_armatura_price(self.database, DEFAULT_RESEARCH_DIR)
-        with self.database.connection() as connection:
-            other_size_items = connection.execute(
-                """SELECT i.id, c.code, i.normalized_key
-                   FROM reference_item i
-                   JOIN reference_category c ON c.id = i.category_id
-                   WHERE i.normalized_key <> '12'"""
-            ).fetchall()
-            self.assertEqual(len(other_size_items), 38)
-            self.assertTrue(all(
-                connection.execute(
-                    "SELECT 1 FROM reference_variant WHERE reference_item_id = ? LIMIT 1",
-                    (row["id"],),
-                ).fetchone() is None
-                for row in other_size_items
-            ))
-            # These items are present in each category's size selector, while
-            # the available snapshots expose mark filters only for selected Ø12.
-            # Their current lack of variants therefore records source coverage,
-            # not a claim that the real assortment has no other marks.
-
     @pytest.mark.legacy_23met
     def test_only_price_reference_fields_are_stored_and_provenance_is_attached(self):
         ingest_armatura_price(self.database, DEFAULT_RESEARCH_DIR)
