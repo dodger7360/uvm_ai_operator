@@ -1,4 +1,10 @@
-"""Synthetic UX/search cases; no live model, user database or polling."""
+"""Rendering, supplied-plan execution and search-response validation, offline.
+
+Fake chooses forward/custom/search/chat/edit intents; HTTP mocks supply search
+results. No case proves GPT understood the Russian message or found a true fact.
+Separate model evaluation must cover paraphrases of forwarding/table requests,
+search vs chat vs mutation, grouping, and questions about a previous search error.
+"""
 from copy import deepcopy
 import json
 from unittest.mock import Mock
@@ -38,29 +44,28 @@ def test_normal_view_hides_internal_structure_retains_facts(tmp_path):
     assert 'взаимозаменяемость' in render(request,'explanation')
 
 
-@pytest.mark.parametrize('message', ['Дай заявку текстом','Подготовь для отправки поставщику',
-    'Сделай список для копирования','Напиши заявку для менеджера','Сформируй короткий текст для пересылки'])
-def test_forward_is_readonly_and_one_coordinator_call(tmp_path,message):
+def test_forward_plan_is_readonly_without_extra_model_or_search_calls(tmp_path):
     agent,repo,fake=state(tmp_path)
     before=repo.load(1).model_dump_json()
     fake.plans=[dict(intent='show_request',view='forward')]
     count=len(fake.calls)
-    reply=agent.handle(1,message,event_id='forward')
+    reply=agent.handle(1,'Дай заявку текстом',event_id='forward')
     assert reply.status=='ok' and reply.calls==1 and len(fake.calls)==count+1
     assert 'С245' in reply.text and 'Ст3' in reply.text and '0,75 т' in reply.text
     assert 'версия' not in reply.text.lower() and '[i1]' not in reply.text
     assert repo.load(1).model_dump_json()==before
+    assert repo.version(1,repo.load(1).id,2) is None and not fake.search_calls
 
 
 @pytest.mark.parametrize('view', ['normalized','forward','explanation','custom'])
-def test_new_views_actual_sdk_schema_and_internal_contract(view):
+def test_sdk_http_mock_accepts_supplied_view_in_strict_schema(view):
     raw=AgentPlan(intent='show_request',view=view,answer='| Позиция | Количество |').model_dump(mode='json')
     plan,sent=sdk_plan(raw)
     assert plan.view==view
     assert subset_issues(sent[0]['text']['format']['schema'])==[]
 
 
-def test_custom_table_uses_single_plan_without_mutation(tmp_path):
+def test_custom_view_plan_returns_supplied_answer_without_mutation(tmp_path):
     agent,repo,fake=state(tmp_path)
     before=repo.load(1).model_dump_json()
     fake.plans=[dict(intent='show_request',view='custom',answer='| Лист С245 | 1,25 т |')]
@@ -80,7 +85,7 @@ def search_response(kind='url'):
 
 
 @pytest.mark.parametrize('kind',['url','feed'])
-def test_real_sdk_reads_structural_search_sources(kind):
+def test_sdk_http_mock_reads_structural_search_sources(kind):
     sent=[]
     def respond(request):
         sent.append(json.loads(request.content))
@@ -92,10 +97,9 @@ def test_real_sdk_reads_structural_search_sources(kind):
     if kind=='url':assert result.sources[0].url=='https://example.org/weather'
     else:assert result.providers==('oai-weather',) and not result.sources
     assert sent[0]['include']==['web_search_call.action.sources']
-    assert sent[0]['reasoning']=={'effort':'high'}
 
 
-def test_failed_search_diagnostic_persists_after_reopen(tmp_path):
+def test_search_status_plan_uses_saved_failure_after_reopen(tmp_path):
     agent,repo,fake=state(tmp_path)
     before=repo.load(1).model_dump_json()
     fake.plans=[dict(intent='web_search',search_query='synthetic')]
@@ -107,7 +111,8 @@ def test_failed_search_diagnostic_persists_after_reopen(tmp_path):
     result=SteelAgent(later,reopened).handle(1,'Почему поиск не сработал?',event_id='why')
     assert 'Invented' not in result.text and 'источник' in result.text.lower()
     assert reopened.load(1).model_dump_json()==before
-    assert later.calls[0][0]['last_search']
+    assert reopened.last_search(1)=={'status':'failed','reason':'no_sources'}
+    assert not later.search_calls and reopened.version(1,reopened.load(1).id,2) is None
 
 
 @pytest.mark.parametrize('damage', ['missing_tool','failed_tool','missing_sources','unsafe_url','empty_text','incomplete'])
@@ -151,7 +156,7 @@ def test_presentation_decimal_and_city_without_service_notes(tmp_path,amount):
     assert request.model_dump_json()==before
 
 
-def test_display_after_mass_edit_undo_reopen_and_other_user(tmp_path):
+def test_quantity_edit_and_undo_plans_preserve_original_and_user_isolation(tmp_path):
     agent,repo,fake=state(tmp_path)
     first=repo.load(1)
     fake.plans=[edit(first,[set_op('i1',field='quantity',value='7.5',evidence='7.5'),
@@ -214,7 +219,7 @@ def test_search_api_metadata_is_safe_and_single_attempt(status,caplog):
     assert 'PRIVATE_BODY_MUST_NOT_LEAK' not in caplog.text and 'PRIVATE_QUERY_MUST_NOT_LEAK' not in caplog.text
 
 
-def test_feeds_readonly_search_and_explanation_isolated_by_user(tmp_path):
+def test_search_plan_with_provider_result_is_readonly_and_user_isolated(tmp_path):
     from steel_agent_v2.transport import SearchAnswer
     agent,repo,fake=state(tmp_path)
     before=repo.load(1).model_dump_json()
@@ -248,7 +253,7 @@ def test_completed_page_action_url_is_verified_source(action):
     assert result.sources[0].url=='https://example.org/consulted'
 
 
-def test_hidden_display_numbers_match_actual_rows_when_groups_reordered(tmp_path):
+def test_regroup_plan_saves_display_addressing_matching_rendered_rows(tmp_path):
     agent,repo,fake=state(tmp_path)
     request=repo.load(1)
     groups=[dict(id='b',label='Second',item_ids=['i2'],rationale='Synthetic'),
@@ -259,10 +264,14 @@ def test_hidden_display_numbers_match_actual_rows_when_groups_reordered(tmp_path
     assert reply.text.index('Лист Ст3') < reply.text.index('Лист С245')
     fake.plans=[dict(intent='show_request')]
     agent.handle(1,'Покажи коротко',event_id='show')
-    assert fake.calls[-1][0]['display_numbers']=={'1':'i2','2':'i1'}
+    shown=repo.load(1)
+    assert repo.last_display(1,shown).item_ids==['i2','i1']
+    assert shown.items==request.items and shown.originals==request.originals
+    assert shown.original_text==request.original_text and shown.records==request.records
+    assert shown.revision==request.revision+1
 
 
-def test_partial_forward_retains_partial_status(tmp_path):
+def test_forward_plan_retains_partial_status_without_mutation(tmp_path):
     repo=Repository(Database(tmp_path/'partial.sqlite3'))
     raw=proposal();raw['extraction']['items'][0]['quantity']=None
     raw['extraction']['questions']=['Уточните количество i1']

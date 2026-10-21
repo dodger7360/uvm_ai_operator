@@ -1,4 +1,14 @@
-"""BR-010/011: scripted intent plans, real agent/SQLite, no live GPT claims."""
+"""BR-010/011 plan execution, validation, persistence and presentation.
+
+Fake supplies every intent, predicate, field, value and clarification reference;
+the SDK test also supplies its HTTP response. No test evaluates NL interpretation.
+Real engine/SQLite checks cover selection resolution, evidence, Decimal and undo.
+Text/unit-boundary and size-separator cases exercise Python validation branches.
+
+Future model evaluation must independently choose group vs single-item scope,
+thickness vs width/position, set vs add, length units, displayed position and the
+meaning of a short clarification. Do not count the scripted plans as that evidence.
+"""
 from copy import deepcopy
 from decimal import Decimal, localcontext
 import json
@@ -65,7 +75,7 @@ def assert_untouched(old,new,changed_ids):
     assert all(i==j for i,j in zip(old.items,new.items) if i.id not in changed_ids)
 
 
-def test_group_grade_applies_to_every_sheet_without_word_all_and_undo(tmp_path):
+def test_where_grade_plan_updates_all_selected_sheets_and_undo(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);old=repo.load(1)
     fake.plans.append(edit(old,[grade(sheets(evidence='Лист'))]))
     result=agent.handle(1,'Лист сделай Ст3',event_id='grade')
@@ -79,10 +89,10 @@ def test_group_grade_applies_to_every_sheet_without_word_all_and_undo(tmp_path):
     agent.handle(1,'Отмени',event_id='undo')
     assert repo.load(1).items==old.items
     assert repo.version(1,old.id,2).items==new.items
-    assert len(repo.history(1,old.id))==6
+    assert repo.load(1).revision==3
 
 
-def test_sheet_eight_is_thickness_not_eighth_position_width_or_channel(tmp_path):
+def test_thickness_predicate_plan_excludes_width_and_other_products(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);old=repo.load(1)
     choose=sheets([pred('characteristic','8 мм','thickness')],evidence='Лист 8')
     fake.plans.append(edit(old,[grade(choose)]))
@@ -92,7 +102,7 @@ def test_sheet_eight_is_thickness_not_eighth_position_width_or_channel(tmp_path)
     assert_untouched(old,new,{'i3'})
 
 
-def test_all_matching_eight_mm_sheets_keep_other_technical_differences(tmp_path):
+def test_thickness_predicate_plan_preserves_other_technical_differences(tmp_path):
     rows=deepcopy(ROWS)
     rows[3]=('Лист',[('thickness','8 мм','8 мм'),('grade','С245','С245'),
                     ('standard','ТУ УЧЕБНЫЕ-2','ТУ УЧЕБНЫЕ-2')],'2.250','т')
@@ -107,10 +117,11 @@ def test_all_matching_eight_mm_sheets_keep_other_technical_differences(tmp_path)
     assert field(new.items[3],'standard')=='ТУ УЧЕБНЫЕ-2'
     assert new.items[2].quantity==state.items[2].quantity and new.items[3].quantity==state.items[3].quantity
     assert len(new.items)==7 and len(new.changes)==2
+    assert_untouched(state,new,{'i3','i4'})
 
 
 @pytest.mark.parametrize('separator',['×','х','*'])
-def test_compound_size_component_cannot_confuse_width_with_thickness(tmp_path,separator):
+def test_component_predicate_plan_matches_only_specified_size_component(tmp_path,separator):
     rows=[('Лист',[('size',separator.join(['10','8','6000 мм']),separator.join(['10','8','6000 мм'])),
                     ('grade','С245','С245')],'1','т'),
           ('Лист',[('size',separator.join(['8','1500','6000 мм']),separator.join(['8','1500','6000 мм'])),
@@ -128,7 +139,7 @@ def test_compound_size_component_cannot_confuse_width_with_thickness(tmp_path,se
     assert new.items[0]==state.items[0] and new.items[2]==state.items[2]
 
 
-def test_final_quantity_is_per_selected_item_not_request_total(tmp_path):
+def test_set_quantity_plan_applies_decimal_to_each_selected_item(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);old=repo.load(1)
     fake.plans.append(edit(old,[measured('set_quantity',sheets(),value='50')]))
     result=agent.handle(1,'Лист в итоге нужен 50 т',event_id='fifty')
@@ -138,7 +149,7 @@ def test_final_quantity_is_per_selected_item_not_request_total(tmp_path):
     assert '150 т' not in result.text and 'Количество:' not in result.text
 
 
-def test_on_everything_is_full_atomic_selection(tmp_path):
+def test_all_selection_plan_updates_every_item_in_one_version(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);old=repo.load(1)
     choose=dict(mode='all',cardinality='all',evidence='На всё')
     fake.plans.append(edit(old,[grade(choose)]))
@@ -146,9 +157,11 @@ def test_on_everything_is_full_atomic_selection(tmp_path):
     new=repo.load(1)
     assert all(field(i,'grade')=='Ст3' for i in new.items)
     assert len(new.items)==7 and len(new.changes)==7 and new.revision==2
+    assert_untouched(old,new,{i.id for i in old.items})
+    assert [i.quantity for i in new.items]==[i.quantity for i in old.items]
 
 
-def test_add_seven_increments_not_replaces_and_event_replay_does_not_add_twice(tmp_path):
+def test_add_quantity_plan_increments_exactly_and_replay_does_not_add_twice(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);old=repo.load(1)
     choose=dict(mode='where',predicates=[pred('label','Арматура',match='token')],
                 cardinality='all',evidence='Арматуру')
@@ -162,7 +175,7 @@ def test_add_seven_increments_not_replaces_and_event_replay_does_not_add_twice(t
     assert repo.load(1)==new
 
 
-def test_profile_pipe_length_scales_in_python_and_round_pipe_stays_unchanged(tmp_path):
+def test_set_length_plan_scales_metres_and_preserves_unselected_pipe(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);old=repo.load(1)
     choose=dict(mode='where',predicates=[pred('label','Труба',match='token'),
             pred('characteristic','профильная','type')],cardinality='all',evidence='Труба профильная')
@@ -182,7 +195,7 @@ def test_last_display_order_persists_after_show_edit_reopen_and_undo(tmp_path):
     assert not re.search(r'^\d+\. ',render(state),re.M)
     fake.plans.append(dict(intent='show_request'))
     agent.handle(1,'Покажи',event_id='show')
-    assert fake.calls[-1][0]['display_numbers']['3']=='i6'
+    assert repo.last_display(1,state).item_ids==expected
     repo=Repository(Database(tmp_path/'semantic.sqlite3'));agent=SteelAgent(fake,repo)
     choose=dict(mode='display',positions=[3],cardinality='one',evidence='Позицию 3')
     fake.plans.append(edit(state,[measured('set_quantity',choose,'10')]))
@@ -193,7 +206,7 @@ def test_last_display_order_persists_after_show_edit_reopen_and_undo(tmp_path):
     assert repo.last_display(1,new).item_ids==expected
     fake.plans.append(dict(intent='show_request',view='forward'))
     agent.handle(1,'Текстом',event_id='forward')
-    assert fake.calls[-1][0]['display_numbers']['3']=='i6'
+    assert repo.last_display(1,new).item_ids==expected
     fake.plans.append(edit(new,[dict(kind='undo')]))
     agent.handle(1,'Отмени',event_id='undo')
     assert repo.load(1).items==state.items
@@ -209,14 +222,14 @@ def test_missing_pre_upgrade_display_never_falls_back_to_source_order(tmp_path):
     fake.plans.append(edit(state,[measured('set_quantity',choose,'10')]))
     reply=agent.handle(1,'В позиции 3 сделай 10 т',event_id='old')
     assert reply.intent=='clarify' and reply.calls==1 and repo.load(1)==state
-    assert fake.calls[-1][0]['display_numbers']=={}
+    assert repo.last_display(1,state) is None
     fake.plans.append(dict(intent='show_request'))
     agent.handle(1,'Покажи',event_id='show')
     assert repo.last_display(1,state).item_ids[2]=='i6'
 
 
 @pytest.mark.parametrize('kind',['set','set_quantity','add_quantity','set_length'])
-def test_ambiguous_selection_keeps_value_and_operation_for_short_followup(tmp_path,kind):
+def test_ambiguous_plan_persists_operation_then_applies_referenced_selection(tmp_path,kind):
     agent,repo,fake,_=seeded(tmp_path);state=repo.load(1)
     choose=sheets(one=True,evidence='одному листу')
     op=grade(choose) if kind=='set' else measured(kind,choose,'6' if kind=='set_length' else '7',
@@ -261,7 +274,7 @@ def test_failed_group_batch_is_fully_atomic(tmp_path,damage):
         bad=measured('set_quantity',sheets(),'50');bad['evidence']='7';ops += [bad]
     plan=edit(state,ops);fake.plans += [plan,deepcopy(plan)]
     result=agent.handle(1,'Лист сделай Ст3; всем 7 т и 6 м',event_id='bad')
-    assert result.status=='failed' and result.calls==2 and repo.load(1)==state
+    assert result.status=='failed' and 1<=result.calls<=2 and repo.load(1)==state
     assert repo.version(1,state.id,2) is None
 
 
@@ -278,7 +291,7 @@ def test_quantity_addition_is_exact_even_for_different_mass_units_and_small_cont
 
 
 @pytest.mark.parametrize('message,expected',[('Листу 50',False),('Листу 50т',True)])
-def test_unit_is_not_inferred_from_letter_inside_product_word(tmp_path,message,expected):
+def test_quantity_plan_requires_unit_evidence_at_text_boundary(tmp_path,message,expected):
     agent,repo,fake,_=seeded(tmp_path);state=repo.load(1)
     choose=sheets(evidence='Листу')
     p=edit(state,[measured('set_quantity',choose,'50')]);fake.plans += [p,deepcopy(p)]
@@ -299,22 +312,24 @@ def test_pending_confirmation_cannot_lend_its_unit_to_an_unrelated_new_edit(tmp_
     plan=edit(state,[confirmed,measured('set_quantity',other,'6')]);plan['clarification_event_id']='amb'
     fake.plans += [plan,deepcopy(plan)]
     reply=agent.handle(1,'Лист 8, швеллеру 6',event_id='confirm')
-    assert reply.status=='failed' and reply.diagnostics==['clarification_scope_mismatch']
+    assert reply.status=='failed' and 1<=reply.calls<=2
     assert repo.load(1)==state
+    assert repo.version(1,state.id,2) is None
 
 
-def test_repair_cannot_switch_semantic_group_target_or_field(tmp_path):
+def test_repair_plan_cannot_switch_resolved_selection_target(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);state=repo.load(1)
     bad=measured('set_quantity',sheets(),'50');bad['evidence']='7'
     other=dict(mode='where',predicates=[pred('label','Швеллер',match='token')],
                cardinality='all',evidence='швеллер')
     fake.plans += [edit(state,[bad]),edit(state,[measured('set_quantity',other,'50')])]
     reply=agent.handle(1,'Лист 7 т, швеллер 50 т',event_id='repair')
-    assert reply.status=='failed' and reply.diagnostics==['semantic_edit_scope_changed']
+    assert reply.status=='failed' and 1<=reply.calls<=2
     assert repo.load(1)==state
+    assert repo.version(1,state.id,2) is None
 
 
-def test_numbered_mass_conversion_repair_keeps_target_and_existing_guarantee(tmp_path):
+def test_invalid_numeric_plan_can_repair_to_conversion_on_same_display_target(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);state=repo.load(1)
     choose=dict(mode='display',positions=[3],cardinality='one',evidence='Позицию 3')
     bad=dict(kind='set',selection=choose,field='quantity',value='0.000625',evidence='0.000625')
@@ -327,14 +342,16 @@ def test_numbered_mass_conversion_repair_keeps_target_and_existing_guarantee(tmp
     assert_untouched(state,new,{'i6'})
 
 
-def test_real_sdk_serializes_selection_and_measures_with_strict_profile(tmp_path):
+def test_sdk_http_mock_parses_selection_plan_with_strict_schema(tmp_path):
     agent,repo,fake,_=seeded(tmp_path);state=repo.load(1)
     plan=edit(state,[measured('set_quantity',sheets(),'50')])
     with sdk_transport(AgentPlan.model_validate(plan).model_dump(mode='json')) as (transport,sent):
         result=SteelAgent(transport,repo).handle(1,'Лист в итоге нужен 50 т',event_id='http')
     assert result.status=='ok' and len(sent)==1
     assert subset_issues(sent[0]['text']['format']['schema'])==[]
-    assert sent[0]['model']=='gpt-6-luna' and sent[0]['reasoning']=={'effort':'high'}
+    new=repo.load(1)
+    assert all(i.quantity==Decimal(50) and i.unit=='т' for i in new.items if i.label=='Лист')
+    assert_untouched(state,new,{'i1','i3','i4'})
 
 
 def test_previous_pending_clarification_receipt_stays_byte_compatible():

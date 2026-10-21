@@ -1,4 +1,11 @@
-"""BR-007 on the agent/repository/outbox path. Synthetic data, no live services."""
+"""BR-007 formatting/provenance and supplied search/sources-plan execution.
+
+Fake selects every intent/view and supplies search facts/URLs; SDK responses are
+also mocked. These tests prove persistence, link safety and delivery behaviour,
+not language understanding, source discovery or factual accuracy of model output.
+Future model evaluation must choose sources vs new search for Russian paraphrases,
+resolve which prior search is meant and avoid mutation while answering questions.
+"""
 from copy import deepcopy
 import json
 from unittest.mock import Mock
@@ -12,7 +19,7 @@ from steel_agent_v2.contracts import AgentPlan, Reply, SourceLink, SourceCitatio
 from steel_agent_v2.queue import DurableQueue
 from steel_agent_v2.search_sources import compact, merge_sources
 from steel_agent_v2.telegram_format import payloads, html_chunks
-from steel_agent_v2.transport import OpenAITransport, SearchAnswer, SearchUnavailable, INSTRUCTIONS
+from steel_agent_v2.transport import OpenAITransport, SearchAnswer, SearchUnavailable
 from test_steel_agent_v2 import Fake, SOURCE, proposal, edit, set_op
 from test_steel_agent_v2_ux_search import search_response, sdk_plan
 from test_steel_agent_v2_wire_schema import subset_issues
@@ -137,16 +144,15 @@ def test_literal_product_data_and_markup_are_protected_on_real_agent_path(tmp_pa
     assert repo.version(1,repo.load(1).id,2) is None
 
 
-@pytest.mark.parametrize('message',[
-    'Покажи все источники','Дай полный список ссылок',
-    'Откуда ты взял эту информацию? Покажи сайты','Покажи все источники последнего поиска'])
-def test_natural_source_requests_use_existing_coordinator_and_no_search(tmp_path,message):
-    repo=Repository(Database(tmp_path/'natural.sqlite3'));fake=Fake();agent=SteelAgent(fake,repo)
-    search(agent,fake);count=len(fake.calls)
-    result=full(agent,fake,message=message)
+def test_sources_view_plan_reuses_saved_provenance_without_search_or_mutation(tmp_path):
+    repo=Repository(Database(tmp_path/'sources-view.sqlite3'));fake=Fake(proposal());agent=SteelAgent(fake,repo)
+    agent.handle(1,SOURCE,event_id='create');before=repo.load(1)
+    searched=search(agent,fake);count=len(fake.calls)
+    result=full(agent,fake)
     assert len(result.sources)==10 and len(fake.calls)==count+1 and len(fake.search_calls)==1
-    assert fake.calls[-1][0]['saved_search_sources']=={'available':True,'count':10}
-    assert 'view=sources' in INSTRUCTIONS
+    assert result.sources==searched.sources and result.source_event_id=='search'
+    assert links(result)==[source.url for source in searched.sources]
+    assert repo.load(1)==before and repo.version(1,before.id,before.revision+1) is None
 
 
 def test_sources_view_is_in_strict_sdk_schema_and_cannot_mutate_or_search():
@@ -231,7 +237,7 @@ def test_old_receipts_serialize_identically_and_merge_preserves_metadata():
     assert len(merged)==1 and merged[0].title==newer.title and old.sources[0].title in merged[0].titles
 
 
-def test_real_sdk_annotations_and_legacy_saved_search_are_read_without_migration(tmp_path,caplog):
+def test_sdk_http_mock_annotations_and_old_saved_search_are_read_without_migration(tmp_path,caplog):
     response=search_response();part=response['output'][-1]['content'][0]
     part['text']='Подтвердите актуальность.[1]';start=part['text'].index('[1]')
     part['annotations']=[dict(type='url_citation',url=sites(1)[0].url,title='Таблица & нормы',start_index=start,end_index=start+3)]
