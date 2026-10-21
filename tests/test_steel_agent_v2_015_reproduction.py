@@ -15,6 +15,7 @@ import telegram_bot as bot
 from database import Database
 from repositories.telegram_repository import TelegramRepository
 from steel_agent_v2 import Repository, SteelAgent
+from steel_agent_v2.contracts import Reply
 from steel_agent_v2.engine import totals
 from steel_agent_v2.telegram import handle_update
 from steel_agent_v2.transport import OpenAITransport
@@ -135,7 +136,49 @@ def test_genuine_source_damage_is_not_silently_removed(tmp_path, damage):
         assert c.execute('SELECT message FROM steel_v2_turn').fetchone()[0] == BEAMS
 
 
-def test_rejected_beams_followup_add_can_reproduce_schema_value_error(tmp_path):
+def test_explicit_beams_append_uses_one_valid_plan_without_repair(tmp_path):
+    repo,fake,api,send=adapter(tmp_path,[proposal()])
+    send(1,SOURCE);before=repo.load(1)
+    prefix='Добавь эти позиции:\n';message=prefix+BEAMS
+    plan=beams_plan()
+    plan.update(intent='append_request',expected_request_id=before.id,expected_revision=before.revision)
+    for record in plan['extraction']['records']:
+        record['start']+=len(prefix);record['end']+=len(prefix)
+    plan['extraction']['records'].insert(0,dict(id='instruction',kind='note',start=0,end=len(prefix)-1))
+    fake.plans.append(plan);calls=len(fake.calls)
+    send(2,message)
+    assert len(fake.calls)-calls==1 and not fake.calls[-1][1]['diagnostics']
+    current=repo.load(1)
+    assert current.id==before.id and current.revision==before.revision+1
+    assert current.original_text==SOURCE+'\n'+message
+    assert current.items[:2]==before.items and current.originals[:2]==before.originals
+    assert current.records[:len(before.records)]==before.records
+    assert current.groups[:len(before.groups)]==before.groups
+    appended=current.items[2:]
+    assert len(appended)==4 and len({item.id for item in current.items})==6
+    assert [item.quantity for item in appended]==list(map(Decimal,['10.700','186.698','127.097','56.669']))
+    assert all(item.unit=='т' for item in appended)
+    assert [[(fact.name,fact.value,fact.raw) for fact in item.characteristics] for item in appended]==[
+        [(fact['name'],fact['value'],fact['raw']) for fact in item['characteristics']]
+        for item in beams_plan()['extraction']['items']]
+    assert totals(current.items)==({'т':'383.164'},[])
+    records={record.id:record for record in current.records}
+    assert [current.original_text[records[item.source_id].start:records[item.source_id].end]
+            for item in appended]==BEAMS.splitlines()
+    assert repo.version(1,before.id,before.revision)==before and repo.load(2) is None
+    with repo.database.connection() as connection:
+        reply=Reply.model_validate_json(connection.execute(
+            "SELECT reply FROM steel_v2_turn WHERE event_id='telegram:2'").fetchone()[0])
+        assert reply.status=='ok' and reply.calls==1
+        assert connection.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==2
+        assert connection.execute('SELECT count(*) FROM steel_v2_inflight').fetchone()[0]==0
+        assert connection.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
+    assert Repository(Database(tmp_path/'v2.sqlite3')).load(1)==current
+    calls=len(fake.calls);send(2,message)
+    assert len(fake.calls)==calls and repo.load(1)==current
+
+
+def test_invalid_beams_followup_preserves_pending_source_and_request_with_bounded_repair(tmp_path):
     invalid_add = dict(intent='edit_request', operations=[])
     repo, fake, api, send = adapter(tmp_path, [proposal(), unsafe_plan(), unsafe_plan(),
         dict(intent='answer_question', answer='Список балок не вошёл в заявку.'), invalid_add, invalid_add,
@@ -143,24 +186,41 @@ def test_rejected_beams_followup_add_can_reproduce_schema_value_error(tmp_path):
     send(1, SOURCE)
     before = repo.load(1).model_dump_json()
     send(2, BEAMS)
+    pending=repo.pending(1)
+    assert pending['event_id']=='telegram:2' and pending['source_text']==BEAMS
     send(3, 'А балки?')
+    calls=len(fake.calls)
     send(4, 'Добавь')
     assert 'schema:' not in api.call.call_args.kwargs['text']
     # Two invalid plans do not prove an append intent; no unrelated fallback claim.
     assert 'не поддерживается' not in api.call.call_args.kwargs['text']
-    assert fake.calls[5][1]['diagnostics']==['schema::value_error']
-    assert any(row['content'] == BEAMS for row in fake.calls[4][0]['history'])
+    assert 1<=len(fake.calls)-calls<=2
+    assert all(context['pending_request']['event_id']==pending['event_id']
+               and any(row['content']==BEAMS for row in context['history'])
+               for context,_ in fake.calls[calls:])
     assert repo.load(1).model_dump_json() == before
+    assert repo.pending(1)==pending
+    with repo.database.connection() as connection:
+        failed=Reply.model_validate_json(connection.execute(
+            "SELECT reply FROM steel_v2_turn WHERE event_id='telegram:4'").fetchone()[0])
+        assert failed.status=='failed' and failed.calls==len(fake.calls)-calls
+        assert connection.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==1
+        assert connection.execute('SELECT count(*) FROM steel_v2_inflight').fetchone()[0]==0
+        assert connection.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
+    calls=len(fake.calls)
     send(5, 'Добавь эти позиции')
+    assert len(fake.calls)-calls==1
     assert 'какой сохранённый список добавить' in api.call.call_args.kwargs['text']
     assert repo.load(1).model_dump_json() == before
+    assert repo.pending(1)==pending
     # Ambiguous historical references still clarify; unsupported-append policy is superseded.
-    send(5, 'Как безопасно продолжить?')
+    calls=len(fake.calls);send(5, 'Как безопасно продолжить?')
+    assert len(fake.calls)==calls
     assert 'schema:' not in api.call.call_args.kwargs['text']
     assert repo.load(1).model_dump_json() == before
     reopened = Repository(Database(tmp_path/'v2.sqlite3'))
     assert reopened.load(1).model_dump_json() == before
-    assert reopened.load(2) is None
+    assert reopened.load(2) is None and reopened.pending(1)==pending
 
 
 def test_crashed_claim_is_durable_but_not_automatically_replayed(tmp_path):

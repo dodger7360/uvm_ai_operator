@@ -120,18 +120,59 @@ def test_topic_change_and_request_revision_expire_clarification(tmp_path):
     assert repo.clarification(1,state) is None
 
 
-def test_old_current_message_only_evidence_failure_repairs_with_saved_reference(tmp_path):
+def test_saved_clarification_applies_original_evidence_in_one_call_after_reopen(tmp_path):
+    agent,repo,fake,source=setup(tmp_path);state=repo.load(1)
+    fake.plans.append(dict(intent='clarify',answer='Это позиция 3?',clarification=proposal()))
+    agent.handle(1,'Раскрой 2х6',event_id='q')
+    repo=Repository(Database(tmp_path/'v2.sqlite3'));agent=SteelAgent(fake,repo)
+    plan=edit(state,[set_op('i3',name='cut',value='2х6',evidence='2х6')])
+    plan['clarification_event_id']='q';fake.plans.append(plan)
+    calls=len(fake.calls)
+    result=agent.handle(1,'Относится',event_id='answer')
+    assert result.status=='ok' and result.calls==1 and len(fake.calls)-calls==1
+    assert fake.calls[-1][0]['pending_clarification']['proposal']['value']=='2х6'
+    assert not fake.calls[-1][1]['diagnostics']
+    changed=repo.load(1)
+    assert changed.id==state.id and changed.revision==state.revision+1
+    assert changed.items[:2]==state.items[:2] and changed.items[3:]==state.items[3:]
+    target=changed.items[2]
+    assert target.id=='i3' and target.quantity==Decimal('1375') and target.unit=='кг'
+    assert target.model_dump(exclude={'characteristics'})==state.items[2].model_dump(exclude={'characteristics'})
+    assert target.characteristics[:-1]==state.items[2].characteristics
+    assert (target.characteristics[-1].name,target.characteristics[-1].value)==('cut','2х6')
+    assert changed.original_text==source and changed.originals==state.originals
+    assert changed.groups==state.groups and len(changed.changes)==len(state.changes)+1
+    assert changed.changes[-1].item_id=='i3' and changed.changes[-1].evidence=='2х6'
+    assert changed.changes[-1].message=='Относится'
+    assert repo.clarification(1,changed) is None and repo.load(2) is None
+    assert repo.version(1,state.id,state.revision)==state
+    with repo.database.connection() as connection:
+        assert connection.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==2
+        assert connection.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
+    calls=len(fake.calls)
+    assert agent.handle(1,'Относится',event_id='answer')==result and len(fake.calls)==calls
+
+
+def test_missing_saved_clarification_reference_preserves_state_with_bounded_repair(tmp_path):
     agent,repo,fake,_=setup(tmp_path);state=repo.load(1)
     fake.plans.append(dict(intent='clarify',answer='Это позиция 3?',clarification=proposal()))
     agent.handle(1,'Раскрой 2х6',event_id='q')
-    old_plan=edit(state,[set_op('i3',name='cut',value='2х6',evidence='2х6')])
-    repaired=deepcopy(old_plan);repaired['clarification_event_id']='q'
-    fake.plans += [old_plan,repaired]
-    result=agent.handle(1,'Относится',event_id='answer')
-    assert result.status=='ok' and result.calls==2
-    assert fake.calls[-1][1]['diagnostics']==['edit_evidence_not_in_message']
-    assert fake.calls[-1][0]['pending_clarification']['proposal']['value']=='2х6'
-    assert repo.load(1).items[2].characteristics[-1].value=='2х6'
+    pending=repo.clarification(1,state)
+    # The short reply does not itself contain this evidence, and the plan omits
+    # the saved clarification reference that would authorize inheriting it.
+    invalid=edit(state,[set_op('i3',name='cut',value='2х6',evidence='2х6')])
+    fake.plans += [deepcopy(invalid),invalid]
+    calls=len(fake.calls)
+    result=agent.handle(1,'Относится',event_id='invalid-answer')
+    assert result.status=='failed' and 1<=result.calls<=2
+    assert len(fake.calls)-calls==result.calls
+    assert 'edit_evidence_not_in_message' in result.diagnostics
+    assert repo.load(1)==state and repo.clarification(1,state)==pending
+    assert repo.load(2) is None
+    with repo.database.connection() as connection:
+        assert connection.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==1
+        assert connection.execute('SELECT count(*) FROM steel_v2_inflight').fetchone()[0]==0
+        assert connection.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
 
 
 def test_actual_sdk_clarification_survives_turns_and_applies_original_evidence(tmp_path):
@@ -181,18 +222,30 @@ def test_mass_conversion_is_one_atomic_version_no_model_number_and_undo(tmp_path
     assert len(repo.history(1,state.id))==6
 
 
-def test_old_two_set_plan_reproduces_evidence_failure_then_narrow_repair(tmp_path,caplog):
+def test_invalid_two_set_mass_plan_is_atomic_with_bounded_repair(tmp_path,caplog):
     agent,repo,fake,_=setup(tmp_path);old=repo.load(1)
-    broken=edit(old,[set_op('i3','quantity','1.375',evidence='1.375'),
-                     set_op('i3','unit','т',evidence='тонны')])
-    fake.plans += [broken,conversion(old)]
+    # The unit edit has literal evidence; the following quantity is invented by
+    # the plan. Neither field may be persisted when that second operation fails.
+    broken=edit(old,[set_op('i3','unit','т',evidence='тонны'),
+                     set_op('i3','quantity','1.375',evidence='1.375')])
+    fake.plans += [broken,deepcopy(broken)]
+    calls=len(fake.calls)
     with caplog.at_level('INFO'):
         reply=agent.handle(1,'Поз 3 пересчитай в тонны',event_id='mass')
-    assert reply.status=='ok' and reply.calls==2
-    assert fake.calls[-1][1]['diagnostics']==['edit_evidence_not_in_message']
-    assert fake.calls[-1][0]['validation_repair'][0]['msg']=='edit_evidence_not_in_message'
+    assert reply.status=='failed' and 1<=reply.calls<=2
+    assert len(fake.calls)-calls==reply.calls
+    assert 'edit_evidence_not_in_message' in reply.diagnostics
+    for context,options in fake.calls[calls+1:]:
+        assert 'edit_evidence_not_in_message' in options['diagnostics']
+        assert context['validation_repair'][0]['msg']=='edit_evidence_not_in_message'
     assert 'edit_evidence_not_in_message' in caplog.text
-    assert repo.load(1).items[2].quantity==Decimal('1.375')
+    assert repo.load(1)==old
+    assert repo.load(1).items[2].quantity==Decimal('1375') and repo.load(1).items[2].unit=='кг'
+    assert repo.version(1,old.id,old.revision)==old and repo.load(2) is None
+    with repo.database.connection() as connection:
+        assert connection.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==1
+        assert connection.execute('SELECT count(*) FROM steel_v2_inflight').fetchone()[0]==0
+        assert connection.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
 
 
 def test_two_invalid_edits_preserve_all_five_items_and_no_third_api(tmp_path):
