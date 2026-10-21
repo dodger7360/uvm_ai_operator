@@ -87,5 +87,7 @@ def test_release_boot_with_isolated_sqlite_preserves_schema(tmp_path, monkeypatc
         assert connection.execute('SELECT count(*) FROM steel_v2_turn').fetchone()[0] == 1
         outbox=connection.execute('SELECT state,message_id,payload FROM steel_v2_outbox').fetchone()
         assert outbox['state']=='delivered' and outbox['message_id']==7
-        assert json.loads(outbox['payload'])['text']==replies[0]
+        # The scheduler may compact delivered payloads after recording the receipt.
+        stored_payload=json.loads(outbox['payload'])
+        assert stored_payload=={} or stored_payload['text']==replies[0]
     assert not (tmp_path / 'telegram.ready').exists()

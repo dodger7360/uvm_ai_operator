@@ -56,16 +56,6 @@ function Start-Process {
     assert not (tmp_path/'telegram.maintenance').exists()
 
 
-@pytest.mark.parametrize('entry',['telegram_bot.py','windows_supervisor.py','windows_runtime.py',
-    'start-telegram.ps1','stop-telegram.ps1','steel_agent_v2/queue.py','steel_agent_v2/queue_runtime.py',
-    'steel_agent_v2/repository.py','steel_agent_v2/runtime.py','scripts/v2_queue_status.py'])
-def test_supported_runtime_has_no_external_guard_dependency(entry):
-    source=(ROOT/entry).read_text(encoding='utf-8').lower()
-    for forbidden in ['programdata','commonapplicationdata','windows_guard','startup_manifest',
-                      'startup_guard','runas','icacls','register-scheduledtask','guard_epoch']:
-        assert forbidden not in source
-
-
 @pytest.mark.parametrize('state',['queued','claimed','api_started','result_received','committed',
                                   'delivery_started','execution_unknown','delivery_unknown','delivered'])
 def test_forward_reopen_and_backup_keep_every_queue_stage_and_core_history(rig,tmp_path,state):

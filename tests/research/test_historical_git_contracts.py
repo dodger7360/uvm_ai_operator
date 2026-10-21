@@ -10,13 +10,6 @@ from steel_agent_v2 import Repository, SteelAgent
 from steel_agent_v2.engine import totals
 from test_steel_agent_v2 import Fake
 ROOT=Path(__file__).resolve().parents[2]
-OLD="aa11380dfe1ed646fec2355b22880fdb03b0d706"
-
-@pytest.mark.parametrize('name',['start-telegram.ps1','stop-telegram.ps1','windows_supervisor.py','windows_runtime.py'])
-def test_existing_launch_infrastructure_is_exactly_production(name):
-    published=subprocess.check_output(['git','show',OLD+':'+name])
-    assert (ROOT/name).read_bytes().replace(b'\r\n',b'\n')==published.replace(b'\r\n',b'\n')
-
 
 def old_repository_class():
     source=subprocess.run(['git','show','aa11380dfe1ed646fec2355b22880fdb03b0d706:steel_agent_v2/repository.py'],

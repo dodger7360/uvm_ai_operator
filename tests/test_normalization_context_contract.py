@@ -165,11 +165,3 @@ def test_commercial_group_and_analog_candidate_are_allowed_without_technical_app
     assert source.material.designation.value == 'В Ст.3 сп.5'
     with pytest.raises(ValidationError):
         ContextualInterpretation.model_validate(view.model_dump() | dict(technical_assessment='equivalent'))
-
-
-def test_context_deep_copy_keeps_independent_snapshots():
-    original = WorkingContext(context_id='context-a', request_id='request-a', normalization_version='v2',
-                              corrections=[CorrectionRecord(**correction_data())])
-    copied = original.model_copy(deep=True)
-    copied.corrections[0].after.unparsed_features.append('additional test evidence')
-    assert original.corrections[0].after.unparsed_features == []

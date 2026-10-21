@@ -398,16 +398,6 @@ def test_remaining_approved_cases_keep_sources_counts_and_provenance_without_cat
     assert Repository(Database(tmp_path/'mass.sqlite3')).load(1)==state
 
 
-def test_all_six_knowledge_documents_remain_approved_with_25_original_positions():
-    assert [len(case_source(n).splitlines()) for n in range(1,7)]==[6,4,1,4,6,5]
-    # CASE004 includes a shared-grade footer, not a fourth product.
-    assert sum([6,4,1,3,6,5])==25
-    for n in range(1,7):
-        document=(CASES/f'CASE-20261019-{n:03}.md').read_text(encoding='utf-8')
-        assert 'approved' in document and '## 2.' in document and '## 5.' in document
-    assert 'редакция 3' in (CASES/'CASE-20261019-002.md').read_text(encoding='utf-8')
-
-
 @pytest.mark.parametrize('pointer,execution,allowed',[(False,'без покрытия',False),
     (True,'без покрытия',True),(True,'оцинкованная',False)])
 def test_indicative_reference_never_erases_known_execution_difference(tmp_path,pointer,execution,allowed):

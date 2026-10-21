@@ -30,8 +30,9 @@ python -B scripts/v2_offline_tests.py --suite=all --collect-only
 
 `legacy` проверяет прежние AIService/TelegramService, локальные normalizer,
 matching/reference и старые интерфейсы. `research` содержит 23MET HTML-снимки,
-исторический B6-корпус, сравнение скриптов со старым Git SHA и проверку старого
-repository. Для их исполнения нужны собственные исторические prerequisites;
+исторический B6-корпус и проверку старого repository. Побайтовое сравнение
+скриптов со старым Git SHA удалено в блоке 2: действующий запуск проверяется
+поведенческими Windows/release-smoke тестами. Для их исполнения нужны собственные исторические prerequisites;
 их успешное исполнение в блоке 1 не заявляется. Ни `legacy`, ни `research`
 не входят в приёмку текущего Telegram. При осознанном историческом запуске
 из команды убирается `--collect-only`; ограничения офлайн-launcher сохраняются.
