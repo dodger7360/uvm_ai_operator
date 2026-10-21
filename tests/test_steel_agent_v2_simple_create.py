@@ -114,20 +114,26 @@ def test_compact_create_envelope_through_actual_sdk_and_repository(tmp_path,case
     assert reply.text==case['expected_text'] and len(sent)==reply.calls==1
     schema=sent[0]['text']['format']['schema']
     assert subset_issues(schema)==[]
-    assert len(schema['$defs']['WireCreatePlan']['required'])==5
-    assert set(schema['$defs']['WireCreatePlan']['properties'])==set(WireCreatePlan.model_fields)
+    assert sent[0]['text']['format']['strict'] is True
+    create_schema=schema['$defs']['WireCreatePlan']
+    assert set(create_schema['required'])==set(create_schema['properties'])==set(WireCreatePlan.model_fields)
+    assert 'operations' not in create_schema['properties']
+    assert 'operations' in schema['$defs']['WireActionPlan']['properties']
     assert repo.load(1).original_text==case['source']
 
 
-def test_compact_payload_scope_and_same_model(tmp_path):
+def test_create_action_and_repair_payload_scopes():
     from steel_agent_v2.transport import plan_request,CREATE_INSTRUCTIONS,ACTION_INSTRUCTIONS,INSTRUCTIONS
     small=plan_request({'message':'synthetic','active_request':None})
     large=plan_request({'message':'synthetic','active_request':{'id':'existing'}})
     assert small['instructions']==CREATE_INSTRUCTIONS
     assert large['instructions']==CREATE_INSTRUCTIONS+ACTION_INSTRUCTIONS
-    assert len(large['instructions'])<len(INSTRUCTIONS)/2
-    assert plan_request({'message':'synthetic'},diagnostics=['known_error'])['instructions']==INSTRUCTIONS
-    assert len(CREATE_INSTRUCTIONS)<len(INSTRUCTIONS)/2
+    repair=plan_request({'message':'synthetic'},diagnostics=['known_error'],previous='invalid proposal')
+    assert repair['instructions']==INSTRUCTIONS
+    assert small['instructions']!=large['instructions']!=repair['instructions']
+    repair_input=json.loads(repair['input'])
+    assert repair_input['diagnostics']==['known_error']
+    assert repair_input['previous_proposal']=='invalid proposal'
     assert 'operations' not in small['text']['format']['schema']['$defs']['WireCreatePlan']['properties']
 
 
