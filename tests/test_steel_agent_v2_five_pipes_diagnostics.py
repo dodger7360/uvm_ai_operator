@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from database import Database
+from diagnostics import http_attempt
 from steel_agent_v2 import Repository
 from steel_agent_v2.contracts import AgentPlan, Reply
 from steel_agent_v2.queue import DurableQueue
@@ -146,6 +147,63 @@ def test_five_pipes_create_one_http_call_and_replay_after_restart(rig,repeated):
     assert [m['content'] for m in repo.history(1,state.id) if m['role']=='user']==[source]
     assert_delivery(rig,100,reply)
     assert_replay_is_free(rig,100,source)
+
+
+@pytest.mark.parametrize('repair',[False,True],ids=['valid-one-call','duplicate-characteristic-repair'])
+def test_five_pipes_payload_sizes_and_existing_call_metrics(rig,caplog,repair):
+    """Measure actual SDK bytes offline, without asserting a latency/size budget.
+
+    Only the supplied duplicate characteristic requires repair. A correct first
+    response must not cause a formatting/second coordinator call. Printed sizes
+    and local timings are diagnostic measurements, not model quality or API SLA.
+    """
+    caplog.set_level('INFO',logger='operator_diagnostics')
+    source,plan=five_pipes()
+    good=wire(plan)
+    bad=deepcopy(good)
+    facts=bad['plan']['extraction']['items'][0]['characteristics']
+    facts.append(deepcopy(facts[0]))
+    responses=[bad,good] if repair else [good]
+    sizes=[]
+    def size(value):
+        return len(json.dumps(value,ensure_ascii=False,separators=(',',':')).encode('utf-8'))
+    def inspect_request(request):
+        http_attempt(request)  # Same existing hook as from_environment, no new telemetry.
+        body=json.loads(request.content)
+        data=json.loads(body['input'])
+        sizes.append(dict(body_bytes=len(request.content),
+            instructions_json_bytes=size(body['instructions']),
+            schema_json_bytes=size(body['text']['format']['schema']),
+            input_json_bytes=size(body['input']),context_json_bytes=size(data['context']),
+            previous_proposal_json_bytes=size(data['previous_proposal']),
+            diagnostic_json_bytes=size(data['diagnostics']),
+            timeout=request.extensions.get('timeout')))
+    def respond(_):
+        assert responses, 'unexpected extra API call'
+        return responses.pop(0)
+    admit(rig,100,text=source)
+    with sdk_transport(respond,inspect_request=inspect_request) as (transport,sent):
+        Executor(rig.queue,rig.access,lambda:rig.api,lambda:transport).execute(rig.queue.claim())
+    assert not responses and len(sent)==len(sizes)==len(transport.metrics)==(2 if repair else 1)
+    repo=Repository(rig.queue.database);state=assert_snapshot(repo,source,plan,1)
+    assert state.revision==1 and state.items==state.originals and not state.questions
+    with repo.database.connection() as c:
+        reply=Reply.model_validate_json(c.execute('SELECT reply FROM steel_v2_turn').fetchone()[0])
+    assert reply.status=='ok' and reply.calls==len(sent)
+    assert_delivery(rig,100,reply)
+    events=[json.loads(record.message) for record in caplog.records if record.name=='operator_diagnostics']
+    complete=[event for event in events if event['event']=='operation_complete']
+    assert len(complete)==1 and complete[0]['http_attempts']==len(sent) and complete[0]['sdk_retries']==0
+    assert complete[0]['calls']==len(sent)
+    validations=[event for event in events if event['event']=='steel_v2_validation']
+    assert len(validations)==int(repair)
+    if repair:
+        assert validations[0]['reason']=='EngineError'
+        assert validations[0]['diagnostic_codes']==['duplicate_characteristic']
+    print(json.dumps(dict(scenario='repair' if repair else 'valid',wire=sizes,
+        calls=[dict(stage=m['stage'],duration_ms=m['duration_ms']) for m in transport.metrics],
+        operation={key:complete[0][key] for key in ['duration_ms','stage_ms','http_attempts','sdk_retries']}),
+        ensure_ascii=True))
 
 
 def test_typed_unit_question_restart_yes_applies_once_without_partial_corruption(rig):

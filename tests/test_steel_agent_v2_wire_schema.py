@@ -51,10 +51,12 @@ def subset_issues(schema):
 
 
 @contextmanager
-def sdk_transport(reply, *, inspect=None):
+def sdk_transport(reply, *, inspect=None, inspect_request=None):
     """Actual Responses.parse -> HTTP serializer -> mock -> actual SDK parser."""
     sent=[]
     def respond(request):
+        if inspect_request:
+            inspect_request(request)
         payload=json.loads(request.content)
         sent.append(payload)
         if inspect:
