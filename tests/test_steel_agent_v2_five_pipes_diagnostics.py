@@ -2,13 +2,14 @@
 
 Only external OpenAI/Telegram replies are supplied. These are not recorded live
 model responses and do not establish Russian-language understanding or latency.
-The deliberately red regression records the unbound create/partial question gap.
+The diagnostic regression records the current unbound create/partial question gap.
 """
 from copy import deepcopy
 from decimal import Decimal
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from database import Database
 from steel_agent_v2 import Repository
@@ -208,24 +209,52 @@ def test_unbound_partial_question_then_invalid_yes_plans_fail_at_engine_and_wire
     assert_replay_is_free(rig,101,'да')
 
 
-def test_create_with_explicit_unit_proposal_keeps_binding_after_restart(rig):
-    """Known red contract gap for 4.2: create cannot carry a typed question.
+def test_create_with_explicit_unit_proposal_is_rejected_and_fallback_stays_unbound_after_restart(rig,caplog):
+    """Diagnose today's contract/fallback, not a capability implemented by 4.2.
 
-    This proposed response intentionally exceeds today's WireCreatePlan. It is
-    NOT a valid model plan under the current schema, nor a replay of the incident.
-    The proposal is explicit: Python is not asked to interpret the question text.
-    Both responses are rejected and fallback recovers the products, not binding.
-    Do not hide that gap with xfail or an invented extra user clarification turn.
+    Both mock replies intentionally exceed WireCreatePlan/AgentPlan. The offered
+    unit is a question, not source evidence: the target's unit is still unknown.
+    No typed binding is expected or invented from the other rows' unit tokens.
     """
+    caplog.set_level('INFO',logger='operator_diagnostics')
     source,plan=five_pipes(missing=True,question=True)
     proposed=wire(plan)
     proposed['plan']['clarification']=dict(target_ids=['i2'],field='unit',value='т',
                                           evidence='т',alternatives=['тонны'])
-    reply,_=execute(rig,100,source,[proposed,proposed])
-    repo=reopen(rig);state=assert_snapshot(repo,source,plan,1)
+    # An unsupported model reply must remain rejected by the actual contracts.
+    with pytest.raises(ValidationError) as wire_error:
+        WireCoordinatorPlan.model_validate(proposed)
+    assert any(error['type']=='extra_forbidden' and 'clarification' in error['loc']
+               for error in wire_error.value.errors())
+    with pytest.raises(ValidationError):
+        AgentPlan.model_validate(proposed['plan'])
+    reply,sent=execute(rig,100,source,[proposed,proposed])
     assert reply.status=='partial' and reply.calls==2 and 'partial_recovered' in reply.diagnostics
-    assert state.questions
-    assert state.items[1].unit is None
-    binding=repo.clarification(1,state)
-    assert binding is not None, 'create contract rejects explicit clarification; fallback loses actionable binding'
-    assert binding.proposal.target_ids==['i2'] and binding.proposal.value=='т'
+    # The same two rejected responses reach the real SDK; no valid repair was substituted.
+    for payload in sent:
+        create_schema=payload['text']['format']['schema']['$defs']['WireCreatePlan']
+        assert create_schema['additionalProperties'] is False
+        assert 'clarification' not in create_schema['properties']
+    events=[json.loads(record.message[record.message.index('{'):]) for record in caplog.records
+            if '"event": "steel_v2_validation"' in record.message]
+    assert [(event['reason'],event['validation_stage']) for event in events]==[
+        ('ValidationError','structured_response'),('ValidationError','structured_response')]
+    repo=reopen(rig);state=assert_snapshot(repo,source,plan,1)
+    assert state.items==state.originals==AgentPlan.model_validate(plan).extraction.items
+    # Recovery rebuilds its own safe questions, not the invalid proposal's question.
+    assert state.questions and all(question in reply.text for question in state.questions)
+    assert QUESTION not in state.questions
+    assert state.items[1].unit is None and state.items[1].unit_text is None
+    assert all(item.unit=='т' for item in state.items if item.id!='i2')
+    assert state.revision==1 and not state.changes
+    assert repo.clarification(1,state) is None and reply.clarification is None
+    assert repo.version(1,state.id,1)==state
+    assert [m['content'] for m in repo.history(1,state.id) if m['role']=='user']==[source]
+    with repo.database.connection() as c:
+        row=c.execute('SELECT reply FROM steel_v2_turn WHERE event_id=?',('telegram:100',)).fetchone()
+        assert Reply.model_validate_json(row[0])==reply
+        assert c.execute('SELECT count(*) FROM steel_v2_turn').fetchone()[0]==1
+    # Reopening and redelivery cannot silently authorize the proposed unit.
+    assert reopen(rig).load(1)==state
+    assert_delivery(rig,100,reply)
+    assert_replay_is_free(rig,100,source)
