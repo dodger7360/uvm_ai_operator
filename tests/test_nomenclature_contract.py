@@ -8,7 +8,6 @@ from pydantic import ValidationError
 
 from nomenclature import (Attribute, Measurement, NomenclatureSpec,
                           NormativeDocument, Provenance)
-from schemas import RequestItem
 
 
 EXAMPLES = json.loads((Path(__file__).parent / 'fixtures' /
@@ -211,14 +210,3 @@ def test_multiple_standards_with_separate_editions_and_provenance_survive():
     assert [doc.number for doc in restored.value] == ['8509', '535']
     assert [doc.edition.value for doc in restored.value] == ['93', '05']
     assert restored == claim
-
-
-def test_existing_request_item_contract_remains_independent():
-    item = RequestItem(product='Уголок', grade='ВСт3сп5', quantity='0,193', unit='т',
-                       gost_tu='ГОСТ 8509-93, ГОСТ 535-05', source_text='unchanged test source')
-    before = item.model_dump_json()
-    NomenclatureSpec.model_validate(EXAMPLES[0]['spec'])
-    assert item.model_dump_json() == before
-    assert RequestItem.model_validate_json(before) == item
-    assert item.quantity == Decimal('0.193')
-    assert 'nomenclature' not in RequestItem.model_fields

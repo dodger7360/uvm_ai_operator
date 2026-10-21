@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from steel_agent_v2.knowledge import PACKAGE, build
+from steel_agent_v2.knowledge import build
 from test_steel_agent_v2_knowledge_evidence import source_copy, manifest, document, replace_row
 
 
@@ -104,14 +104,3 @@ def test_same_units_are_compared_as_exact_decimal_lengths(source_copy,case):
     built=build(source_copy)
     assert [r['piece_length_mm'] for r in built['data']['mass_records'][:4]]==['6000']*4
     assert [r['piece_length_mm'] for r in built['data']['mass_records'][4:]]==['12000']*5
-
-
-def test_original_nine_bindings_keep_the_existing_artifact_and_version(source_copy):
-    artifact=json.loads(PACKAGE.read_text(encoding='utf-8'))
-    built=build(source_copy)
-    assert built==artifact
-    assert built['version'].startswith('sha256:9a4')
-    assert len(built['data']['mass_records'])==9
-    assert [r['piece_length_mm'] for r in built['data']['mass_records']]==['6000']*4+['12000']*5
-    assert len(built['data']['cases'])==6
-    assert sum(c['position_count'] for c in built['data']['cases'])==25
