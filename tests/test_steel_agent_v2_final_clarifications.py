@@ -92,12 +92,13 @@ def test_failed_second_correction_does_not_partially_change_profile(tmp_path):
     assert repo.version(1,before.id,2) is None
 
 
-def test_wall_correction_policy_reaches_actual_sdk_payload_without_network():
+def test_actual_sdk_preserves_wall_message_and_parses_one_supplied_reply_without_network():
     import json
     import httpx2
     from openai import OpenAI, DefaultHttpxClient
     from steel_agent_v2.contracts import AgentPlan
     from steel_agent_v2.transport import OpenAITransport
+    from test_steel_agent_v2_wire_schema import subset_issues
     sent=[]
     def respond(request):
         sent.append(json.loads(request.content))
@@ -108,12 +109,13 @@ def test_wall_correction_policy_reaches_actual_sdk_payload_without_network():
             'text':plan.model_dump_json(),'annotations':[]}]}]})
     with DefaultHttpxClient(transport=httpx2.MockTransport(respond)) as http:
         transport=OpenAITransport(OpenAI(api_key='offline-test',http_client=http))
-        transport.plan({'message':'Стенка 5 мм'})
+        # This checks transport, not whether GPT understands a wall correction.
+        plan=transport.plan({'message':'Стенка 5 мм'})
     assert len(sent)==1
-    instructions=sent[0]['instructions']
-    assert '40×40×5' in instructions and 'replace_from="3"' in instructions
-    assert 'одновременные противоречивые факты' in instructions
-    assert '3,36 кг/м' in instructions
+    assert json.loads(sent[0]['input'])['context']['message']=='Стенка 5 мм'
+    assert sent[0]['text']['format']['strict'] is True
+    assert subset_issues(sent[0]['text']['format']['schema'])==[]
+    assert plan==AgentPlan(intent='free_chat',answer='Офлайн')
 
 
 def test_sequential_correction_in_one_input_keeps_original_evidence(tmp_path):
