@@ -1,0 +1,19 @@
+-- Synthetic state; frozen four-table pre-queue schema, no production data.
+BEGIN TRANSACTION;
+CREATE TABLE steel_v2_active(
+                    user_id INTEGER PRIMARY KEY, sequence INTEGER NOT NULL, payload TEXT);
+INSERT INTO "steel_v2_active" VALUES(1,1,'{"id":"synthetic-prequeue-request","revision":1,"original_text":"Лист С245 — 1,25 т\nЛист Ст3 — 750 кг","records":[{"id":"r1","kind":"product","start":0,"end":18},{"id":"r2","kind":"product","start":19,"end":36}],"originals":[{"id":"i1","source_id":"r1","label":"Лист","characteristics":[{"name":"grade","value":"С245","raw":"С245","source_ids":["r1"]}],"quantity":"1.25","unit":"т","quantity_text":"1,25","unit_text":"т"},{"id":"i2","source_id":"r2","label":"Лист","characteristics":[{"name":"grade","value":"Ст3","raw":"Ст3","source_ids":["r2"]}],"quantity":"750","unit":"кг","quantity_text":"750","unit_text":"кг"}],"items":[{"id":"i1","source_id":"r1","label":"Лист","characteristics":[{"name":"grade","value":"С245","raw":"С245","source_ids":["r1"]}],"quantity":"1.25","unit":"т","quantity_text":"1,25","unit_text":"т"},{"id":"i2","source_id":"r2","label":"Лист","characteristics":[{"name":"grade","value":"Ст3","raw":"Ст3","source_ids":["r2"]}],"quantity":"750","unit":"кг","quantity_text":"750","unit_text":"кг"}],"groups":[{"id":"g1","label":"Листы, закупочная группа","item_ids":["i1","i2"],"rationale":"Предложение GPT","differences":["Различаются марки; это не разрешение на техническую замену."]}],"questions":[],"changes":[],"undo_stack":[]}');
+CREATE TABLE steel_v2_inflight(
+                    user_id INTEGER PRIMARY KEY, event_id TEXT NOT NULL, input_hash TEXT NOT NULL,
+                    message TEXT NOT NULL);
+CREATE TABLE steel_v2_turn(
+                    user_id INTEGER NOT NULL, event_id TEXT NOT NULL, input_hash TEXT NOT NULL,
+                    message TEXT NOT NULL, reply TEXT NOT NULL, request_id TEXT,
+                    sequence INTEGER NOT NULL, PRIMARY KEY(user_id,event_id));
+INSERT INTO "steel_v2_turn" VALUES(1,'old-valid-turn','b6a65ac07d6751c771b605f0daa1e5948d1c69a38bb93937b53a6fcde9ff16fd','Лист С245 — 1,25 т
+Лист Ст3 — 750 кг','{"text":"Лист С245 — 1,25 т\nЛист Ст3 — 0,75 т","status":"ok","intent":"create_request","request_id":"synthetic-prequeue-request","revision":1,"sources":[],"diagnostics":[],"calls":1}','synthetic-prequeue-request',1);
+CREATE TABLE steel_v2_version(
+                    user_id INTEGER NOT NULL, request_id TEXT NOT NULL, revision INTEGER NOT NULL,
+                    payload TEXT NOT NULL, PRIMARY KEY(user_id,request_id,revision));
+INSERT INTO "steel_v2_version" VALUES(1,'synthetic-prequeue-request',1,'{"id":"synthetic-prequeue-request","revision":1,"original_text":"Лист С245 — 1,25 т\nЛист Ст3 — 750 кг","records":[{"id":"r1","kind":"product","start":0,"end":18},{"id":"r2","kind":"product","start":19,"end":36}],"originals":[{"id":"i1","source_id":"r1","label":"Лист","characteristics":[{"name":"grade","value":"С245","raw":"С245","source_ids":["r1"]}],"quantity":"1.25","unit":"т","quantity_text":"1,25","unit_text":"т"},{"id":"i2","source_id":"r2","label":"Лист","characteristics":[{"name":"grade","value":"Ст3","raw":"Ст3","source_ids":["r2"]}],"quantity":"750","unit":"кг","quantity_text":"750","unit_text":"кг"}],"items":[{"id":"i1","source_id":"r1","label":"Лист","characteristics":[{"name":"grade","value":"С245","raw":"С245","source_ids":["r1"]}],"quantity":"1.25","unit":"т","quantity_text":"1,25","unit_text":"т"},{"id":"i2","source_id":"r2","label":"Лист","characteristics":[{"name":"grade","value":"Ст3","raw":"Ст3","source_ids":["r2"]}],"quantity":"750","unit":"кг","quantity_text":"750","unit_text":"кг"}],"groups":[{"id":"g1","label":"Листы, закупочная группа","item_ids":["i1","i2"],"rationale":"Предложение GPT","differences":["Различаются марки; это не разрешение на техническую замену."]}],"questions":[],"changes":[],"undo_stack":[]}');
+COMMIT;

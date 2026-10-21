@@ -1,3 +1,75 @@
+## Актуальный офлайн-запуск — блок 1, 21.10.2026
+
+Из корня checkout с установленными тестовыми зависимостями:
+
+```powershell
+python -B scripts/v2_offline_tests.py
+```
+
+По умолчанию запускается `--suite=current`: все актуальные v2-модули, Windows
+operations, release-smoke и выделенные общие проверки доступа, quantity,
+dialog_history и TypingIndicator. Состав явно перечислен в
+`test_suite_inventory.py`; новый неклассифицированный модуль вызывает ошибку,
+а не молча исчезает из приёмки. `conftest.py` исключает чужие модули **до импорта**
+и отклоняет явный путь/node ID из другой группы. Обычный `pytest` допускается
+для `--collect-only`; для исполнения он сообщает команду изолированного launcher.
+
+Адресный запуск использует тот же launcher:
+
+```powershell
+python -B scripts/v2_offline_tests.py tests/test_release_startup.py tests/test_v2_suite_isolation.py
+```
+
+Исторические проверки сохранены, но требуют явного выбора:
+
+```powershell
+python -B scripts/v2_offline_tests.py --suite=legacy --collect-only
+python -B scripts/v2_offline_tests.py --suite=research --collect-only
+python -B scripts/v2_offline_tests.py --suite=all --collect-only
+```
+
+`legacy` проверяет прежние AIService/TelegramService, локальные normalizer,
+matching/reference и старые интерфейсы. `research` содержит 23MET HTML-снимки,
+исторический B6-корпус, сравнение скриптов со старым Git SHA и проверку старого
+repository. Для их исполнения нужны собственные исторические prerequisites;
+их успешное исполнение в блоке 1 не заявляется. Ни `legacy`, ни `research`
+не входят в приёмку текущего Telegram. При осознанном историческом запуске
+из команды убирается `--collect-only`; ограничения офлайн-launcher сохраняются.
+
+Launcher создаёт отдельный временный каталог на каждый прогон. SQLite допускается
+только внутри него и в `:memory:`; запрещены repository/user DB, посторонние
+каталоги OS temp, внешние URI/UNC и `ATTACH` за пределами прогона. Нормальные
+Python-потомки наследуют `sitecustomize`, запрет сетевого I/O и ограничение SQLite.
+При ошибке установки дочернего guard процесс завершается до импорта приложения.
+Удаляются реальные ключи/config environment и внешние `PYTEST_ADDOPTS`/plugins;
+dotenv, autoload plugins, bytecode и pytest cache отключены. Внешний существующий
+`--basetemp` отклоняется до того, как pytest сможет очистить каталог.
+Это изоляция доверенного тестового кода, не OS sandbox для враждебных программ.
+
+Сохранены реальные crash/lock/DPAPI/PowerShell проверки: они используют только
+свои временные процессы и файлы. Миграция четырёх старых core-таблиц и атомарный
+откат DDL теперь работают на versioned synthetic SQL fixture, без `git show`
+старого кода. Текущий корпус 38/22/27/10 синтетических строк проверяет сохранение
+исходника, всех фактов, количеств, групп, версии и restart; исходный B6 остаётся
+отдельным research-сценарием. Эти проверки не измеряют качество извлечения GPT.
+
+На базе `efbb67f6c1a096f57192a2076d6d4f4e2829eede`:
+
+| Набор | Результат блока 1 |
+|---|---|
+| Прежняя default collection, смешанная | 2 228 случаев; это число сбора, не успешного исполнения |
+| Новый current | 35 модулей / 523 определения / **1 085 passed** |
+| Затронутые модули | **171 passed** |
+| Все группы, только collection | 77 модулей / 1 237 определений / **2 280 collected** |
+
+Полный current исполнен в отдельной копии исходников без `.git`, `.env`,
+пользовательских SQLite и внешних HTML: **1 085 passed in 120.25s**, без skip/xfail.
+Это время тестов, не время ответа Telegram. Пакет знаний проверен через
+`python -B scripts/build_v2_knowledge.py --check`; его версия не изменилась.
+Точный состав, исключения и риски — [отчёт блока 1](reports/block-1-offline-test-suite.md).
+
+Дальше сохранены исторические свидетельства прежних этапов и их ограничения.
+
 ## Этап 6: расчётные аннотации м/шт
 
 ## Этап 7 — пакет approved знаний

@@ -1,8 +1,6 @@
 """Durability and concurrency with real repositories, fake external effects and events."""
 from contextlib import contextmanager
 from threading import Event, Lock, Thread
-from types import ModuleType
-import subprocess
 import json
 import sqlite3
 import time
@@ -330,20 +328,12 @@ def test_completed_queue_payloads_compact_but_replay_still_deduplicated(rig):
     assert rig.queue.claim() is None and len(fake.calls)==1
 
 
-def old_repository_class():
-    source=subprocess.run(['git','show','aa11380dfe1ed646fec2355b22880fdb03b0d706:steel_agent_v2/repository.py'],
-        capture_output=True,check=True,encoding='utf-8').stdout
-    module=ModuleType('steel_agent_v2._published_repository');module.__package__='steel_agent_v2'
-    exec(compile(source,'published_repository.py','exec'),module.__dict__)
-    return module.Repository
 
 
-def test_old_release_is_unsupported_and_forward_reopen_preserves_every_table(rig,tmp_path):
+def test_forward_reopen_preserves_every_table(rig,tmp_path):
     from scripts.v2_queue_status import prepare_rollback
     from scripts.v2_sqlite_snapshot import metadata,snapshot
-    old=old_repository_class()
     admit(rig,1)
-    with pytest.raises(ValueError):old(rig.queue.database)
     with pytest.raises(ValueError,match='forward_only'):
         prepare_rollback(rig.queue.database.path,tmp_path/'refused.sqlite3','rollback:2')
     assert not (tmp_path/'refused.sqlite3').exists()
