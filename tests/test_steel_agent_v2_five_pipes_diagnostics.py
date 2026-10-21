@@ -199,7 +199,7 @@ def test_five_pipes_payload_sizes_and_existing_call_metrics(rig,caplog,repair):
     assert len(validations)==int(repair)
     if repair:
         assert validations[0]['reason']=='EngineError'
-        assert validations[0]['diagnostic_codes']==['duplicate_characteristic']
+        assert validations[0]['diagnostic_codes']==['request_validation']  # dynamic item suffix is not logged
     print(json.dumps(dict(scenario='repair' if repair else 'valid',wire=sizes,
         calls=[dict(stage=m['stage'],duration_ms=m['duration_ms']) for m in transport.metrics],
         operation={key:complete[0][key] for key in ['duration_ms','stage_ms','http_attempts','sdk_retries']}),
@@ -316,3 +316,53 @@ def test_create_with_explicit_unit_proposal_is_rejected_and_fallback_stays_unbou
     assert reopen(rig).load(1)==state
     assert_delivery(rig,100,reply)
     assert_replay_is_free(rig,100,source)
+
+
+@pytest.mark.parametrize('case',['valid','repair','partial_fallback','failed'])
+def test_safe_plan_result_reports_committed_outcome_without_payload(rig,caplog,case):
+    caplog.set_level('INFO',logger='operator_diagnostics')
+    source,plan=five_pipes()
+    good=wire(plan)
+    if case=='failed':
+        execute(rig,99,source,[good])
+        old=Repository(rig.queue.database).load(1)
+        caplog.clear()
+        message='PRIVATE_CONFIRMATION'
+        invalid=wire(edit(old,[set_op('i2',field='unit',value='т',evidence='PRIVATE_EVIDENCE')]))
+        responses=[invalid,invalid]
+        primary='edit_evidence_not_in_message';outcome='failed';valid=False
+    elif case=='partial_fallback':
+        message=source
+        bad=deepcopy(good);bad['plan']['clarification']={'PRIVATE_PLAN':'PRIVATE_VALUE'}
+        responses=[bad,bad]
+        primary='schema_validation';outcome='partial_fallback';valid=False
+    elif case=='repair':
+        message=source
+        bad=deepcopy(good);bad['plan']['extraction']['groups'][0]['item_ids'].pop()
+        responses=[bad,good]
+        primary='groups_must_partition_all_items_once';outcome='request_saved';valid=True
+    else:
+        message=source;responses=[good]
+        primary=None;outcome='request_saved';valid=True
+    reply,sent=execute(rig,100,message,responses)
+    events=[json.loads(record.message) for record in caplog.records if record.name=='operator_diagnostics']
+    result=[event for event in events if event['event']=='steel_v2_plan_result']
+    assert len(result)==1
+    assert {key:result[0][key] for key in ['attempt','valid','primary_failure','repair_attempted','outcome','status']}==dict(
+        attempt=len(sent),valid=valid,primary_failure=primary,repair_attempted=len(sent)>1,
+        outcome=outcome,status=reply.status)
+    failures=[event for event in events if event['event']=='steel_v2_validation']
+    assert len(failures)==len(sent)-int(valid)
+    assert all(event['valid'] is False and event['primary_failure']==primary for event in failures)
+    assert all(event['operation']==result[0]['operation'] for event in failures)
+    repo=Repository(rig.queue.database)
+    state=assert_snapshot(repo,source,plan,1)
+    if case=='failed':assert state==old and reply.status=='failed'
+    elif case=='partial_fallback':assert reply.status=='partial'
+    else:assert reply.status=='ok' and state.items==state.originals
+    for private in [source,'PRIVATE_CONFIRMATION','PRIVATE_EVIDENCE','PRIVATE_PLAN','PRIVATE_VALUE']:
+        assert private not in caplog.text
+    # Durable replay does not produce a new coordinator result or model call.
+    count=len(result)
+    assert_replay_is_free(rig,100,message)
+    assert sum('"event": "steel_v2_plan_result"' in record.message for record in caplog.records)==count

@@ -675,6 +675,7 @@ class OpenAITransport:
         phase('steel_v2_'+stage)
         trace=CURRENT.get()
         if trace:
+            trace.http_request_bytes=None
             trace.calls+=1
             trace.stage_calls[stage]=trace.stage_calls.get(stage,0)+1
             trace.model,trace.reasoning=self.model,self.reasoning
@@ -699,6 +700,10 @@ class OpenAITransport:
             fields={k:get(usage,k) for k in ('input_tokens','output_tokens','total_tokens') if type(get(usage,k)) is int}
             details=get(usage,'output_tokens_details')
             if type(get(details,'reasoning_tokens')) is int:fields['reasoning_tokens']=get(details,'reasoning_tokens')
+            cached=get(get(usage,'input_tokens_details'),'cached_tokens')
+            if type(cached) is int and cached>=0:fields['cached_tokens']=cached
+            if trace and type(trace.http_request_bytes) is int:
+                fields['request_bytes']=trace.http_request_bytes
             metric=dict(call_index=call_index,stage=stage,model=self.model,duration_ms=round((time.monotonic()-started)*1000),reason=failure,**fields)
             metric.update(error_metadata)
             metric['operation']=trace.operation_id if trace else None

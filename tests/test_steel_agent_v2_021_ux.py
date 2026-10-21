@@ -132,7 +132,7 @@ def test_rejected_creation_has_no_append_claim_and_retains_active(rig,caplog):
     events=[json.loads(r.message) for r in caplog.records if r.message.startswith('{')]
     validation=[e for e in events if e.get('event')=='steel_v2_validation']
     assert [e['intent'] for e in validation]==['create_request','create_request']
-    assert all(e['extracted_count']==2 and e['diagnostic_codes']==['duplicate_characteristic'] for e in validation)
+    assert all(e['extracted_count']==2 and e['diagnostic_codes']==['request_validation'] for e in validation)
     assert all('i1' not in json.dumps(e) for e in validation)
 
 

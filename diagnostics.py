@@ -39,6 +39,7 @@ class Trace:
     stage_ms: dict = field(default_factory=dict)
     http_attempts: int = 0
     sdk_retries: int = 0
+    http_request_bytes: int | None = None
     result: str = 'ok'
 
 
@@ -63,7 +64,7 @@ def emit(event, **fields):
 
 
 def http_attempt(request):
-    """Public HTTP hook: record SDK retry metadata, never URLs or headers."""
+    """Public SDK hook: counts only, never body, URLs, headers or credentials."""
     trace = CURRENT.get()
     if trace:
         trace.http_attempts += 1
@@ -72,6 +73,11 @@ def http_attempt(request):
         except (TypeError, ValueError):
             retry = 0
         trace.sdk_retries += int(retry > 0)
+        try:
+            trace.http_request_bytes = len(request.content)
+        except Exception:
+            # Do not consume a streaming body or fail an API call for telemetry.
+            trace.http_request_bytes = None
 
 
 def safe_code(error):
