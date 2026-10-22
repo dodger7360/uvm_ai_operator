@@ -1,5 +1,20 @@
 # Состояние Steel Agent v2
 
+## Кандидат блока 4.4 — типизированная единица при create, 22.10.2026
+
+База main `aa777dd2f9676ba789baa91817525bb3b80e4e8a`: PR #34 слит после
+разрешённого review HEAD `017866b42bc1fff1a35fc9e055c5ef4c70603949`.
+Ветка fix/v2-create-unit-confirmation добавляет один unit_proposal и узкую
+операцию confirm_unit через прежние Engine/Repository/queue. Единица не записывается
+до согласия; literal consent и event сохраняются отдельно от source evidence.
+Другие поля/вопросы защищены, request/revision/user scope проверяется, undo/replay
+не оживляют согласие. SQLite schema, queue, BR-007 и approved knowledge прежние.
+Контракт — [UNIT_CONFIRMATION](UNIT_CONFIRMATION.md); проверки и границы —
+[отчёт 4.4](reports/block-4-4-create-unit-confirmation.md).
+Это кандидат без deployment и живой проверки языка/скорости API. Строковые вопросы
+без явного unit_proposal автоматически не интерпретируются. Pending → append
+остаётся отложенным; общая система вопросов не реализуется.
+
 ## P0: компактный create и approved масса — 19.10.2026
 
 Production штатно установлен в предыдущем задании на

@@ -1,7 +1,7 @@
 """One GPT coordinator. No keyword/regex intent router and no legacy pipeline."""
 import json
 from pydantic import ValidationError
-from .contracts import AgentPlan, Reply, PendingClarification, Clarification, DisplayOrder, KnowledgeContext
+from .contracts import AgentPlan, Reply, PendingClarification, Clarification, UnitProposal, DisplayOrder, KnowledgeContext
 from .engine import RequestEngine, EngineError, SelectionError, totals, unit_evidence_in_message
 from .repository import Busy
 from .presentation import render, display_order, display_layout, literal_fragments
@@ -63,6 +63,8 @@ VALIDATION_CODES=frozenset({
     'invalid_clarification_target','contradictory_duplicate_patch','invalid_set_target_or_field',
     'invalid_characteristic_name','literal_replacement_ambiguous_or_missing',
     'measured_unit_evidence','addition_requires_compatible_known_quantity',
+    'invalid_create_unit_proposal','unit_confirmation_missing','unit_confirmation_stale',
+    'unit_confirmation_scope','unit_confirmation_target','unit_confirmation_consent','unit_confirmation_question',
 })
 
 
@@ -156,7 +158,7 @@ class SteelAgent:
                 'mass_reference_records':self.knowledge.context_records(self.engine.mass_catalog.records,
                     message,current,pending_text=pending_text,selected_cases=selected_cases),
                 'supported_edit_operations':['set','regroup','undo','resolve','convert_mass',
-                                             'set_quantity','add_quantity','set_length','calculate_mass'],'append_supported':True}
+                                             'set_quantity','add_quantity','set_length','calculate_mass','confirm_unit'],'append_supported':True}
             context['last_search_explanation']=search_status_text(context['last_search'])
             notes=[];previous=None;updated=None;reply=None;first_intent=None;proposals=[];source_pending=None
             shown_normalized=False
@@ -168,6 +170,7 @@ class SteelAgent:
                 shown_normalized=False
                 used_layout=None
                 candidate=None;plan=None;validation_stage='structured_response';plan_valid=False
+                creation_clarification=None
                 try:
                     calls+=1
                     prior_proposal=previous
@@ -208,6 +211,19 @@ class SteelAgent:
                             source=pending['source_text']
                             source_pending=plan.pending_event_id
                         updated=self.engine.create(plan.extraction,source,f'{user_id}:{event}',plan.mass_specs)
+                        if plan.unit_proposal is not None:
+                            proposal=plan.unit_proposal
+                            targets=[item for item in updated.items if item.id==proposal.target_id]
+                            originals=[item for item in updated.originals if item.id==proposal.target_id]
+                            if (len(targets)!=1 or len(originals)!=1 or targets[0].unit is not None
+                                    or originals[0].unit is not None or originals[0].unit_text is not None
+                                    or originals[0].unit_source_id is not None
+                                    or updated.questions.count(proposal.question)>1):
+                                raise EngineError('invalid_create_unit_proposal')
+                            if proposal.question not in updated.questions:
+                                updated=updated.model_copy(update={'questions':[*updated.questions,proposal.question]})
+                            creation_clarification=PendingClarification(event_id=event,request_id=updated.id,
+                                revision=updated.revision,proposal=proposal,source_message=source,question=proposal.question)
                         text=present(updated,proposed=plan.display_layout)
                     elif plan.intent=='edit_request':
                         has_selection=any(op.selection is not None for op in plan.operations)
@@ -233,25 +249,31 @@ class SteelAgent:
                                 any(op.kind!='convert_mass' for op in plan.operations) or
                                 {op.get('target_id') for op in old_ops}!={op.target_id for op in plan.operations}):
                                 raise EngineError('mass_conversion_repair_scope_mismatch')
-                        edit_message=message
+                        edit_message=message;unit_consent=None
                         if plan.clarification_event_id is not None:
                             if clarification is None or plan.clarification_event_id!=clarification.event_id:
                                 raise EngineError('clarification_stale_or_missing')
                             proposal=clarification.proposal
-                            saved=clarification.operation
-                            inherited=False
-                            for op in plan.operations:
-                                matches=(op.kind==(saved.kind if saved else 'set') and op.target_id in proposal.target_ids and
-                                    op.field==proposal.field and op.name==proposal.name and
-                                    op.value==proposal.value and op.evidence==proposal.evidence and
-                                    op.replace_from is None and
-                                    (op.unit,op.unit_evidence)==((saved.unit,saved.unit_evidence) if saved else (None,None)))
-                                if matches:inherited=True
-                                elif (not op.evidence or op.evidence not in message or
-                                      op.unit_evidence is not None and not unit_evidence_in_message(message,op.unit_evidence)):
+                            if isinstance(proposal,UnitProposal):
+                                if (has_selection or len(plan.operations)!=1
+                                        or plan.operations[0].kind!='confirm_unit'):
                                     raise EngineError('clarification_scope_mismatch')
-                            if not inherited:raise EngineError('clarification_scope_mismatch')
-                            edit_message=clarification.source_message+'\n'+message
+                                unit_consent=clarification
+                            else:
+                                saved=clarification.operation
+                                inherited=False
+                                for op in plan.operations:
+                                    matches=(op.kind==(saved.kind if saved else 'set') and op.target_id in proposal.target_ids and
+                                        op.field==proposal.field and op.name==proposal.name and
+                                        op.value==proposal.value and op.evidence==proposal.evidence and
+                                        op.replace_from is None and
+                                        (op.unit,op.unit_evidence)==((saved.unit,saved.unit_evidence) if saved else (None,None)))
+                                    if matches:inherited=True
+                                    elif (not op.evidence or op.evidence not in message or
+                                          op.unit_evidence is not None and not unit_evidence_in_message(message,op.unit_evidence)):
+                                        raise EngineError('clarification_scope_mismatch')
+                                if not inherited:raise EngineError('clarification_scope_mismatch')
+                                edit_message=clarification.source_message+'\n'+message
                         from .theoretical_mass import confirm, research_candidates
                         approved=confirm(current,plan,mass_pending) if plan.mass_confirmation_event_id else ()
                         if approved:
@@ -260,7 +282,7 @@ class SteelAgent:
                                 raise EngineError('mass_confirmation_spec_changed')
                             plan=plan.model_copy(update={'mass_specs':list(saved_specs.values())})
                         updated=self.engine.edit(current,plan,edit_message,
-                            lambda key,rev:self.repository.version(user_id,key,rev),mass_approved=approved)
+                            lambda key,rev:self.repository.version(user_id,key,rev),mass_approved=approved,unit_consent=unit_consent)
                         if approved and not {op.target_id for op in plan.operations}<={m.spec.item_id for m in updated.theoretical_mass if m.status=='calculated'}:
                             raise EngineError('mass_confirmation_inapplicable')
                         if plan.search_query:
@@ -363,7 +385,7 @@ class SteelAgent:
                         if not plan.answer.strip():raise EngineError('answer_or_clarification_required')
                         text=plan.answer
                     state=updated or current
-                    next_clarification=None
+                    next_clarification=creation_clarification
                     if plan.intent=='clarify':
                         next_clarification=clarification
                         if plan.clarification is not None:
@@ -373,7 +395,7 @@ class SteelAgent:
                                     or not set(proposal.target_ids)<=ids
                                     or (proposal.field=='characteristic')!=bool(proposal.name)):
                                 raise EngineError('invalid_clarification_target')
-                            inherited=clarification and (
+                            inherited=clarification and isinstance(clarification.proposal,Clarification) and (
                                 proposal.field,proposal.name,proposal.value,proposal.evidence)==(
                                 clarification.proposal.field,clarification.proposal.name,
                                 clarification.proposal.value,clarification.proposal.evidence) and set(
@@ -498,7 +520,8 @@ class SteelAgent:
                     # durable turn as the source; don't relabel this short message.
                     if source_pending:
                         reply=reply.model_copy(update={'diagnostics':notes})
-            if updated is None and reply.status=='failed' and clarification:
+            if (updated is None and reply.status=='failed' and clarification
+                    and not isinstance(clarification.proposal,UnitProposal)):
                 reply=reply.model_copy(update={'clarification':clarification})
             state=updated or current
             if state and (updated is not None or shown_normalized):
@@ -533,7 +556,9 @@ class SteelAgent:
             reply=Reply(text='Обработка не завершена. Активная заявка не изменена; исходное сообщение сохранено в истории. '
                 'Повторите позже или сообщите администратору.',status='failed',intent='clarify',
                 request_id=current.id if current else None,revision=current.revision if current else None,
-                diagnostics=[code],calls=calls,clarification=clarification,knowledge=knowledge_use if calls else None)
+                diagnostics=[code],calls=calls,
+                clarification=clarification if clarification and not isinstance(clarification.proposal,UnitProposal) else None,
+                knowledge=knowledge_use if calls else None)
             try:
                 return finish(reply)
             except Exception:

@@ -2,7 +2,7 @@
 from decimal import Decimal, InvalidOperation, localcontext
 import re
 from uuid import uuid5, NAMESPACE_URL
-from .contracts import RequestSnapshot, Characteristic, Change
+from .contracts import RequestSnapshot, Characteristic, Change, UnitProposal
 from quantity import normalize_quantity, sum_quantities
 
 
@@ -273,7 +273,7 @@ class RequestEngine:
                 'spec':m.spec.model_copy(update={'item_id':item_ids[m.spec.item_id]})}) for m in segment.theoretical_mass]]})
         return self.validate(changed)
 
-    def edit(self, current, plan, message, read_version, display_ids=None, mass_approved=()):
+    def edit(self, current, plan, message, read_version, display_ids=None, mass_approved=(),unit_consent=None):
         require(current is not None, 'no_active_request')
         require((plan.expected_request_id, plan.expected_revision) == (current.id, current.revision), 'stale_request_revision')
         operations = self.resolve_plan(current,plan,message,display_ids).operations
@@ -298,6 +298,28 @@ class RequestEngine:
         touched = set()
         regrouped = False
         for op in operations:
+            if op.kind=='confirm_unit':
+                require(unit_consent is not None and isinstance(unit_consent.proposal,UnitProposal),
+                        'unit_confirmation_missing')
+                proposal=unit_consent.proposal
+                require((unit_consent.event_id,unit_consent.request_id,unit_consent.revision)==(
+                    plan.clarification_event_id,current.id,current.revision),'unit_confirmation_stale')
+                require(len(operations)==1 and op.target_id==proposal.target_id and op.value==proposal.unit
+                        and op.field is None and op.name is None and op.selection is None and not op.groups
+                        and op.unit is None and op.unit_evidence is None and op.replace_from is None
+                        and plan.remaining_questions is None and not plan.mass_specs,
+                        'unit_confirmation_scope')
+                require(op.target_id in by_id and by_id[op.target_id].unit is None,
+                        'unit_confirmation_target')
+                require(bool(op.evidence) and op.evidence==message.strip() and op.evidence in message,
+                        'unit_confirmation_consent')
+                require(changed.questions.count(proposal.question)==1,'unit_confirmation_question')
+                # Consent is evidence of this decision, never evidence from a source row.
+                by_id[op.target_id]=by_id[op.target_id].model_copy(update={'unit':proposal.unit})
+                changed.questions.remove(proposal.question)
+                changed.changes.append(Change(item_id=op.target_id,field='unit',before=None,after=proposal.unit,
+                    evidence=op.evidence,message=message,confirmation_event_id=unit_consent.event_id))
+                continue
             if op.kind=='calculate_mass':
                 require(op.target_id in by_id and op.field is None and op.name is None and op.value is None
                         and not op.groups and op.evidence and op.evidence in message,'invalid_calculate_mass')

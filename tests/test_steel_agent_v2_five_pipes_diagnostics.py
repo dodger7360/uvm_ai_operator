@@ -2,7 +2,7 @@
 
 Only external OpenAI/Telegram replies are supplied. These are not recorded live
 model responses and do not establish Russian-language understanding or latency.
-The diagnostic regression records the current unbound create/partial question gap.
+String-only questions remain unbound; block 4.4 covers the explicit unit proposal.
 """
 from copy import deepcopy
 from decimal import Decimal
@@ -16,7 +16,7 @@ from diagnostics import http_attempt
 from steel_agent_v2 import Repository
 from steel_agent_v2.contracts import AgentPlan, Reply
 from steel_agent_v2.queue import DurableQueue
-from steel_agent_v2.wire import WireCoordinatorPlan
+from steel_agent_v2.wire import WireCoordinatorPlan, WireCreatePlan
 from test_steel_agent_v2 import edit, set_op
 from test_steel_agent_v2_027_presentation import sample
 from test_steel_agent_v2_queue import rig, admit, Executor
@@ -45,14 +45,14 @@ def five_pipes(*, repeated=False, missing=False, question=False):
 
 def wire(plan):
     if plan['intent']=='create_request':
-        allowed={'intent','extraction','pending_event_id','display_layout','mass_specs'}
+        allowed=set(WireCreatePlan.model_fields)
         plan={key:value for key,value in plan.items() if key in allowed}
     else:
         plan=AgentPlan.model_validate(plan).model_dump(mode='json')
     return WireCoordinatorPlan.model_validate({'plan':plan}).model_dump(mode='json')
 
 
-def execute(rig,number,message,responses):
+def execute(rig,number,message,responses,user=1):
     """Use existing SDK/queue fixtures; never replace a production algorithm."""
     responses=deepcopy(responses)
     def respond(_):
@@ -62,7 +62,7 @@ def execute(rig,number,message,responses):
         assert payload['text']['format']['strict'] is True
         assert not subset_issues(payload['text']['format']['schema'])
         assert payload['store'] is False
-    admit(rig,number,text=message)
+    admit(rig,number,user=user,text=message)
     job=rig.queue.claim()
     assert job is not None and job['update_id']==number
     with sdk_transport(respond,inspect=inspect) as (transport,sent):
@@ -76,11 +76,11 @@ def execute(rig,number,message,responses):
         attempts=list(c.execute('SELECT kind,state FROM steel_v2_attempt WHERE update_id=? ORDER BY number',(number,)))
     assert reply.calls==len(sent)==len(attempts)
     assert all(tuple(row)==('plan','result_received') for row in attempts)
-    assert_delivery(rig,number,reply)
+    assert_delivery(rig,number,reply,user=user)
     return reply,sent
 
 
-def assert_delivery(rig,number,reply):
+def assert_delivery(rig,number,reply,user=1):
     job=rig.queue.job(number)
     assert job['state']=='delivered' and job['committed']==1
     rows=stored(rig.queue,number)
@@ -88,7 +88,7 @@ def assert_delivery(rig,number,reply):
     actual=[]
     for row in rows:
         method,payload=rig.api.calls[row['message_id']-1]
-        assert method=='sendMessage' and payload['chat_id']==1
+        assert method=='sendMessage' and payload['chat_id']==user
         assert json.loads(row['payload']) in ({},payload)  # compact may discard delivered payload
         actual.append(payload['text'])
     assert visible(actual)==reply.text
@@ -268,7 +268,7 @@ def test_unbound_partial_question_then_invalid_yes_plans_fail_at_engine_and_wire
 
 
 def test_create_with_explicit_unit_proposal_is_rejected_and_fallback_stays_unbound_after_restart(rig,caplog):
-    """Diagnose today's contract/fallback, not a capability implemented by 4.2.
+    """Generic create+clarification stays unsupported; use typed unit_proposal.
 
     Both mock replies intentionally exceed WireCreatePlan/AgentPlan. The offered
     unit is a question, not source evidence: the target's unit is still unknown.
@@ -366,3 +366,156 @@ def test_safe_plan_result_reports_committed_outcome_without_payload(rig,caplog,c
     count=len(result)
     assert_replay_is_free(rig,100,message)
     assert sum('"event": "steel_v2_plan_result"' in record.message for record in caplog.records)==count
+
+
+def unit_create(other_question=False):
+    source,plan=five_pipes(missing=True,question=True)
+    if other_question:plan['extraction']['questions'].append('Уточните условия доставки')
+    plan['unit_proposal']=dict(target_id='i2',unit='т',question=QUESTION)
+    return source,plan
+
+
+def unit_accept(state,event='telegram:100',evidence='да'):
+    plan=edit(state,[dict(kind='confirm_unit',target_id='i2',value='т',evidence=evidence)])
+    plan['clarification_event_id']=event
+    return plan
+
+
+@pytest.mark.parametrize('other_question',[False,True])
+def test_create_unit_proposal_restart_yes_replay_and_undo(rig,other_question):
+    source,plan=unit_create(other_question)
+    reply,sent=execute(rig,100,source,[wire(plan)])
+    assert reply.status=='partial' and reply.calls==1 and QUESTION in reply.text
+    assert 'unit_proposal' in sent[0]['text']['format']['schema']['$defs']['WireCreatePlan']['properties']
+    rig.queue.compact()  # The persisted question must not depend on delivered outbox payload.
+    repo=reopen(rig);old=assert_snapshot(repo,source,plan,1)
+    pending=repo.clarification(1,old)
+    assert pending.event_id=='telegram:100' and pending.request_id==old.id and pending.revision==1
+    assert pending.proposal.model_dump()==plan['unit_proposal']
+    assert old.items[1].unit is None and old.originals[1].unit is None
+    assert old.originals[1].unit_text is None and not old.changes
+    accepted,requests=execute(rig,101,'да',[wire(unit_accept(old))])
+    assert accepted.calls==1 and accepted.status==('partial' if other_question else 'ok')
+    context=json.loads(requests[0]['input'])['context']
+    assert context['pending_clarification']['proposal']==plan['unit_proposal']
+    state=assert_snapshot(repo,source,plan,2)
+    assert state.id==old.id and state.revision==2 and state.items[1].unit=='т'
+    assert state.items[1].unit_text is None and state.items[1].unit_source_id is None
+    assert state.items[1].model_dump(exclude={'unit'})==old.items[1].model_dump(exclude={'unit'})
+    assert all(a==b for a,b in zip(old.items,state.items) if a.id!='i2')
+    assert state.originals==old.originals and state.groups==old.groups and state.records==old.records
+    assert state.questions==[q for q in old.questions if q!=QUESTION]
+    assert len(state.changes)==1
+    change=state.changes[0]
+    assert (change.field,change.before,change.after,change.evidence,change.message,
+            change.confirmation_event_id)==('unit',None,'т','да','да','telegram:100')
+    assert repo.clarification(1,state) is None and repo.version(1,state.id,1)==old
+    assert_replay_is_free(rig,101,'да')
+    rig.queue.compact();repo=reopen(rig)
+    assert repo.load(1)==state
+    assert_delivery(rig,101,accepted)
+    undone,_=execute(rig,102,'Отмени',[wire(edit(state,[dict(kind='undo')]))])
+    restored=repo.load(1)
+    assert undone.calls==1 and restored.revision==3
+    assert restored.items==old.items and restored.originals==old.originals and restored.questions==old.questions
+    assert repo.clarification(1,restored) is None
+    # Undo restores data, never the consumed consent at a new revision.
+    stale,_=execute(rig,103,'да',[wire(unit_accept(restored))]*2)
+    assert stale.status=='failed' and repo.load(1)==restored
+    assert_snapshot(repo,source,plan,3)
+
+
+def test_ambiguous_reply_preserves_unit_question_until_explicit_confirmation(rig):
+    source,plan=unit_create()
+    execute(rig,100,source,[wire(plan)])
+    repo=reopen(rig);old=repo.load(1)
+    ambiguous=wire(dict(intent='clarify',answer='Подтвердите именно тонны для второй позиции?'))
+    reply,_=execute(rig,101,'Не уверен',[ambiguous])
+    assert reply.intent=='clarify' and reply.calls==1 and repo.load(1)==old
+    repo=reopen(rig);saved=repo.clarification(1,old)
+    assert saved.event_id=='telegram:100' and saved.proposal.question==QUESTION
+    accepted,_=execute(rig,102,'да',[wire(unit_accept(old))])
+    assert accepted.status=='ok' and accepted.calls==1 and repo.load(1).items[1].unit=='т'
+    assert_snapshot(repo,source,plan,2)
+
+
+@pytest.mark.parametrize('damage',[
+    'target','value','event','revision','request','generic_set','extra_operation',
+    'borrowed_evidence','questions_override','no_reference','selection','partial_answer'])
+def test_unit_confirmation_rejects_changed_scope_without_partial_writes(rig,damage):
+    source,plan=unit_create(other_question=True)
+    execute(rig,100,source,[wire(plan)])
+    repo=reopen(rig);old=repo.load(1)
+    bad=wire(unit_accept(old));action=bad['plan'];op=action['operations'][0];message='да'
+    if damage=='target':op['target_id']='i1'
+    elif damage=='value':op['value']='кг'
+    elif damage=='event':action['clarification_event_id']='telegram:other'
+    elif damage=='revision':action['expected_revision']=old.revision+1
+    elif damage=='request':action['expected_request_id']='another-request'
+    elif damage=='generic_set':op.update(kind='set',field='unit')
+    elif damage=='extra_operation':action['operations'].append(set_op('i1',name='grade',value='Ст3',evidence='Ст3'))
+    elif damage=='borrowed_evidence':op['evidence']='т'
+    elif damage=='questions_override':action['remaining_questions']=[]
+    elif damage=='no_reference':action['clarification_event_id']=None
+    elif damage=='selection':
+        op.update(target_id=None,selection=dict(mode='display',positions=[2],cardinality='one',evidence='да'))
+    elif damage=='partial_answer':message='да или нет?'
+    failed,_=execute(rig,101,message,[bad,bad])
+    assert failed.status=='failed' and failed.calls==2 and repo.load(1)==old
+    assert repo.clarification(1,old) is None  # failed/inappropriate turn expires this binding
+    assert_snapshot(repo,source,plan,1)
+    assert_replay_is_free(rig,101,message)
+
+
+@pytest.mark.parametrize('other_active',[False,True])
+def test_other_user_cannot_use_saved_unit_consent(rig,other_active):
+    source,plan=unit_create()
+    execute(rig,100,source,[wire(plan)])
+    repo=reopen(rig);old=repo.load(1)
+    if other_active:execute(rig,101,source,[wire(plan)],user=2)
+    two=repo.load(2)
+    # Even with the caller's own request/revision and matching i2/unit, another
+    # user's question event must never authorize this mutation.
+    failed,_=execute(rig,102 if other_active else 101,'да',[wire(unit_accept(two or old))]*2,user=2)
+    assert failed.status=='failed' and repo.load(1)==old and repo.load(2)==two
+    assert repo.clarification(1,old).event_id=='telegram:100' and repo.clarification(2,two) is None
+    with repo.database.connection() as c:
+        assert c.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==(2 if other_active else 1)
+
+
+@pytest.mark.parametrize('transition',['revision','replacement','topic'])
+def test_unit_question_expires_after_scope_change(rig,transition):
+    source,plan=unit_create()
+    execute(rig,100,source,[wire(plan)])
+    repo=reopen(rig);old=repo.load(1)
+    if transition=='revision':
+        action=edit(old,[set_op('i1',name='grade',value='Ст3',evidence='Ст3')]);message='Ст3'
+    elif transition=='replacement':message,action=five_pipes()
+    else:message='нет, сменим тему';action=dict(intent='free_chat',answer='Хорошо')
+    execute(rig,101,message,[wire(action)])
+    repo=reopen(rig);current=repo.load(1)
+    assert repo.clarification(1,current) is None
+    failed,_=execute(rig,102,'да',[wire(unit_accept(current))]*2)
+    assert failed.status=='failed' and repo.load(1)==current
+    with repo.database.connection() as c:
+        assert c.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==(1 if transition=='topic' else 2)
+
+
+@pytest.mark.parametrize('damage',['target','known_unit','unit_text','duplicate_question','unsupported','multiple'])
+def test_invalid_create_unit_proposal_never_replaces_existing_request(rig,damage):
+    initial,base=five_pipes();execute(rig,99,initial,[wire(base)])
+    repo=Repository(rig.queue.database);old=repo.load(1)
+    source,plan=unit_create();bad=wire(plan)
+    proposal=bad['plan']['unit_proposal']
+    if damage=='target':proposal['target_id']='absent'
+    elif damage=='known_unit':proposal['target_id']='i1'
+    elif damage=='unit_text':bad['plan']['extraction']['items'][1]['unit_text']='т'
+    elif damage=='duplicate_question':bad['plan']['extraction']['questions'].append(QUESTION)
+    elif damage=='unsupported':proposal['unit']='unsupported-unit'
+    elif damage=='multiple':bad['plan']['unit_proposal']=[proposal,deepcopy(proposal)]
+    failed,_=execute(rig,100,source,[bad,bad])
+    assert failed.status=='failed' and repo.load(1)==old and repo.clarification(1,old) is None
+    assert all(item.unit=='т' for item in old.items)
+    with repo.database.connection() as c:
+        assert c.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==1
+        assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'

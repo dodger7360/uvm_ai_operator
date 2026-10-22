@@ -61,6 +61,13 @@ class Clarification(ContractModel):
     alternatives: list[NonEmpty] = Field(min_length=1)
 
 
+class UnitProposal(ContractModel):
+    """One unconfirmed unit question; deliberately has no source-evidence field."""
+    target_id: NonEmpty
+    unit: Literal['т','кг','г','м','мм','см','шт']
+    question: NonEmpty
+
+
 class SelectionPredicate(ContractModel):
     field: Literal['label', 'characteristic']
     name: str | None = None
@@ -104,7 +111,7 @@ class Selection(ContractModel):
 
 class Operation(ContractModel):
     kind: Literal['set', 'regroup', 'undo', 'resolve', 'convert_mass',
-                  'set_quantity', 'add_quantity', 'set_length', 'calculate_mass']
+                  'set_quantity', 'add_quantity', 'set_length', 'calculate_mass', 'confirm_unit']
     target_id: str | None = None
     selection: Selection | None = None
     field: Literal['quantity', 'unit', 'label', 'characteristic'] | None = None
@@ -134,7 +141,7 @@ class PendingClarification(ContractModel):
     event_id: str
     request_id: str
     revision: int
-    proposal: Clarification
+    proposal: Clarification | UnitProposal
     source_message: str
     question: str
     operation: Operation | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -224,6 +231,7 @@ class AgentPlan(ContractModel):
     remaining_questions: list[str] | None = None
     clarification: Clarification | None = None
     clarification_event_id: str | None = None
+    unit_proposal: UnitProposal | None = None
     display_layout: DisplayLayout | None = None
     mass_specs: list[MassSpec] = Field(default_factory=list)
     mass_candidates: list[MassCandidate] = Field(default_factory=list)
@@ -232,6 +240,13 @@ class AgentPlan(ContractModel):
 
     @model_validator(mode='after')
     def only_intended_mutation(self):
+        if self.unit_proposal is not None and self.intent!='create_request':
+            raise ValueError('unit proposal belongs only to create_request')
+        if any(op.kind=='confirm_unit' for op in self.operations):
+            if (self.intent!='edit_request' or len(self.operations)!=1 or not self.clarification_event_id
+                    or self.remaining_questions is not None or self.mass_specs or self.mass_candidates
+                    or self.search_query or self.mass_confirmation_event_id or self.display_layout):
+                raise ValueError('unit confirmation is a separate referenced edit without other changes')
         if self.awaiting_new_request and self.intent!='clarify':
             raise ValueError('new source confirmation belongs only to clarify')
         if self.clarification is not None and self.intent != 'clarify':
@@ -286,6 +301,7 @@ class Change(ContractModel):
     after: str | None
     evidence: str
     message: str
+    confirmation_event_id: str | None = Field(default=None,exclude_if=lambda value:value is None)
 
 
 class RequestSnapshot(ContractModel):
