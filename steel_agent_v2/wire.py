@@ -7,7 +7,7 @@ instead of JSON numbers, which could become floats before ExactDecimal sees them
 from typing import Literal
 from pydantic import Field
 from nomenclature import ContractModel
-from .contracts import AgentPlan, Extraction, DisplayLayout, MassSpec
+from .contracts import AgentPlan, Extraction, DisplayLayout, MassSpec, UnitProposal
 
 
 def _without_defaults(node):
@@ -41,12 +41,13 @@ class WireAgentPlan(AgentPlan):
 
 
 class WireCreatePlan(ContractModel):
-    """Only the five fields used by creation, not empty edit/search machinery."""
+    """Creation and one optional unit question, without edit/search machinery."""
     intent: Literal['create_request']
     extraction: Extraction
     pending_event_id: str | None = None
     display_layout: DisplayLayout | None = None
     mass_specs: list[MassSpec] = Field(default_factory=list)
+    unit_proposal: UnitProposal | None = None
 
     def to_internal(self):
         return AgentPlan.model_validate(self.model_dump())
