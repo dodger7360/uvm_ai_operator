@@ -47,6 +47,32 @@ def validation_notes(error):
     return ['invalid_json_or_structured_response']
 
 
+# Exact static messages only. Never strip suffixes containing IDs/values/offsets.
+VALIDATION_CODES=frozenset({
+    'duplicate_characteristic','duplicate_source_id','duplicate_original_id','duplicate_item_id',
+    'duplicate_group_id','no_product_items','item_set_changed',
+    'every_product_record_requires_exactly_one_item','groups_must_partition_all_items_once','empty_group',
+    'no_active_request','stale_request_revision','selection_evidence_not_in_message',
+    'display_order_unavailable','selection_no_match','selection_ambiguous',
+    'repair_cannot_change_to_different_mutation_intent','semantic_edit_scope_changed',
+    'edit_evidence_not_in_message','edited_quantity_evidence_mismatch',
+    'new_value_missing_from_edit_evidence','invalid_decimal_evidence',
+    'invalid_mass_conversion','mass_conversion_unit_evidence','unsupported_mass_conversion',
+    'mass_conversion_repair_scope_mismatch','mass_conversion_requires_known_quantity_and_unit',
+    'clarification_stale_or_missing','clarification_scope_mismatch','clarification_value_evidence',
+    'invalid_clarification_target','contradictory_duplicate_patch','invalid_set_target_or_field',
+    'invalid_characteristic_name','literal_replacement_ambiguous_or_missing',
+    'measured_unit_evidence','addition_requires_compatible_known_quantity',
+})
+
+
+def validation_codes(error):
+    if isinstance(error,ValidationError):return ['schema_validation']
+    code=error.args[0] if len(error.args)==1 else None
+    return [code if isinstance(error,EngineError) and type(code) is str and code in VALIDATION_CODES
+            else 'request_validation']
+
+
 class SteelAgent:
     def __init__(self, transport, repository, *, mass_catalog=None, knowledge_package=None):
         self.transport,self.repository=transport,repository
@@ -67,13 +93,26 @@ class SteelAgent:
                          status='failed',intent='clarify',diagnostics=[str(error)])
         if cached is not None:return cached
         calls=0;clarification=None;knowledge_use=None
+        attempt=0;plan_valid=False;primary_failure=None
+        def finish(reply,updated=None):
+            saved=self.repository.finish(user_id,event,sequence,message,reply,updated)
+            if calls:
+                trace=CURRENT.get()
+                outcome=('partial_fallback' if 'partial_recovered' in reply.diagnostics else
+                         'request_saved' if updated is not None else
+                         'failed' if reply.status=='failed' else
+                         'request_closed' if reply.intent=='close_request' else 'no_request_change')
+                emit('steel_v2_plan_result',operation=trace.operation_id if trace else None,
+                     attempt=attempt+1,valid=plan_valid,primary_failure=primary_failure,
+                     repair_attempted=attempt>0,outcome=outcome,status=reply.status)
+            return saved
         try:
             def close_reply(count=0):
                 reply=Reply(text='Заявка закрыта. История сохранена. Можно начать новую заявку или продолжить общение.'
                     if current else 'Активной заявки нет. Можно продолжить общение.',
                     status='ok',intent='close_request',calls=count,
                     request_id=current.id if current else None,revision=current.revision if current else None)
-                return self.repository.finish(user_id,event,sequence,message,reply)
+                return finish(reply)
             if message.strip()=='/close':return close_reply()
             pending=self.repository.pending(user_id)
             clarification=self.repository.clarification(user_id,current)
@@ -128,7 +167,7 @@ class SteelAgent:
                 updated=None
                 shown_normalized=False
                 used_layout=None
-                candidate=None;plan=None;validation_stage='structured_response'
+                candidate=None;plan=None;validation_stage='structured_response';plan_valid=False
                 try:
                     calls+=1
                     prior_proposal=previous
@@ -141,6 +180,7 @@ class SteelAgent:
                             first_intent=intent
                     validation_stage='plan_contract'
                     plan=AgentPlan.model_validate_json(raw) if isinstance(raw,str) else AgentPlan.model_validate(raw)
+                    plan_valid=True
                     validation_stage='request_validation'
                     if plan.intent in {'create_request','append_request','close_request','edit_request'} and first_intent != plan.intent:
                         raise EngineError('repair_cannot_change_to_different_mutation_intent')
@@ -359,6 +399,9 @@ class SteelAgent:
                                       or plan.intent=='answer_question' and plan.view=='forward')
                     break
                 except (ValidationError,EngineError,json.JSONDecodeError,ValueError) as error:
+                    plan_valid=False
+                    codes=validation_codes(error)
+                    if primary_failure is None:primary_failure=codes[0]
                     if isinstance(error,SelectionError):
                         saved=None;op=error.operation
                         if (error.candidates and op.kind in {'set','set_quantity','add_quantity','set_length'}
@@ -402,19 +445,10 @@ class SteelAgent:
                     intent=candidate.get('intent') if isinstance(candidate,dict) else None
                     extraction=candidate.get('extraction') if isinstance(candidate,dict) else None
                     items=extraction.get('items') if isinstance(extraction,dict) else None
-                    # Strict allowlist: no model IDs, characteristic names, input or error text.
-                    known={'duplicate_characteristic','repair_cannot_change_to_different_mutation_intent',
-                           'edit_evidence_not_in_message','edited_quantity_evidence_mismatch',
-                           'new_value_missing_from_edit_evidence','invalid_decimal_evidence',
-                           'invalid_mass_conversion','mass_conversion_unit_evidence','unsupported_mass_conversion',
-                           'mass_conversion_repair_scope_mismatch',
-                           'mass_conversion_requires_known_quantity_and_unit','clarification_stale_or_missing',
-                           'clarification_scope_mismatch','clarification_value_evidence','invalid_clarification_target',
-                           'groups_must_partition_all_items_once'}
-                    codes=[n.split(':',1)[0] if n.split(':',1)[0] in known else
-                           'schema_validation' if n.startswith('schema:') else 'request_validation' for n in notes[:10]]
                     emit('steel_v2_validation',operation=trace.operation_id if trace else None,
-                         attempt=attempt+1,reason=type(error).__name__,issue_count=len(notes),
+                         attempt=attempt+1,valid=False,primary_failure=primary_failure,
+                         reason=('EngineError' if isinstance(error,EngineError) else
+                                 'ValidationError' if isinstance(error,ValidationError) else 'ValueError'),issue_count=len(notes),
                          intent=intent if intent in safe_intents else None,
                          first_intent=first_intent,extracted_count=len(items) if isinstance(items,list) else None,
                          validation_stage=validation_stage,diagnostic_codes=codes)
@@ -483,12 +517,15 @@ class SteelAgent:
                 else:
                     reply=reply.model_copy(update={'presentation':literal(reply.text) if original_view else prose(reply.text,protected)})
             if knowledge_use and calls:reply=reply.model_copy(update={'knowledge':knowledge_use})
-            return self.repository.finish(user_id,event,sequence,message,reply,updated)
+            return finish(reply,updated)
         except PermissionError:
             raise
         except Exception as error:
             # No SDK retries; no automatic replay after timeout/transport/storage failure.
             code=safe_code(error)
+            if primary_failure is None:
+                primary_failure=code if code in {'api_connection','api_timeout','api_bad_request',
+                    'api_authentication','api_permission','api_rate_limit','api_model_not_found'} else 'operation_failed'
             trace=CURRENT.get()
             if trace:
                 trace.result=code
@@ -498,7 +535,7 @@ class SteelAgent:
                 request_id=current.id if current else None,revision=current.revision if current else None,
                 diagnostics=[code],calls=calls,clarification=clarification,knowledge=knowledge_use if calls else None)
             try:
-                return self.repository.finish(user_id,event,sequence,message,reply)
+                return finish(reply)
             except Exception:
                 # Do not falsely claim persistence when SQLite cannot commit.
                 return Reply(text='Не удалось подтвердить сохранение сообщения. Сохраните его исходный текст; '

@@ -8,10 +8,12 @@ import httpx2
 from openai import OpenAI, DefaultHttpxClient
 
 from database import Database
-from diagnostics import operation
+from diagnostics import operation, http_attempt
 from steel_agent_v2.agent import SteelAgent
 from steel_agent_v2.repository import Repository
 from steel_agent_v2.transport import OpenAITransport
+from steel_agent_v2.engine import EngineError
+from steel_agent_v2.agent import validation_codes
 
 
 def test_http_400_metadata_survives_without_response_body(tmp_path, caplog):
@@ -122,3 +124,98 @@ def test_api_failure_preserves_active_original_and_replay_calls_no_model(tmp_pat
         assert c.execute('SELECT count(*) FROM steel_v2_version').fetchone()[0]==1
         assert c.execute('SELECT count(*) FROM steel_v2_inflight').fetchone()[0]==0
     assert 'PRIVATE_BODY' not in caplog.text and 'Synthetic edit' not in caplog.text
+
+
+@pytest.mark.parametrize('message,expected',[
+    ('stale_request_revision','stale_request_revision'),
+    ('groups_must_partition_all_items_once','groups_must_partition_all_items_once'),
+    ('duplicate_characteristic:PRIVATE_POSITION','request_validation'),
+    ('stale_request_revision:PRIVATE_VALUE','request_validation'),
+    ('stale_request_revision\nPRIVATE_SOURCE','request_validation'),
+    ('PRIVATE_UNKNOWN_EXCEPTION','request_validation'),
+])
+def test_validation_code_is_exact_allowlist_not_exception_text(tmp_path,caplog,message,expected):
+    from test_steel_agent_v2 import Fake
+    error=EngineError(message)
+    assert validation_codes(error)==[expected]
+    repo=Repository(Database(tmp_path/'v2.sqlite3'))
+    with caplog.at_level(logging.INFO,logger='operator_diagnostics'),operation():
+        reply=SteelAgent(Fake(error,error),repo).handle(1,'PRIVATE_USER_INPUT',event_id='private-event')
+    assert reply.status=='failed' and reply.calls==2
+    events=[json.loads(record.message) for record in caplog.records if record.name=='operator_diagnostics']
+    errors=[event for event in events if event['event']=='steel_v2_validation']
+    assert len(errors)==2 and all(event['diagnostic_codes']==[expected] for event in errors)
+    assert next(event for event in events if event['event']=='steel_v2_plan_result')['primary_failure']==expected
+    assert 'PRIVATE_' not in caplog.text and 'private-event' not in caplog.text
+
+
+@pytest.mark.parametrize('cached',[0,37,None,True,-1,'PRIVATE_CACHED_TOKENS'])
+def test_sdk_cached_tokens_and_hook_bytes_are_numeric_and_safe(cached,caplog):
+    from test_steel_agent_v2_ux_search import search_response
+    payloads=[]
+    response=search_response();response['output']=response['output'][1:]
+    response['output'][0]['content'][0]['text']=json.dumps(dict(intent='free_chat',answer='PRIVATE_ANSWER'))
+    response['usage']=dict(input_tokens=100,output_tokens=10,total_tokens=110,
+                           input_tokens_details={'cached_tokens':cached})
+    # Mock client keeps malformed usage values uncoerced for the numeric guard;
+    # valid usage also runs through the actual SDK HTTP path below.
+    if type(cached) is int and cached>=0:
+        def respond(request):
+            payloads.append(request.content)
+            return httpx2.Response(200,json=response)
+        with DefaultHttpxClient(transport=httpx2.MockTransport(respond),event_hooks={'request':[http_attempt]}) as http:
+            transport=OpenAITransport(OpenAI(api_key='PRIVATE_API_KEY',http_client=http))
+            with caplog.at_level(logging.INFO,logger='operator_diagnostics'),operation():
+                result=transport.plan({'message':'PRIVATE_ТЕКСТ'})
+        assert result.answer=='PRIVATE_ANSWER'
+        metric=transport.metrics[-1]
+        assert metric['cached_tokens']==cached
+        assert metric['request_bytes']==len(payloads[0])>len(payloads[0].decode('utf-8'))
+    else:
+        client=Mock();client.with_options.return_value=client;client.responses.create.return_value=response
+        transport=OpenAITransport(client)
+        with caplog.at_level(logging.INFO,logger='operator_diagnostics'),operation():
+            transport.plan({'message':'PRIVATE_ТЕКСТ'})
+        metric=transport.metrics[-1]
+        assert 'cached_tokens' not in metric and 'request_bytes' not in metric
+    emitted=[json.loads(record.message) for record in caplog.records if record.name=='operator_diagnostics']
+    assert next(event for event in emitted if event['event']=='steel_v2_model_call')=={'event':'steel_v2_model_call',**metric}
+    assert 'PRIVATE_' not in caplog.text and 'https://' not in caplog.text and 'authorization' not in caplog.text.lower()
+
+
+def test_hook_does_not_read_stream_or_reuse_previous_request_size(caplog):
+    class Unread:
+        headers={}
+        @property
+        def content(self):raise RuntimeError('PRIVATE_STREAM_ERROR')
+    with operation() as trace:
+        trace.http_request_bytes=123
+        http_attempt(Unread())
+        assert trace.http_request_bytes is None and trace.http_attempts==1
+    client=Mock();client.with_options.return_value=client
+    client.responses.create.side_effect=httpx2.ReadTimeout('PRIVATE_NETWORK_DETAIL')
+    transport=OpenAITransport(client)
+    with caplog.at_level(logging.INFO,logger='operator_diagnostics'),operation() as trace:
+        trace.http_request_bytes=123
+        with pytest.raises(httpx2.ReadTimeout):transport.plan({'message':'PRIVATE_INPUT'})
+    assert client.responses.create.call_count==1 and 'request_bytes' not in transport.metrics[-1]
+    assert 'PRIVATE_' not in caplog.text
+
+
+def test_unknown_network_outcome_has_one_hook_call_and_no_repair(tmp_path,caplog):
+    requests=[]
+    def respond(request):
+        requests.append(request.content)
+        raise httpx2.ReadTimeout('PRIVATE_NETWORK_ERROR',request=request)
+    repo=Repository(Database(tmp_path/'v2.sqlite3'))
+    with DefaultHttpxClient(transport=httpx2.MockTransport(respond),event_hooks={'request':[http_attempt]}) as http:
+        transport=OpenAITransport(OpenAI(api_key='PRIVATE_KEY',http_client=http))
+        with caplog.at_level(logging.INFO,logger='operator_diagnostics'),operation():
+            reply=SteelAgent(transport,repo).handle(1,'PRIVATE_INPUT',event_id='network')
+    assert reply.status=='failed' and reply.calls==len(requests)==1 and repo.load(1) is None
+    events=[json.loads(record.message) for record in caplog.records if record.name=='operator_diagnostics']
+    result=next(event for event in events if event['event']=='steel_v2_plan_result')
+    assert result['attempt']==1 and result['repair_attempted'] is False and result['outcome']=='failed'
+    assert result['primary_failure']=='api_timeout'
+    assert transport.metrics[-1]['request_bytes']==len(requests[0])
+    assert 'PRIVATE_' not in caplog.text
